@@ -1,0 +1,79 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Uu]ser[Ss]ettings/
+SysInfo/
+
+Assets/VContainerPractice/
+.AGENTS
+skills-lock.json
+*.booproj
+*.pidb
+*.suo
+*.user
+*.userprefs
+*.csproj
+*.unityproj
+*.sln
+*.svd
+*.pdb
+*.mdb
+
+# Rider / VS / JetBrains
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.DotSettings.user
+
+# Gradle / Android / Xcode
+.gradle/
+ExportedObj/
+*.apk
+*.aab
+*.keystore
+*.xcworkspace
+*.xcuserstate
+*.xcuserdatad/
+DerivedData/
+
+# Unity Specific
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# CRITICAL: Always commit these
+!/*.meta
+!/Assets/**/*.meta
+!/ProjectSettings/**/*.meta
+
+# Test output
+TestResults/
+Reports/
+coverage.xml
+*.trx
+
+# Other
+.DS_Store
+Thumbs.db
+CLAUDE.md
+WORKFLOW.md
+.claude/
+.claude-code/
+qa_testing_config.json
+.output/
+
+# Raw audio backups created by Tools/normalize_audio.py
+_AudioBackup_raw/
+
+CLAUDE.md.generated
+.claude.backup.*
