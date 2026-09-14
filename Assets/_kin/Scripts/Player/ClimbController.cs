@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 
-public class ClimbingController : MonoBehaviour
+public class ClimbController : MonoBehaviour
 {
     [Header("Climbing Settings (Subway Surfers Style)")]
     public float climbSpeed = 5f;
