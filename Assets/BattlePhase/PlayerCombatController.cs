@@ -3,213 +3,393 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+// --- [แก้ไข] เพิ่ม State "ChoosingSkill" เข้ามา ---
+public enum PlayerActionState { Waiting, ChoosingAction, ChoosingSkill, ChoosingTarget, DoingQTE, Executing }
+
 public class PlayerCombatController : MonoBehaviour
 {
+    public static PlayerCombatController Instance;
+
     [Header("Stats")]
     public float baseSpeed = 100f;
     public int maxAP = 5;
-    public int currentAP = 3; // เริ่มต้นอาจจะมีไม่เต็ม
+    public int currentAP = 3;
     public TextMeshProUGUI textAP;
 
     [Header("Weapons")]
-    public List<WeaponData> inventoryWeapons; // ลิสต์อาวุธที่พกมา
+    public List<WeaponData> inventoryWeapons;
     public int currentWeaponIndex = 0;
 
     public WeaponData CurrentWeapon => inventoryWeapons[currentWeaponIndex];
     public WeaponData ActiveWeapon;
 
     [Header("Free Aim Settings")]
-    public GameObject crosshairUI; // รูปเป้าเล็ง
-    public LayerMask enemyLayer;   // แยก Layer ให้ยิงโดนเฉพาะศัตรู
+    public GameObject crosshairUI;
+    public LayerMask enemyLayer;
     private bool isAiming = false;
     private Camera mainCam;
+
+    [Header("Target & Skill Selection")]
+    public PlayerActionState actionState = PlayerActionState.Waiting; // [ใช้ Enum คุม State]
+    private int currentTargetIndex = 0;
+    private int pendingActionType = 0; // 0 = ตีปกติ, 1 = สกิล
+
+    // --- [เพิ่มใหม่] เก็บสกิลที่ผู้เล่นเพิ่งเลือก ---
+    private WeaponSkill selectedSkill;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     private void Start()
     {
         mainCam = Camera.main;
-        if (crosshairUI != null) crosshairUI.SetActive(false); // ซ่อนเป้าเล็งตอนเริ่มเกม
+        if (crosshairUI != null) crosshairUI.SetActive(false);
     }
 
-    // เพิ่มฟังก์ชัน Update เพื่อดักจับการคลิกเมาส์
     private void Update()
     {
-        // ระบบเล็งจะทำงานได้ ก็ต่อเมื่อเป็นเทิร์นของผู้เล่นเท่านั้น
         if (CombatManager.Instance.currentState != CombatState.PlayerTurn)
         {
             if (isAiming) ExitAimMode();
             return;
         }
 
-        // กดคลิกขวาค้าง = เข้าโหมดเล็ง
-        if (Mouse.current != null && Mouse.current.rightButton.isPressed)
+        if (actionState == PlayerActionState.ChoosingSkill)
         {
-            if (!isAiming) EnterAimMode();
-            AimingRoutine();
-        }
-        else
-        {
-            if (isAiming) ExitAimMode();
-        }
-    }
-
-    void EnterAimMode()
-    {
-        isAiming = true;
-        if (crosshairUI != null) crosshairUI.SetActive(true);
-        // 💡 คุณสามารถสั่งให้กล้องซูมเข้า (FOV ลดลง) หรือทำ Slow Motion เพิ่มตรงนี้ได้
-    }
-
-    void ExitAimMode()
-    {
-        isAiming = false;
-        if (crosshairUI != null) crosshairUI.SetActive(false);
-    }
-
-    void AimingRoutine()
-    {
-        // 1. บังคับเป้าเล็ง UI ให้ขยับตามเมาส์
-        Vector2 mousePos = Mouse.current.position.ReadValue();
-        if (crosshairUI != null) crosshairUI.transform.position = mousePos;
-
-        // 2. ถ้าคลิกซ้ายขณะที่เล็งอยู่ = ทำการยิง
-        if (Mouse.current.leftButton.wasPressedThisFrame)
-        {
-            ExecuteFreeAimShoot(mousePos);
-        }
-    }
-
-    void ExecuteFreeAimShoot(Vector2 screenPos)
-    {
-        // เช็คว่ามี AP พอหรือไม่ (สมมติว่าใช้ 1 AP)
-        if (currentAP < 1)
-        {
-            Debug.Log("AP ไม่พอสำหรับการยิง!");
+            HandleSkillSelectionInput();
             return;
         }
 
-        // 3. ยิงเส้น Raycast จากกล้องเข้าไปใน 3D Space
-        Ray ray = mainCam.ScreenPointToRay(screenPos);
-        RaycastHit hit;
-
-        // เช็คว่าชนกับวัตถุที่อยู่ใน Enemy Layer หรือไม่ (ระยะยิง 100 หน่วย)
-        if (Physics.Raycast(ray, out hit, 1000f, enemyLayer))
+        else if (actionState == PlayerActionState.ChoosingTarget)
         {
-            EnemyController enemy = hit.collider.GetComponent<EnemyController>();
-            if (enemy != null)
+            HandleTargetSelectionInput();
+            return;
+        }
+
+        // โหมด Free Aim (คลิกขวาค้าง)
+        if (actionState != PlayerActionState.ChoosingSkill) 
+        {
+            if (Mouse.current != null && Mouse.current.rightButton.isPressed)
             {
-                int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier);
-
-                Debug.Log($"<color=green>🎯 ยิงโดนเป้าหมาย: {enemy.enemyName}</color>");
-                enemy.TakeDamage(finalDamage);
-                enemy.TakePostureDamage(Mathf.RoundToInt(finalDamage * 0.5f));
-
-                currentAP -= 1;
-
-                ExitAimMode();
-                //CombatManager.Instance.EndCurrentTurn();
+                if (!isAiming) EnterAimMode();
+                AimingRoutine();
             }
+            else
+            {
+                if (isAiming) ExitAimMode();
+            }
+        }
+
+        
+    }
+
+    // ==========================================
+    // 1. ระบบเลือกสกิล (เมื่อกดปุ่ม Skill บน UI)
+    // ==========================================
+    public void Command_Skill()
+    {
+        if (ActiveWeapon.availableSkills == null || ActiveWeapon.availableSkills.Count == 0)
+        {
+            Debug.LogWarning($"อาวุธ {ActiveWeapon.weaponName} ไม่มีสกิลให้ใช้!");
+            return;
+        }
+
+        actionState = PlayerActionState.ChoosingSkill;
+
+        if (PlayerUIManager.Instance != null)
+        {
+            PlayerUIManager.Instance.ShowSkillMenu(ActiveWeapon);
+        }
+    }
+    public void UI_SelectSkill(int skillIndex)
+    {
+        if (actionState != PlayerActionState.ChoosingSkill) return;
+
+        WeaponSkill skillToCast = ActiveWeapon.availableSkills[skillIndex];
+
+        if (currentAP >= skillToCast.apCost)
+        {
+            selectedSkill = skillToCast;
+            pendingActionType = 1; // 1 = สกิล
+            actionState = PlayerActionState.ChoosingTarget;
+            currentTargetIndex = 0;
+
+            // ซ่อนเมนูสกิลระหว่างเล็งเป้า
+            if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
+
+            UpdateCameraFocus();
         }
         else
         {
-            Debug.Log("<color=red>❌ ยิงพลาด!</color>");
-            // (ถ้าอยากให้ยิงพลาดแล้วเสียเทิร์นเลย ก็สั่งหัก AP และ EndCurrentTurn ตรงนี้ได้ครับ)
+            Debug.Log($"<color=red>AP ไม่พอ! (ต้องการ {skillToCast.apCost} แต่มี {currentAP})</color>");
+            // TODO: เล่นเสียง Error หรือสั่น UI
         }
-
-        UpdateAPUI();
     }
 
+    private void HandleSkillSelectionInput()
+    {
+        if (Keyboard.current == null) return;
+
+        // ดักจับการกดปุ่ม ESC เพื่อกลับไปหน้าเมนูหลัก
+        if (Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            actionState = PlayerActionState.ChoosingAction;
+            Debug.Log("ยกเลิกการเลือกสกิล -> กลับไปหน้าเมนูหลัก");
+
+            // สั่งซ่อนหน้าสกิล แล้วเปิดหน้าต่าง Action Menu ขึ้นมา
+            if (PlayerUIManager.Instance != null)
+            {
+                PlayerUIManager.Instance.ShowActionMenu();
+            }
+        }
+    }
+
+    // ==========================================
+    // 2. ระบบเลือกเป้าหมาย (ใช้สำหรับโจมตีปกติและสกิล)
+    // ==========================================
+    public void Command_BasicAttack()
+    {
+        if (CombatManager.Instance.enemies.Count == 0) return;
+
+        pendingActionType = 0; // 0 = โจมตีปกติ
+        actionState = PlayerActionState.ChoosingTarget;
+        currentTargetIndex = 0;
+
+        if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
+
+        UpdateCameraFocus();
+    }
+
+    private void HandleTargetSelectionInput()
+    {
+        List<EnemyController> enemies = CombatManager.Instance.enemies;
+        if (enemies.Count == 0 || Keyboard.current == null) return;
+
+        if (Keyboard.current.dKey.wasPressedThisFrame || Keyboard.current.rightArrowKey.wasPressedThisFrame)
+        {
+            currentTargetIndex = (currentTargetIndex + 1) % enemies.Count;
+            UpdateCameraFocus();
+        }
+        else if (Keyboard.current.aKey.wasPressedThisFrame || Keyboard.current.leftArrowKey.wasPressedThisFrame)
+        {
+            currentTargetIndex--;
+            if (currentTargetIndex < 0) currentTargetIndex = enemies.Count - 1;
+            UpdateCameraFocus();
+        }
+        else if (Keyboard.current.fKey.wasPressedThisFrame || Keyboard.current.enterKey.wasPressedThisFrame)
+        {
+            ExecutePendingAction(enemies[currentTargetIndex]);
+        }
+        else if (Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            if (pendingActionType == 1)
+            {
+                // ถ้ายกเลิกสกิล ให้เปิดหน้า List สกิลกลับมา
+                actionState = PlayerActionState.ChoosingSkill;
+                if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowSkillMenu(ActiveWeapon);
+            }
+            else
+            {
+                // ถ้ายกเลิกโจมตีปกติ ให้เปิดหน้าเมนูหลักกลับมา
+                actionState = PlayerActionState.ChoosingAction;
+                if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
+            }
+
+            if (BattleCameraController.Instance != null) BattleCameraController.Instance.ResetCamera();
+        }
+    }
+
+    private void UpdateCameraFocus()
+    {
+        EnemyController target = CombatManager.Instance.enemies[currentTargetIndex];
+        string actionName = (pendingActionType == 0) ? "โจมตีปกติ" : $"สกิล '{selectedSkill.skillName}'";
+
+        Debug.Log($"<color=yellow>เล็งเป้า ({actionName}) ไปที่: {target.enemyName}</color>");
+
+        if (BattleCameraController.Instance != null)
+        {
+            BattleCameraController.Instance.FocusOnTarget(target.transform);
+        }
+    }
+
+    // ==========================================
+    // 3. ระบบยืนยันการโจมตี (OOP ทำงานที่นี่)
+    // ==========================================
+    private void ExecutePendingAction(EnemyController targetEnemy)
+    {
+        if (pendingActionType == 0)
+        {
+            // ตีปกติ ไม่ต้องมี QTE ทำงานได้เลย
+            actionState = PlayerActionState.Executing;
+            int damage = Mathf.RoundToInt(ActiveWeapon.baseDamage);
+            targetEnemy.TakeDamage(damage);
+            RestoreAP(1);
+            FinishTurnAction();
+        }
+        else if (pendingActionType == 1 && selectedSkill != null)
+        {
+            // สกิล -> เช็คว่าสกิลนี้ต้องใช้ QTE ไหม
+            if (selectedSkill.useQTE && SkillQTEManager.Instance != null)
+            {
+                actionState = PlayerActionState.DoingQTE;
+                Debug.Log("รอผู้เล่นกด QTE...");
+
+                // ส่งคำสั่งเปิด QTE และรอรับผลลัพธ์ผ่าน Callback
+                SkillQTEManager.Instance.StartQTE(selectedSkill.qteSteps, (successCount) =>
+                {
+                    // [เมื่อ QTE จบลง ฟังก์ชันข้างในนี้ถึงจะทำงาน]
+                    currentAP -= selectedSkill.apCost;
+                    selectedSkill.ExecuteSkill(this, targetEnemy, successCount);
+
+                    FinishTurnAction(); // สั่งจบเทิร์น
+                });
+            }
+            else
+            {
+                // ถ้าสกิลนี้ไม่ต้องใช้ QTE (หรือไม่มี Manager) ก็ปล่อยสกิลเลยโดยส่ง QTE = 0
+                actionState = PlayerActionState.Executing;
+                currentAP -= selectedSkill.apCost;
+                selectedSkill.ExecuteSkill(this, targetEnemy, 0);
+                FinishTurnAction();
+            }
+        }
+    }
+
+    // แยกการทำงานตอนจบเทิร์นออกมา เพื่อให้เรียกง่ายขึ้น
+    private void FinishTurnAction()
+    {
+        UpdateAPUI();
+        if (BattleCameraController.Instance != null) BattleCameraController.Instance.ResetCamera();
+
+        if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
+
+        actionState = PlayerActionState.Waiting;
+        CombatManager.Instance.EndCurrentTurn();
+    }
+
+    // ==========================================
+    // Utility & Free Aim Methods
+    // ==========================================
     public void StartTurn(WeaponData weaponData)
     {
         Debug.Log($"<color=cyan>Player's Turn!</color>");
         ActiveWeapon = weaponData;
-        // ฟื้นฟู AP ทุกเทิร์นอัตโนมัติ
-        //RestoreAP(1);
-        Debug.Log("Player Turn! Waiting for input...");
-        // ตรงนี้คุณจะไปเปิด UI Menu (Attack, Skill, Switch) ให้ผู้เล่นกด
 
+        currentWeaponIndex = inventoryWeapons.IndexOf(weaponData);
+
+        actionState = PlayerActionState.ChoosingAction;
         UpdateAPUI();
-    }
 
-    // --- Action Methods (เรียกจากปุ่ม UI) ---
-
-    public void Command_BasicAttack()
-    {
-        int damage = ActiveWeapon.baseDamage;
-        if (CombatManager.Instance.enemies.Count == 0) return;
-        EnemyController targetEnemy = CombatManager.Instance.enemies[0];
-
-        Debug.Log($"Player attacks with {CurrentWeapon.weaponName} for {damage} damage");
-        targetEnemy.TakeDamage(damage);
-        RestoreAP(1); // โจมตีธรรมดาได้ AP
-
-
-        // เล่น Animation โจมตีศัตรู และลด HP ศัตรู
-        UpdateAPUI();
-        CombatManager.Instance.EndCurrentTurn();
-    }
-
-    public void Command_Skill()
-    {
-        if (currentAP >= 2) // สมมติสกิลใช้ 2 AP
+        if (PlayerUIManager.Instance != null)
         {
-            currentAP -= 2;
-            Debug.Log($"Player uses skill with {CurrentWeapon.weaponName}");
-            // ทำดาเมจสกิล
-
-            UpdateAPUI();
-            CombatManager.Instance.EndCurrentTurn();
-        }
-        else
-        {
-            Debug.Log("AP ไม่พอ!");
+            PlayerUIManager.Instance.ShowActionMenu();
         }
     }
 
     public void Command_SwitchWeapon()
     {
-        // หาอาวุธถัดไปที่ยังไม่พัง
-        int nextIndex = (currentWeaponIndex + 1) % inventoryWeapons.Count;
+        int nextIndex = currentWeaponIndex;
+        bool foundValidWeapon = false;
 
-        if (inventoryWeapons[nextIndex].currentDurability > 0)
+        // วนลูปหาอาวุธถัดไปที่ยังไม่พัง (ป้องกันบั๊กกรณีพังเกือบหมด)
+        for (int i = 0; i < inventoryWeapons.Count; i++)
+        {
+            nextIndex = (nextIndex + 1) % inventoryWeapons.Count;
+            if (inventoryWeapons[nextIndex].currentDurability > 0)
+            {
+                foundValidWeapon = true;
+                break;
+            }
+        }
+
+        if (foundValidWeapon && nextIndex != currentWeaponIndex)
         {
             currentWeaponIndex = nextIndex;
+
+            ActiveWeapon = CurrentWeapon;
+
             Debug.Log($"Switched to {CurrentWeapon.weaponName}");
-            // อาจจะเสีย AP 1 หน่วย หรือ ฟรี ก็ได้ แล้วแต่บาลานซ์
-            // สลับอาวุธเสร็จ ไม่จบเทิร์น (หรือจบเทิร์นก็ได้)
             UpdateAPUI();
+
+            actionState = PlayerActionState.Waiting;
+            if (BattleCameraController.Instance != null) BattleCameraController.Instance.ResetCamera();
         }
-        else
+        else if (nextIndex == currentWeaponIndex)
         {
-            Debug.Log("อาวุธชิ้นนั้นพังไปแล้ว!");
+            Debug.LogWarning("ไม่มีอาวุธอื่นที่ใช้งานได้แล้ว!");
         }
     }
 
-    // --- Utility Methods ---
-
-    public void RestoreAP(int amount)
-    {
-        currentAP = Mathf.Min(currentAP + amount, maxAP);
+    void EnterAimMode() 
+    { 
+        isAiming = true; if (crosshairUI != null) crosshairUI.SetActive(true);
+        if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
+    }
+    void ExitAimMode() 
+    { 
+        isAiming = false; if (crosshairUI != null) crosshairUI.SetActive(false);
+        if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
     }
 
+    void AimingRoutine()
+    {
+        Vector2 mousePos = Mouse.current.position.ReadValue();
+        if (crosshairUI != null) crosshairUI.transform.position = mousePos;
+
+        if (Mouse.current.leftButton.wasPressedThisFrame) ExecuteFreeAimShoot(mousePos);
+    }
+
+    void ExecuteFreeAimShoot(Vector2 screenPos)
+    {
+        if (currentAP < 1) return;
+
+        Ray ray = mainCam.ScreenPointToRay(screenPos);
+        if (Physics.Raycast(ray, out RaycastHit hit, 1000f, enemyLayer))
+        {
+            EnemyController enemy = hit.collider.GetComponent<EnemyController>();
+            if (enemy != null)
+            {
+                int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier);
+                enemy.TakeDamage(finalDamage);
+                enemy.TakePostureDamage(Mathf.RoundToInt(finalDamage * 0.5f));
+                currentAP -= 1;
+                ExitAimMode();
+            }
+        }
+        UpdateAPUI();
+    }
+
+    public void RestoreAP(int amount) { currentAP = Mathf.Min(currentAP + amount, maxAP); }
     public void TakeDamage(int damage)
     {
-        CurrentWeapon.currentDurability -= damage;
-        Debug.Log($"{CurrentWeapon.weaponName} took {damage} damage. Remaining: {CurrentWeapon.currentDurability}");
+        if (ActiveWeapon == null) return; // กัน Error
+
+        ActiveWeapon.currentDurability -= damage;
+        Debug.Log($"{ActiveWeapon.weaponName} took {damage} damage. Remaining: {ActiveWeapon.currentDurability}");
+
+        DamagePopupManager.Instance.CreatePopup(transform.position, damage, false, Color.red);
 
         if (CurrentWeapon.currentDurability <= 0)
         {
+            Debug.Log($"{CurrentWeapon.weaponName} is BROKEN!");
             HandleWeaponBreak();
         }
     }
-
     void HandleWeaponBreak()
     {
-        Debug.Log($"{CurrentWeapon.weaponName} is BROKEN!");
-        // ลอจิกบังคับเปลี่ยนอาวุธชิ้นถัดไป ถ้าพังหมดให้เรียก GameOver
-    }
+        Debug.Log($"<color=red>{ActiveWeapon.weaponName} is BROKEN!</color>");
 
-    void UpdateAPUI()
-    {
-        textAP.text = $"AP: {currentAP}/{maxAP}";
+        if (CombatManager.Instance != null)
+        {
+            CombatManager.Instance.RemoveWeapon(ActiveWeapon);
+        }
+
+        if (CombatManager.Instance.currentState != CombatState.GameOver)
+        {
+            Command_SwitchWeapon();
+        }
     }
+    void UpdateAPUI() { if (textAP != null) textAP.text = $"AP: {currentAP}/{maxAP}"; }
 }

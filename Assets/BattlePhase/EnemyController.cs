@@ -1,15 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 
-// สร้าง Struct สำหรับเก็บข้อมูลท่าโจมตีแต่ละท่า
-[System.Serializable]
-public struct EnemyAttack
-{
-    public string attackName;
-    public int damage;
-    public Vector2 parryDirection; // ทิศทางที่ผู้เล่นต้องปัดนิ้วเพื่อหลบ/ปัดป้องท่านี้
-}
-
 public class EnemyController : MonoBehaviour
 {
     [Header("Base Stats")]
@@ -18,27 +9,26 @@ public class EnemyController : MonoBehaviour
     public int maxHP = 100;
     public int currentHP;
 
-    public int maxPosture = 100; // หลอดความทนทาน
+    public int maxPosture = 100;
     public int currentPosture;
-    public bool isStaggered = false; // ติดสถานะเบรคหรือไม่
+    public bool isStaggered = false;
 
-    [Header("Attack Patterns")]
-    public List<EnemyAttack> attackList; // ใส่ท่าโจมตีใน Inspector ได้เลย
+    [Header("Attack Patterns (Multi-Hit)")]
+    // ใช้โครงสร้างใหม่ที่เก็บข้อมูลหลายฮิตแทน
+    public List<EnemyAttackPattern> attackPatterns;
 
     private void Start()
     {
-        currentHP = maxHP; // เซ็ต HP เต็มตอนเริ่มเกม
-        currentPosture = maxPosture; // เซ็ต Posture เต็มตอนเริ่มเกม
+        currentHP = maxHP;
+        currentPosture = maxPosture;
     }
 
-    // ฟังก์ชันนี้จะถูกเรียกโดย CombatManager เมื่อถึงคิวของศัตรูตัวนี้
     public void StartTurn()
     {
         Debug.Log($"<color=orange>{enemyName}'s Turn!</color>");
 
         if (isStaggered)
         {
-            // ถ้าติด Stagger ให้ข้ามเทิร์นแล้วฟื้นฟู Posture กลับมา
             Debug.Log($"<color=yellow>{enemyName} is STAGGERED and skips a turn!</color>");
             isStaggered = false;
             currentPosture = maxPosture;
@@ -46,18 +36,16 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        // 1. สุ่มเลือกท่าโจมตีจากที่มี (ในอนาคตสามารถเปลี่ยนเป็น AI เลือกท่าตามสถานการณ์ได้)
-        int attackIndex = Random.Range(0, attackList.Count);
-        EnemyAttack chosenAttack = attackList[attackIndex];
+        // 1. สุ่มท่าโจมตีจากชุดคอมโบ
+        int attackIndex = Random.Range(0, attackPatterns.Count);
+        EnemyAttackPattern chosenPattern = attackPatterns[attackIndex];
 
-        Debug.Log($"{enemyName} uses {chosenAttack.attackName}!");
+        Debug.Log($"{enemyName} uses {chosenPattern.attackName}!");
 
-        // 2. ส่งข้อมูลท่าโจมตีไปให้ ParryManager ดำเนินการต่อ
-        // (ParryManager จะนับเวลาและเป็นตัวสั่งจบเทิร์นเมื่อหมดเวลา หรือผู้เล่นปัดสำเร็จ)
-        ParryManager.Instance.StartParryWindow(chosenAttack.parryDirection, chosenAttack.damage, this);
+        // 2. ส่งทั้งชุดโจมตีไปให้ ParryManager ดำเนินการ
+        ParryManager.Instance.StartParrySequence(chosenPattern, this);
     }
 
-    // ฟังก์ชันรับดาเมจเมื่อผู้เล่นโจมตี
     public void TakeDamage(int damage)
     {
         if (isStaggered) damage = Mathf.RoundToInt(damage * 1.5f);
@@ -65,15 +53,15 @@ public class EnemyController : MonoBehaviour
         currentHP -= damage;
         Debug.Log($"{enemyName} took {damage} damage! (HP: {currentHP}/{maxHP})");
 
-        if (currentHP <= 0)
-        {
-            Die();
-        }
+        Color dmgColor = isStaggered ? Color.yellow : Color.white;
+        DamagePopupManager.Instance.CreatePopup(transform.position, damage, isStaggered, dmgColor);
+
+        if (currentHP <= 0) Die();
     }
 
     public void TakePostureDamage(int postureDamage)
     {
-        if (isStaggered) return; // ถ้าเบรคอยู่แล้วไม่ต้องลดอีก
+        if (isStaggered) return;
 
         currentPosture -= postureDamage;
         Debug.Log($"{enemyName} took {postureDamage} Posture Damage! (Posture: {currentPosture}/{maxPosture})");
@@ -88,11 +76,36 @@ public class EnemyController : MonoBehaviour
     private void Die()
     {
         Debug.Log($"<color=red>{enemyName} has been defeated!</color>");
-
-        // แจ้ง CombatManager ให้ถอดตัวนี้ออกจากคิวเทิร์น
         CombatManager.Instance.RemoveEnemy(this);
-
-        // ทำลาย Object หรือเล่น Animation ตาย
         Destroy(gameObject);
     }
+}
+
+// ---------------------------------------------------------
+// โครงสร้างข้อมูลท่าโจมตี (วางไว้ด้านล่างของไฟล์ หรือแยกไฟล์ก็ได้)
+// ---------------------------------------------------------
+[System.Serializable]
+public class ParryStrike
+{
+    [Header("Timing (ซิงก์กับ Animation)")]
+    [Tooltip("หน่วงเวลาก่อนฟันดาบนี้ (วินาที)")]
+    public float delayBeforeStrike = 0.5f;
+
+    [Tooltip("เวลาที่ผู้เล่นมีสิทธิ์ Parry (วินาที)")]
+    public float parryWindowDuration = 0.8f;
+
+    [Header("Consequences")]
+    public float damageIfHit = 15f;
+    public float postureDamageIfParried = 10f;
+
+    [Header("Osu Slider Type")]
+    [Tooltip("0=ขวา, 1=ซ้าย, 2=ลง, 3=ขึ้น, 4=ขวาบน, 5=ซ้ายบน, 6=ขวาล่าง ,7=ซ้ายล่าง")]
+    public int sliderDirectionIndex = 0;
+}
+
+[System.Serializable]
+public class EnemyAttackPattern
+{
+    public string attackName = "Triple Slash";
+    public List<ParryStrike> strikes = new List<ParryStrike>();
 }
