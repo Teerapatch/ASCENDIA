@@ -1273,7 +1273,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &637260221
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1937,6 +1937,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MapGenerator
   mountainPrefabs:
   - {fileID: 2002122749271754723, guid: 07dd1e64c37a96b4e957fecb244cae28, type: 3}
+  - {fileID: 2002122749271754723, guid: 7b102e40afcebb54ab8a0d5f9925fa89, type: 3}
+  - {fileID: 2002122749271754723, guid: e32469c3dfd397b49a34a9901069627f, type: 3}
   tileHeight: 20
   maxTilesOnScreen: 4
   playerTransform: {fileID: 864942010}
