@@ -19,7 +19,13 @@ public class HybridPlayerController : MonoBehaviour
     public float minX = -4f;
     public float maxX = 4f;
     public float baseStaminaDrain = 10f;
-    public float maxPlayerHeight = 5f; // ความสูงที่จะให้ตัวละครไต่ขึ้นไปถึง ก่อนที่ฉากจะเลื่อนแทน
+    public float maxPlayerHeight = 5f; 
+
+    [Header("Cinemachine & Camera Control")]
+    public GameObject walkCam;  
+    public GameObject climbCam; 
+    public Transform cameraLookTarget; 
+    public float mouseSensitivity = 3f; 
 
     [Header("References")]
     public Transform environmentContainer; 
@@ -31,14 +37,45 @@ public class HybridPlayerController : MonoBehaviour
     private Vector3 savedPlayerPosition; 
     private bool isHandlingDeath = false;
 
+    // --- ระบบล็อคกล้อง ---
+    private Vector3 lookTargetOffset; // เก็บระยะห่างระหว่างคนกับเป้ากล้อง
+    private float camPan = 0f; 
+    private float camTilt = 0f; 
+    private float lockedPan = 0f; // มุมแนวนอนที่ล็อคไว้
+    private float lockedTilt = 0f; // มุมแนวตั้งที่ล็อคไว้
+
     private void Start()
     {
+        walkCam.SetActive(true);
+        climbCam.SetActive(false);
+
+        // 1. จำระยะห่างและมุมตั้งต้นไว้เป็น "มุมล็อค"
+        if (cameraLookTarget != null)
+        {
+            lookTargetOffset = cameraLookTarget.localPosition;
+            lockedPan = cameraLookTarget.eulerAngles.y;
+            lockedTilt = cameraLookTarget.eulerAngles.x;
+            camPan = lockedPan;
+            camTilt = lockedTilt;
+
+            // 2. ปลดเป้ากล้องออกจากการเป็นลูกของ Player จะได้ไม่หมุนตามตอนกด W A S D
+            cameraLookTarget.SetParent(null); 
+        }
+
         SaveCheckpoint();
     }
 
     private void Update()
     {
         if (GameManager.Instance == null || isHandlingDeath) return;
+
+        // อัปเดตให้เป้ากล้องเดินตามตัวละครตลอดเวลา (แต่ไม่หมุนตาม)
+        if (cameraLookTarget != null)
+        {
+            cameraLookTarget.position = transform.position + lookTargetOffset;
+        }
+
+        HandleCameraOrbit();
 
         if (currentState == PlayerState.Walking)
         {
@@ -49,11 +86,36 @@ public class HybridPlayerController : MonoBehaviour
             HandleClimbing();
             CheckStaminaPenalty();
 
-            // ปุ่ม V ไว้เทสระบบปักหมุด
             if (Input.GetKeyDown(KeyCode.V))
             {
                 SaveCheckpoint();
             }
+        }
+    }
+
+    private void HandleCameraOrbit()
+    {
+        if (cameraLookTarget == null) return;
+
+        if (Input.GetMouseButton(1)) // คลิกขวาค้างเพื่อหมุนกล้อง
+        {
+            float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
+            float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+
+            camPan += mouseX;
+            camTilt -= mouseY;
+            camTilt = Mathf.Clamp(camTilt, -30f, 70f); 
+
+            // หมุนเป้ากล้องแบบ World Space
+            cameraLookTarget.rotation = Quaternion.Euler(camTilt, camPan, 0f);
+        }
+        else 
+        {
+            // ถ้าปล่อยเมาส์ ให้ค่อยๆ สมูทกล้องกลับมาที่ "มุมล็อค" (ใช้ LerpAngle เพื่อกันบั๊กหมุน 360 องศา)
+            camPan = Mathf.LerpAngle(camPan, lockedPan, Time.deltaTime * 10f);
+            camTilt = Mathf.LerpAngle(camTilt, lockedTilt, Time.deltaTime * 10f);
+            
+            cameraLookTarget.rotation = Quaternion.Euler(camTilt, camPan, 0f);
         }
     }
 
@@ -66,15 +128,14 @@ public class HybridPlayerController : MonoBehaviour
         if (movement.magnitude > 0.1f)
         {
             transform.Translate(movement * walkSpeed * Time.deltaTime, Space.World);
+            // หมุนเฉพาะตัวละครให้หันตามทิศที่เดิน (กล้องจะไม่หมุนตามแล้ว เพราะปลดลูกออกไปแล้ว)
             transform.forward = Vector3.Slerp(transform.forward, movement, Time.deltaTime * 10f);
         }
 
-        // ยิง Raycast ไปข้างหน้าเพื่อตรวจจับกำแพง
         if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, wallDetectDistance))
         {
             if (hit.collider.CompareTag("Wall"))
             {
-                // ส่งข้อมูลจุดที่ชน (hit) เข้าไปด้วย เพื่อให้ดึงตัวละครติดกำแพงได้เนียนๆ
                 StartClimbing(hit);
             }
         }
@@ -83,17 +144,20 @@ public class HybridPlayerController : MonoBehaviour
     private void StartClimbing(RaycastHit hit)
     {
         currentState = PlayerState.Climbing;
-        
-        // 1. บังคับให้ตัวละครหันหน้าเข้าหากำแพงตามองศาของกำแพงจริงๆ
         transform.forward = -hit.normal; 
         
-        // 2. ดึงตัวให้ชิดกำแพงในระยะที่พอดี (แกน X, Z) 
-        // 3. **รักษาความสูงแกน Y ไว้เท่าเดิม (ไม่วาร์ปขึ้นไปแล้ว เริ่มไต่จากพื้นจริงๆ)**
-        float capsuleRadius = 0.6f; // ระยะครึ่งนึงของตัวละครกันจมกำแพง
+        float capsuleRadius = 0.6f; 
         Vector3 stickToWallPos = hit.point + (hit.normal * capsuleRadius);
         transform.position = new Vector3(stickToWallPos.x, transform.position.y, stickToWallPos.z);
 
-        Debug.Log("💥 เกาะกำแพงแล้ว! กด W เพื่อเริ่มไต่ขึ้นจากพื้น");
+        // --- เซ็ตมุมล็อคใหม่ให้กล้องมองเข้าหากำแพงตรงๆ ---
+        lockedPan = transform.eulerAngles.y;
+        lockedTilt = 0f; 
+
+        walkCam.SetActive(false);
+        climbCam.SetActive(true);
+
+        Debug.Log("💥 เกาะกำแพงแล้ว! สลับเป็นกล้องปีนเขา");
     }
 
     private void HandleClimbing()
@@ -101,19 +165,16 @@ public class HybridPlayerController : MonoBehaviour
         float h = Input.GetAxisRaw("Horizontal");
         float v = Input.GetAxisRaw("Vertical");
 
-        // ขยับซ้าย-ขวาบนกำแพง
         Vector3 newPos = transform.position + new Vector3(h, 0, 0) * horizontalClimbSpeed * Time.deltaTime;
         newPos.x = Mathf.Clamp(newPos.x, minX, maxX);
         transform.position = newPos;
 
         if (v > 0.1f)
         {
-            // ถ้าความสูงตัวละครยังไม่ถึงเป้าหมาย ให้เลื่อน "ตัวละคร" ขึ้น
             if (transform.position.y < maxPlayerHeight)
             {
                 transform.Translate(Vector3.up * climbSpeed * Time.deltaTime, Space.World);
             }
-            // ถ้าความสูงถึงเป้าหมายแล้ว ให้สลับไปดึง "ฉาก" ลงมาแทนแบบ Subway Surfers
             else
             {
                 environmentContainer.Translate(Vector3.down * climbSpeed * Time.deltaTime);
@@ -124,7 +185,6 @@ public class HybridPlayerController : MonoBehaviour
         }
         else if (v < -0.1f)
         {
-            // การปีนลง: ให้เช็คว่าฉากอยู่ชิดพื้นหรือยัง ถ้ายังให้ดึงฉากขึ้น ถ้าชิดแล้วค่อยดึงตัวละครลง (แต่สำหรับ Prototype อาจจะให้ดึงฉากขึ้นอย่างเดียวก่อนได้)
             environmentContainer.Translate(Vector3.up * climbSpeed * Time.deltaTime);
             distanceClimbed -= climbSpeed * Time.deltaTime;
             DrainStamina();
@@ -146,7 +206,6 @@ public class HybridPlayerController : MonoBehaviour
         savedDistance = distanceClimbed;
         savedContainerPosition = environmentContainer.position;
         savedPlayerPosition = transform.position; 
-        Debug.Log("📌 ปักหมุด Checkpoint เรียบร้อย!");
     }
 
     private void CheckStaminaPenalty()
@@ -160,8 +219,7 @@ public class HybridPlayerController : MonoBehaviour
     private IEnumerator PenaltyRoutine()
     {
         isHandlingDeath = true;
-        Debug.Log("💀 Stamina หมด! ตัดจอดำลงโทษ...");
-
+        
         if (fadeImage != null) fadeImage.color = new Color(0, 0, 0, 1);
         GameManager.Instance.UsePiton();
         
@@ -178,7 +236,14 @@ public class HybridPlayerController : MonoBehaviour
         {
             Debug.Log("GAME OVER - หมุดหมด!");
             currentState = PlayerState.Walking; 
-            transform.position = new Vector3(0, 0.5f, -5f); // ถอยหลังกลับไปตั้งหลักที่พื้น
+            transform.position = new Vector3(0, 0.5f, -5f); 
+            
+            // รีเซ็ตมุมกล้องให้มองตรง
+            lockedPan = 0f;
+            lockedTilt = 0f;
+
+            climbCam.SetActive(false);
+            walkCam.SetActive(true);
         }
 
         isHandlingDeath = false;
