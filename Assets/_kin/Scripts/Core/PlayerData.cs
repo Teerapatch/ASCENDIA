@@ -1,15 +1,26 @@
-using System;
+using UnityEngine;
 
-[Serializable]
-public class PlayerData
+[CreateAssetMenu(fileName = "NewPlayerData", menuName = "Game Data/Player Data")]
+public class PlayerData : ScriptableObject
 {
+    [Header("Stamina System")]
     public float maxStamina = 100f;
     public float stamina = 100f;
+    public float baseStaminaDrain = 10f; // << เพิ่มบรรทัดนี้เข้ามา
 
+    [Header("Inventory & Stats")]
     public int ore = 0;
-
-    public float weight = 10f;
+    public float weight = 0f;
     public float maxWeight = 30f;
 
-    public int piton = 3; // หมุดเปรียบเสมือนจำนวนชีวิต
+    [Header("Lives")]
+    public int piton = 3;
+
+    public void ResetData()
+    {
+        stamina = maxStamina;
+        ore = 0;
+        weight = 0f; 
+        piton = 3;
+    }
 }

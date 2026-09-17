@@ -4,7 +4,8 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance;
 
-    public PlayerData playerData = new PlayerData();
+    // เปลี่ยนจาก = new PlayerData() เป็นการเปิดช่องว่างไว้รอรับไฟล์จาก Inspector
+    public PlayerData playerData; 
 
     public int currentNodeID = 0;
 
@@ -14,6 +15,12 @@ public class GameManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // รีเซ็ตค่าสเตตัสกลับเป็นค่าเริ่มต้นทุกครั้งที่กด Play เกม
+            if (playerData != null)
+            {
+                playerData.ResetData();
+            }
         }
         else
         {
