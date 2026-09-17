@@ -21,14 +21,6 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    public void TakeDamage(int damage)
-    {
-        playerData.hp -= damage;
-
-        if (playerData.hp < 0)
-            playerData.hp = 0;
-    }
-
     public void AddOre(int amount)
     {
         playerData.ore += amount;

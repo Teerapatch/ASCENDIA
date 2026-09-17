@@ -3,9 +3,6 @@ using System;
 [Serializable]
 public class PlayerData
 {
-    public int maxHP = 100;
-    public int hp = 100;
-
     public float maxStamina = 100f;
     public float stamina = 100f;
 
@@ -14,5 +11,5 @@ public class PlayerData
     public float weight = 10f;
     public float maxWeight = 30f;
 
-    public int piton = 3;
+    public int piton = 3; // หมุดเปรียบเสมือนจำนวนชีวิต
 }
