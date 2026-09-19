@@ -5,6 +5,8 @@ using UnityEngine;
 public class WeaponData : ScriptableObject
 {
     public string weaponName;
+    public Sprite weaponIcon;
+
     public float baseDamage;
     public float weight;
     public float speed;
@@ -12,7 +14,6 @@ public class WeaponData : ScriptableObject
     public float currentDurability; 
     public float freeAimMultiplier = 1.5f;
 
-    // --- [เพิ่มใหม่] คลังสกิลของอาวุธชิ้นนี้ ---
     [Header("Weapon Skills")]
     public List<WeaponSkill> availableSkills; 
 }

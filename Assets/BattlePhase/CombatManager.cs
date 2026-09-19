@@ -157,9 +157,6 @@ public class CombatManager : MonoBehaviour
     {
         if (currentState == CombatState.GameOver) return;
 
-        // =========================================================
-        // --- [เพิ่มใหม่] สแกนหาอาวุธที่พัง และเตะออกอัตโนมัติก่อนคำนวณเทิร์น ---
-        // =========================================================
         var brokenWeapons = turnQueue
             .Where(node => !node.IsEnemy && node.WeaponRef != null && node.WeaponRef.currentDurability <= 0)
             .Select(node => node.WeaponRef)
@@ -195,6 +192,12 @@ public class CombatManager : MonoBehaviour
         else
         {
             currentState = CombatState.EnemyTurn;
+
+            if (WeaponUIManager.Instance != null)
+            {
+                WeaponUIManager.Instance.UpdateWeaponUI(player.inventoryWeapons, player.ActiveWeapon);
+            }
+
             activeTurn.EnemyRef.StartTurn();
         }
     }

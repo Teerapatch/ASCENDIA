@@ -17,6 +17,9 @@ public class EnemyController : MonoBehaviour
     // ใช้โครงสร้างใหม่ที่เก็บข้อมูลหลายฮิตแทน
     public List<EnemyAttackPattern> attackPatterns;
 
+    [Header("Visual Effects")]
+    public ParticleSystem staggerParticle;
+
     private void Start()
     {
         currentHP = maxHP;
@@ -32,6 +35,12 @@ public class EnemyController : MonoBehaviour
             Debug.Log($"<color=yellow>{enemyName} is STAGGERED and skips a turn!</color>");
             isStaggered = false;
             currentPosture = maxPosture;
+
+            if (staggerParticle != null)
+            {
+                staggerParticle.Stop();
+            }
+
             CombatManager.Instance.EndCurrentTurn();
             return;
         }
@@ -70,11 +79,17 @@ public class EnemyController : MonoBehaviour
         {
             isStaggered = true;
             Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
+
+            if (staggerParticle != null)
+            {
+                staggerParticle.Play();
+            }
         }
     }
 
     private void Die()
     {
+        if (staggerParticle != null) staggerParticle.Stop();
         Debug.Log($"<color=red>{enemyName} has been defeated!</color>");
         CombatManager.Instance.RemoveEnemy(this);
         Destroy(gameObject);

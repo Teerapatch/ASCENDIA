@@ -282,6 +282,11 @@ public class PlayerCombatController : MonoBehaviour
         actionState = PlayerActionState.ChoosingAction;
         UpdateAPUI();
 
+        if (WeaponUIManager.Instance != null)
+        {
+            WeaponUIManager.Instance.UpdateWeaponUI(inventoryWeapons, ActiveWeapon);
+        }
+
         if (PlayerUIManager.Instance != null)
         {
             PlayerUIManager.Instance.ShowActionMenu();
@@ -312,6 +317,11 @@ public class PlayerCombatController : MonoBehaviour
 
             Debug.Log($"Switched to {CurrentWeapon.weaponName}");
             UpdateAPUI();
+
+            if (WeaponUIManager.Instance != null)
+            {
+                WeaponUIManager.Instance.UpdateWeaponUI(inventoryWeapons, ActiveWeapon);
+            }
 
             actionState = PlayerActionState.Waiting;
             if (BattleCameraController.Instance != null) BattleCameraController.Instance.ResetCamera();
@@ -371,6 +381,11 @@ public class PlayerCombatController : MonoBehaviour
 
         DamagePopupManager.Instance.CreatePopup(transform.position, damage, false, Color.red);
 
+        if (WeaponUIManager.Instance != null)
+        {
+            WeaponUIManager.Instance.UpdateWeaponUI(inventoryWeapons, ActiveWeapon);
+        }
+
         if (CurrentWeapon.currentDurability <= 0)
         {
             Debug.Log($"{CurrentWeapon.weaponName} is BROKEN!");
@@ -386,10 +401,10 @@ public class PlayerCombatController : MonoBehaviour
             CombatManager.Instance.RemoveWeapon(ActiveWeapon);
         }
 
-        if (CombatManager.Instance.currentState != CombatState.GameOver)
-        {
-            Command_SwitchWeapon();
-        }
+        //if (CombatManager.Instance.currentState != CombatState.GameOver)
+        //{
+        //    Command_SwitchWeapon();
+        //}
     }
     void UpdateAPUI() { if (textAP != null) textAP.text = $"AP: {currentAP}/{maxAP}"; }
 }
