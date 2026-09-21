@@ -3,15 +3,12 @@ using TMPro;
 
 public class PathNode : MonoBehaviour
 {
-    // *** 1. เพิ่มตัวเลือกประเภทของโหนด ***
-    public enum NodeAction { TeleportInScene, LoadNewScene }
+    // *** เปลี่ยนเป็นประเภทห้อง เพื่อให้ RoomManager รู้ว่าต้องโหลดด่านไหน ***
+    public enum RoomType { Climb, Battle, CampScene }
 
     [Header("Node Action")]
-    public NodeAction nodeAction = NodeAction.TeleportInScene; // เลือกประเภทโหนด
-    [Tooltip("จุดวาร์ปในซีนเดียวกัน (ใช้เมื่อเลือก TeleportInScene)")]
-    public Transform teleportDestination; 
-    [Tooltip("ชื่อซีนที่จะโหลด (ใช้เมื่อเลือก LoadNewScene)")]
-    public string sceneToLoad = "NextSceneName";
+    public RoomType roomType = RoomType.Climb; 
+    public string sceneToLoad = "CampScene";
 
     [Header("Node Identity (Icon)")]
     public Sprite nodeIcon; 
@@ -22,7 +19,7 @@ public class PathNode : MonoBehaviour
     [HideInInspector] public RectTransform uiNodeTransform; 
 
     [Header("Node Info (Text)")]
-    public string nodeName = "จุดพักแคมป์"; 
+    public string nodeName = "ทางปีนเขา"; 
     public TextMeshPro nodeText; 
     public Color normalColor = Color.white; 
     public Color hoverColor = Color.yellow; 
@@ -44,17 +41,8 @@ public class PathNode : MonoBehaviour
         targetScale = originalScale;
 
         Transform aura3D = transform.Find("Aura3D"); 
-        if (aura3D != null) 
-        {
-            nodeAura3D = aura3D.gameObject;
-            nodeAura3D.SetActive(false);
-        }
-
-        if (nodeText != null)
-        {
-            nodeText.text = nodeName;
-            nodeText.color = normalColor;
-        }
+        if (aura3D != null) { nodeAura3D = aura3D.gameObject; nodeAura3D.SetActive(false); }
+        if (nodeText != null) { nodeText.text = nodeName; nodeText.color = normalColor; }
     }
 
     private void Update()
@@ -66,10 +54,8 @@ public class PathNode : MonoBehaviour
     {
         isHovering = hover;
         targetScale = isHovering ? originalScale * hoverScaleMultiplier : originalScale;
-
         if (nodeAura3D) nodeAura3D.SetActive(isHovering);
         if (uiMapAura) uiMapAura.SetActive(isHovering);
-
         if (nodeText != null) nodeText.color = isHovering ? hoverColor : normalColor;
     }
 }
