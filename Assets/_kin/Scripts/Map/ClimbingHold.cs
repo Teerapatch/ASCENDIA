@@ -1,10 +1,10 @@
 using UnityEngine;
-
 public class ClimbingHold : MonoBehaviour
 {
     public float grabDistance = 1.5f;
 
     private void Update()
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
     {
         if (GameManager.Instance == null)
             return;
@@ -28,14 +28,17 @@ public class ClimbingHold : MonoBehaviour
                 GrabHold(player);
             }
         }
+        
     }
 
     private void GrabHold(GameObject player)
+    // Update is called once per frame
     {
         player.transform.position =
             transform.position +
             new Vector3(0, 0, -0.6f);
 
         Debug.Log("Grabbed Hold!");
+        
     }
-}
+} 

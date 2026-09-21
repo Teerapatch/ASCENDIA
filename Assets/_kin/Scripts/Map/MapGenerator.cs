@@ -4,22 +4,28 @@ using System.Collections.Generic;
 public class MapGenerator : MonoBehaviour
 {
     [Header("Tile Settings")]
-    public GameObject[] mountainPrefabs; // เอา Prefab หน้าผาแบบต่างๆ มาใส่ช่องนี้
-    public float tileHeight = 20f; // ความสูงของ Prefab หน้าผา 1 บล็อก
-    public int maxTilesOnScreen = 4; // โหลดรอไว้กี่บล็อก
+    public GameObject[] mountainPrefabs; 
+    public GameObject topMountainPrefab; 
     
-    [Header("References")]
-    public Transform playerTransform; // ลากตัวละครมาใส่
+    public float tileHeight = 20f; 
+    public int maxTilesOnScreen = 4; 
+    
+    [Header("Room Progression")]
+    public int totalTilesPerRoom = 10; 
 
+    private Transform playerTransform; 
     private float spawnY = 0f; 
+    private int tilesSpawned = 0; 
     private List<GameObject> activeTiles = new List<GameObject>();
 
     private void Start()
     {
-        // สุ่มสร้างหน้าผาเรียงกันขึ้นไปรอไว้ก่อนตอนเริ่มเกม
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null) playerTransform = player.transform;
+
         for (int i = 0; i < maxTilesOnScreen; i++)
         {
-            SpawnTile();
+            if (tilesSpawned < totalTilesPerRoom) SpawnTile();
         }
     }
 
@@ -27,32 +33,48 @@ public class MapGenerator : MonoBehaviour
     {
         if (playerTransform == null) return;
 
-        // ถ้าระยะ Y (แบบ World Space) ของชิ้นล่างสุด มันต่ำกว่าผู้เล่นมากแล้ว ให้ลบชิ้นล่างสุดทิ้ง แล้วสุ่มสร้างชิ้นใหม่ต่อด้านบน
-        if (activeTiles[0].transform.position.y + tileHeight < playerTransform.position.y - (tileHeight / 2))
+        if (activeTiles.Count > 0 && activeTiles[0] != null && activeTiles[0].transform.position.y + tileHeight < playerTransform.position.y - (tileHeight / 2))
         {
             DeleteTile();
-            SpawnTile();
+            if (tilesSpawned < totalTilesPerRoom) SpawnTile();
         }
     }
 
     private void SpawnTile()
     {
-        // สุ่มหยิบแผนที่ 1 อัน
-        int randomIndex = Random.Range(0, mountainPrefabs.Length);
+        GameObject tileToSpawn;
+        bool isTopTile = false;
+
+        if (tilesSpawned == totalTilesPerRoom - 1 && topMountainPrefab != null)
+        {
+            tileToSpawn = topMountainPrefab;
+            isTopTile = true;
+        }
+        else
+        {
+            tileToSpawn = mountainPrefabs[Random.Range(0, mountainPrefabs.Length)];
+        }
         
-        // สร้างขึ้นมาเป็นลูกของ EnvironmentContainer
-        GameObject go = Instantiate(mountainPrefabs[randomIndex], transform);
-        
-        // ต่อด้านบนไปเรื่อยๆ (ใช้ Local Position เพราะมันเลื่อนไปพร้อม Container)
+        GameObject go = Instantiate(tileToSpawn, transform);
         go.transform.localPosition = new Vector3(0, spawnY, 0);
         spawnY += tileHeight;
         
         activeTiles.Add(go);
+        tilesSpawned++; 
+
+        // *** ส่วนที่เพิ่มมา: ถ้าเป็นยอดเขา ให้เปิดใช้งาน Trigger ***
+        if (isTopTile)
+        {
+            Debug.Log("🏔️ ถึงยอดเขาแล้ว! เตรียมตัวเลือกโหนด...");
+        }
     }
 
     private void DeleteTile()
     {
-        Destroy(activeTiles[0]);
-        activeTiles.RemoveAt(0);
+        if (activeTiles.Count > 0)
+        {
+            Destroy(activeTiles[0]);
+            activeTiles.RemoveAt(0);
+        }
     }
 }
