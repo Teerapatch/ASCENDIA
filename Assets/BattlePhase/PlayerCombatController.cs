@@ -406,5 +406,5 @@ public class PlayerCombatController : MonoBehaviour
         //    Command_SwitchWeapon();
         //}
     }
-    void UpdateAPUI() { if (textAP != null) textAP.text = $"AP: {currentAP}/{maxAP}"; }
+    void UpdateAPUI() { if (textAP != null) textAP.text = $"{currentAP}/{maxAP}"; }
 }
