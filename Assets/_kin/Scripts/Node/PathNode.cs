@@ -3,12 +3,12 @@ using TMPro;
 
 public class PathNode : MonoBehaviour
 {
-    // *** เปลี่ยนเป็นประเภทห้อง เพื่อให้ RoomManager รู้ว่าต้องโหลดด่านไหน ***
     public enum RoomType { Climb, Battle, CampScene }
 
     [Header("Node Action")]
     public RoomType roomType = RoomType.Climb; 
-    public string sceneToLoad = "CampScene";
+    [Tooltip("ใส่ชื่อซีนที่จะโหลด (ใช้เมื่อเป็น Battle หรือ CampScene)")]
+    public string sceneToLoad = ""; // ปล่อยว่างไว้ จะได้พิมพ์ใส่เองใน Inspector
 
     [Header("Node Identity (Icon)")]
     public Sprite nodeIcon; 

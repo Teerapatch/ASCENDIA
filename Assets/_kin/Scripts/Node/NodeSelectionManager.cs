@@ -314,7 +314,7 @@ public class NodeSelectionManager : MonoBehaviour
             }
         }
 
-        yield return StartCoroutine(FadeScreen(1f, 1f));
+       yield return StartCoroutine(FadeScreen(1f, 1f));
 
         if (GameManager.Instance != null && GameManager.Instance.playerData != null)
         {
@@ -322,14 +322,17 @@ public class NodeSelectionManager : MonoBehaviour
             Debug.Log("🔼 ผ่านด่าน! ขึ้นสู่ชั้นที่: " + GameManager.Instance.playerData.currentFloor);
         }
 
-        if (nextRoomType == PathNode.RoomType.CampScene)
+        // 🌟 เพิ่มเงื่อนไข: ถ้าเป็น CampScene "หรือ" Battle ให้โหลดซีนใหม่เลย
+        if (nextRoomType == PathNode.RoomType.CampScene || nextRoomType == PathNode.RoomType.Battle)
         {
-            Debug.Log("🏕️ โหลดฉากแคมป์: " + nextScene);
-            // UnityEngine.SceneManagement.SceneManager.LoadScene(nextScene);
+            Debug.Log("⚔️/🏕️ โหลดซีนใหม่ชื่อ: " + nextScene);
+            // เอาคอมเมนต์ออกเพื่อใช้งานคำสั่งโหลดซีนจริงๆ
+            UnityEngine.SceneManagement.SceneManager.LoadScene(nextScene);
         }
         else 
         {
-            Debug.Log("✨ สร้างห้องใหม่");
+            // ถ้าเป็น Climb ถึงจะใช้วิธีเสกห้อง (Room Looping) เหมือนเดิม
+            Debug.Log("✨ สร้างห้องปีนเขาห้องใหม่");
             if (RoomManager.Instance != null && stateManager != null)
             {
                 RoomManager.Instance.LoadNewRoom(nextRoomType, stateManager.transform);
