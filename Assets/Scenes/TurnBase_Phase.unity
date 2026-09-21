@@ -642,7 +642,7 @@ GameObject:
   - component: {fileID: 199608955}
   - component: {fileID: 199608954}
   - component: {fileID: 199608957}
-  m_Layer: 6
+  m_Layer: 10
   m_Name: Enemy_2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3243,6 +3243,41 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1118245949}
   m_CullTransparentMesh: 1
+--- !u!1 &1144007049
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1144007050}
+  m_Layer: 5
+  m_Name: Apply_TurnOrder
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1144007050
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1144007049}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1574319839}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 200}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1186547308
 GameObject:
   m_ObjectHideFlags: 0
@@ -3652,41 +3687,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1306727961}
   m_CullTransparentMesh: 1
---- !u!1 &1338126649
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1338126650}
-  m_Layer: 5
-  m_Name: Apply_TurnOrder
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!224 &1338126650
-RectTransform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1338126649}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1574319839}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 310}
-  m_SizeDelta: {x: -160, y: -560}
-  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1429998800
 GameObject:
   m_ObjectHideFlags: 0
@@ -3973,10 +3973,10 @@ RectTransform:
   m_GameObject: {fileID: 1574319838}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1.46, y: 1.29, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 1338126650}
+  - {fileID: 1144007050}
   m_Father: {fileID: 1994296740}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
@@ -4035,7 +4035,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TurnOrderUI
   portraitPrefab: {fileID: 6635108581976774000, guid: 67fd4e03b603e1344b72512fde30a7a4, type: 3}
-  container: {fileID: 1338126650}
+  container: {fileID: 1144007050}
   ySpacing: 100
   xOffsetPerItem: 0
   spawnOffset: {x: 300, y: 0}
@@ -5644,7 +5644,7 @@ MonoBehaviour:
   crosshairUI: {fileID: 919835078}
   enemyLayer:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 1024
   actionState: 0
 --- !u!136 &2064914703
 CapsuleCollider:
@@ -5739,7 +5739,7 @@ GameObject:
   - component: {fileID: 2067283697}
   - component: {fileID: 2067283696}
   - component: {fileID: 2067283699}
-  m_Layer: 6
+  m_Layer: 10
   m_Name: Capsule
   m_TagString: Untagged
   m_Icon: {fileID: 0}
