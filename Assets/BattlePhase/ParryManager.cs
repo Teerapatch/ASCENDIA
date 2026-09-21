@@ -166,6 +166,7 @@ public class ParryManager : MonoBehaviour
         isAwaitingInput = false;
 
         Debug.Log($"<color=cyan>PARRY SUCCESS! Countering with {currentPostureDamage} Posture Damage!</color>");
+        CameraShakeManager.Instance.Shake(0.1f);
 
         // ฟื้น AP และหักเกจ Posture ศัตรู[cite: 6]
         CombatManager.Instance.player.RestoreAP(1);
@@ -178,6 +179,7 @@ public class ParryManager : MonoBehaviour
         isAwaitingInput = false;
 
         Debug.Log($"<color=red>PARRY FAILED ({reason}) - Took {incomingDamage} Damage!</color>");
+        CameraShakeManager.Instance.Shake(0.8f);
 
         // รับดาเมจเข้าตัว/อาวุธผู้เล่น[cite: 6]
         CombatManager.Instance.player.TakeDamage(incomingDamage);

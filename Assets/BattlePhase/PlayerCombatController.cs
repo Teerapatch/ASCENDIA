@@ -386,9 +386,16 @@ public class PlayerCombatController : MonoBehaviour
             WeaponUIManager.Instance.UpdateWeaponUI(inventoryWeapons, ActiveWeapon);
         }
 
+        if (CameraShakeManager.Instance != null)
+            CameraShakeManager.Instance.Shake(0.8f);
+
         if (CurrentWeapon.currentDurability <= 0)
         {
             Debug.Log($"{CurrentWeapon.weaponName} is BROKEN!");
+
+            if (CameraShakeManager.Instance != null)
+                CameraShakeManager.Instance.Shake(1.2f);
+
             HandleWeaponBreak();
         }
     }

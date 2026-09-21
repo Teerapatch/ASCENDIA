@@ -65,6 +65,9 @@ public class EnemyController : MonoBehaviour
         Color dmgColor = isStaggered ? Color.yellow : Color.white;
         DamagePopupManager.Instance.CreatePopup(transform.position, damage, isStaggered, dmgColor);
 
+        if (CameraShakeManager.Instance != null)
+            CameraShakeManager.Instance.Shake(0.3f);
+
         if (currentHP <= 0) Die();
     }
 
@@ -79,6 +82,9 @@ public class EnemyController : MonoBehaviour
         {
             isStaggered = true;
             Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
+
+            if (CameraShakeManager.Instance != null)
+                CameraShakeManager.Instance.Shake(1.5f);
 
             if (staggerParticle != null)
             {

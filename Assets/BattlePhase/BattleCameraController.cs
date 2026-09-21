@@ -1,17 +1,20 @@
 ﻿using UnityEngine;
-using System.Collections;
+using Unity.Cinemachine;
 
 public class BattleCameraController : MonoBehaviour
 {
     public static BattleCameraController Instance;
 
+    [Header("Cinemachine")]
+    [Tooltip("ลาก CinemachineCamera (ตัวจำลอง) มาใส่ที่นี่")]
+    public CinemachineCamera battleVCam;
+
     [Header("Camera Settings")]
     public float transitionSpeed = 5f;
-    public float defaultOrthoSize = 7f; // ขนาดกล้องตอนมองเห็นทั้งฉาก
-    public float zoomOrthoSize = 4f;    // ขนาดกล้องตอนซูมเจาะจงเป้าหมาย
-    public Vector3 offset = new Vector3(0, 0, -10f); // ระยะห่างกล้องในแกน Z
+    public float defaultOrthoSize = 7f;
+    public float zoomOrthoSize = 4f;
+    public Vector3 offset = new Vector3(0, 0, -10f);
 
-    private Camera cam;
     private Vector3 defaultPosition;
     private Vector3 targetPosition;
     private float targetSize;
@@ -19,20 +22,45 @@ public class BattleCameraController : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        cam = GetComponent<Camera>();
-        defaultPosition = transform.position;
+
+        if (battleVCam == null)
+            battleVCam = GetComponent<CinemachineCamera>();
+
+        // 1. จำตำแหน่งจุดเริ่มต้นของ VCam ไว้เป็นจุด Default อัตโนมัติ (ไม่ต้องใช้ Transform อ้างอิงเพิ่ม)
+        if (battleVCam != null)
+        {
+            defaultPosition = battleVCam.transform.position;
+        }
+        else
+        {
+            defaultPosition = transform.position;
+        }
 
         // เซ็ตค่าเริ่มต้น
         targetPosition = defaultPosition;
         targetSize = defaultOrthoSize;
-        cam.orthographicSize = defaultOrthoSize;
+
+        // ดึงโครงสร้างเลนส์มาปรับค่าเริ่มต้น
+        if (battleVCam != null)
+        {
+            var lens = battleVCam.Lens;
+            lens.OrthographicSize = defaultOrthoSize;
+            battleVCam.Lens = lens;
+        }
     }
 
     private void Update()
     {
-        // ทำ Smooth transition ทุกๆ เฟรม
-        transform.position = Vector3.Lerp(transform.position, targetPosition, Time.deltaTime * transitionSpeed);
-        cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, targetSize, Time.deltaTime * transitionSpeed);
+        if (battleVCam == null) return;
+
+        // 1. Smooth Transition ตำแหน่ง (Lerp ใส่ VCam โดยตรง)
+        battleVCam.transform.position = Vector3.Lerp(battleVCam.transform.position, targetPosition, Time.deltaTime * transitionSpeed);
+
+        // 2. Smooth Transition ขนาดกล้อง (Zoom)
+        // ใน Cinemachine 3 Lens เป็น Struct ต้องดึงออกมาแก้ แล้วยัดกลับเข้าไปใหม่
+        var lens = battleVCam.Lens;
+        lens.OrthographicSize = Mathf.Lerp(lens.OrthographicSize, targetSize, Time.deltaTime * transitionSpeed);
+        battleVCam.Lens = lens;
     }
 
     // เรียกฟังก์ชันนี้เมื่อเลือกศัตรู
