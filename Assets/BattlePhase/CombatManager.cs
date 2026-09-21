@@ -47,7 +47,12 @@ public class CombatManager : MonoBehaviour
 
     private List<TurnNode> turnQueue = new List<TurnNode>();
 
-    private void Awake() { Instance = this; }
+    private void Awake() 
+    {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        Instance = this;
+    }
 
     private void Start()
     {

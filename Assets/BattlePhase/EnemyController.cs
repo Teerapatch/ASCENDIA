@@ -83,13 +83,13 @@ public class EnemyController : MonoBehaviour
             isStaggered = true;
             Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
 
-            if (CameraShakeManager.Instance != null)
-                CameraShakeManager.Instance.Shake(1.5f);
-
             if (staggerParticle != null)
             {
                 staggerParticle.Play();
             }
+
+            if (CameraShakeManager.Instance != null)
+                CameraShakeManager.Instance.Shake(1.5f);
         }
     }
 
