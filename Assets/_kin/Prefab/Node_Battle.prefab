@@ -310,7 +310,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PathNode
   roomType: 1
   sceneToLoad: TurnBase_Phase
-  nodeIcon: {fileID: 10915, guid: 0000000000000000f000000000000000, type: 0}
+  nodeIcon: {fileID: 862160680, guid: 0693a106859742049934682e83013ab3, type: 3}
   nodeAura3D: {fileID: 0}
   uiMapAura: {fileID: 0}
   uiNodeTransform: {fileID: 0}
