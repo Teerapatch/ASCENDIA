@@ -8,37 +8,37 @@ public class NodeSelectionManager : MonoBehaviour
     public static NodeSelectionManager Instance;
 
     [Header("UI & Camera")]
-    public GameObject mapUIPanel; 
-    public GameObject nodeCam; 
-    public Image fadeImage; 
+    public GameObject mapUIPanel;
+    public GameObject nodeCam;
+    public Image fadeImage;
 
     [Header("Auto UI Generation")]
-    public GameObject uiNodePrefab; 
-    public Transform uiNodeContainer; 
-    public GameObject uiLinePrefab; 
-    public Transform uiLineContainer; 
-    public float lineThickness = 4f; 
-    public Color normalLineColor = new Color(0.8f, 0.8f, 0.8f, 0.5f); 
-    public Color auraLineColor = Color.yellow; 
+    public GameObject uiNodePrefab;
+    public Transform uiNodeContainer;
+    public GameObject uiLinePrefab;
+    public Transform uiLineContainer;
+    public float lineThickness = 4f;
+    public Color normalLineColor = new Color(0.8f, 0.8f, 0.8f, 0.5f);
+    public Color auraLineColor = Color.yellow;
 
     [Header("Map Progression UI")]
-    public RectTransform playerUIIcon; 
-    public float uiPlayerMoveDuration = 1.5f; 
+    public RectTransform playerUIIcon;
+    public float uiPlayerMoveDuration = 1.5f;
 
     [Header("Player Systems")]
-    public PlayerStateManager stateManager; 
-    public PlayerCameraController camController; 
-    public float autoClimbSpeed = 4f; 
-    public float cameraBlendWaitTime = 2f; 
+    public PlayerStateManager stateManager;
+    public PlayerCameraController camController;
+    public float autoClimbSpeed = 4f;
+    public float cameraBlendWaitTime = 2f;
 
     [Header("Mouse Camera Sway")]
-    public float cameraSwayAmount = 5f; 
-    public Texture2D circleCursor; 
-    public Vector2 cursorHotspot = new Vector2(16, 16); 
+    public float cameraSwayAmount = 5f;
+    public Texture2D circleCursor;
+    public Vector2 cursorHotspot = new Vector2(16, 16);
 
     private PathNode hoveredNode;
     private bool isSelecting = false;
-    private Quaternion originalNodeCamRot; 
+    private Quaternion originalNodeCamRot;
     private Dictionary<PathNode, Image> nodeLines = new Dictionary<PathNode, Image>();
     private Dictionary<PathNode, Image> nodeFutureLines = new Dictionary<PathNode, Image>();
 
@@ -66,10 +66,10 @@ public class NodeSelectionManager : MonoBehaviour
         }
 
         // 🌟 จำมุมกล้องที่ถูกต้องไว้แค่ครั้งแรกครั้งเดียว!
-        if (nodeCam != null) 
+        if (nodeCam != null)
         {
             originalNodeCamRot = nodeCam.transform.rotation;
-            nodeCam.SetActive(false); 
+            nodeCam.SetActive(false);
         }
 
         if (mapUIPanel != null) mapUIPanel.SetActive(false);
@@ -86,9 +86,9 @@ public class NodeSelectionManager : MonoBehaviour
             camController = playerTransform.GetComponent<PlayerCameraController>();
         }
 
-        if (stateManager) stateManager.ChangeState(PlayerStateManager.State.NodeSelection); 
-        if (mapUIPanel) mapUIPanel.SetActive(true); 
-        
+        if (stateManager) stateManager.ChangeState(PlayerStateManager.State.NodeSelection);
+        if (mapUIPanel) mapUIPanel.SetActive(true);
+
         StartCoroutine(GenerateMapUICoroutine(playerTransform.position));
 
         if (camController) camController.enabled = false;
@@ -96,11 +96,11 @@ public class NodeSelectionManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        if (nodeCam != null) 
+        if (nodeCam != null)
         {
             // 🌟 จับกล้องหันหน้ากลับมาตรงๆ ก่อนจะเปิดใช้งาน เพื่อไม่ให้เกิดอาการกล้องเบี้ยว
-            nodeCam.transform.rotation = originalNodeCamRot; 
-            nodeCam.SetActive(true); 
+            nodeCam.transform.rotation = originalNodeCamRot;
+            nodeCam.SetActive(true);
         }
 
         if (camController)
@@ -110,7 +110,7 @@ public class NodeSelectionManager : MonoBehaviour
         }
     }
 
-   private IEnumerator GenerateMapUICoroutine(Vector3 centerPosition)
+    private IEnumerator GenerateMapUICoroutine(Vector3 centerPosition)
     {
         PathNode[] allNodes = FindObjectsByType<PathNode>(FindObjectsSortMode.None);
         List<PathNode> currentNodes = new List<PathNode>();
@@ -124,16 +124,16 @@ public class NodeSelectionManager : MonoBehaviour
         if (uiLineContainer != null) foreach (Transform child in uiLineContainer) Destroy(child.gameObject);
 
         List<RectTransform> generatedUINodes = new List<RectTransform>();
-        nodeLines.Clear(); nodeFutureLines.Clear(); 
+        nodeLines.Clear(); nodeFutureLines.Clear();
 
         foreach (PathNode node in currentNodes)
         {
             if (uiNodePrefab == null || uiNodeContainer == null) break;
-            
+
             GameObject newUI = Instantiate(uiNodePrefab, uiNodeContainer);
             node.uiNodeTransform = newUI.GetComponent<RectTransform>();
             generatedUINodes.Add(node.uiNodeTransform);
-            
+
             Transform auraUI = newUI.transform.Find("Aura");
             if (auraUI != null) { node.uiMapAura = auraUI.gameObject; node.uiMapAura.SetActive(false); }
             Transform iconUI = newUI.transform.Find("Icon");
@@ -143,17 +143,17 @@ public class NodeSelectionManager : MonoBehaviour
                 if (img != null) img.sprite = node.nodeIcon;
             }
         }
-        
+
         // รอ 1 เฟรมให้ Unity จัดเรียง UI ให้เสร็จก่อน
-        yield return null; 
+        yield return null;
 
         if (uiLinePrefab != null && uiLineContainer != null && playerUIIcon != null)
         {
             Vector3[] corners = new Vector3[4];
             mapUIPanel.GetComponent<RectTransform>().GetWorldCorners(corners);
             float bottomY = corners[0].y; // ขอบล่างหน้าต่างแผนที่
-            float topY = corners[1].y + 50f;    
-            
+            float topY = corners[1].y + 50f;
+
             if (generatedUINodes.Count > 0)
             {
                 // 🌟 1. หาจุดกึ่งกลางของแกน X
@@ -163,28 +163,28 @@ public class NodeSelectionManager : MonoBehaviour
                     centerX += rt.position.x;
                 }
                 centerX /= generatedUINodes.Count;
-                
+
                 // 🌟 2. หาความสูงของโหนด แล้วบังคับดึงวงกลมผู้เล่นลงมาให้อยู่ "ต่ำกว่า" เสมอ!
-                float nodeY = generatedUINodes[0].position.y; 
+                float nodeY = generatedUINodes[0].position.y;
                 // จัดให้อยู่สูงจากขอบจอล่างขึ้นมา 40% (ปรับเลข 0.4f ได้ถ้าอยากให้สูง/ต่ำกว่านี้)
-                float playerY = Mathf.Lerp(bottomY, nodeY, 0.4f); 
-                
+                float playerY = Mathf.Lerp(bottomY, nodeY, 0.4f);
+
                 playerUIIcon.position = new Vector3(centerX, playerY, playerUIIcon.position.z);
             }
 
             // 🌟 3. ลากเส้นสีเหลืองขึ้นมาจากขอบจอล่าง
             Vector3 pastStart = new Vector3(playerUIIcon.position.x, bottomY - 50f, 0);
             DrawUILine(pastStart, playerUIIcon.position, auraLineColor);
-            
+
             // 🌟 4. ลากเส้นกิ่งก้านสาขา
             for (int i = 0; i < generatedUINodes.Count; i++)
             {
                 RectTransform targetNode = generatedUINodes[i];
                 PathNode logicNode = currentNodes[i];
-                
+
                 Image branchLine = DrawUILine(playerUIIcon.position, targetNode.position, normalLineColor);
-                nodeLines.Add(logicNode, branchLine); 
-                
+                nodeLines.Add(logicNode, branchLine);
+
                 Vector3 futureEnd = new Vector3(targetNode.position.x, topY, 0);
                 Image futureLine = DrawUILine(targetNode.position, futureEnd, normalLineColor);
                 nodeFutureLines.Add(logicNode, futureLine);
@@ -211,7 +211,7 @@ public class NodeSelectionManager : MonoBehaviour
     {
         if (!isSelecting) return;
         Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
-        
+
         if (nodeCam != null)
         {
             float mouseX = (Input.mousePosition.x / Screen.width) - 0.5f;
@@ -219,7 +219,7 @@ public class NodeSelectionManager : MonoBehaviour
             Quaternion swayRot = Quaternion.Euler(-mouseY * cameraSwayAmount, mouseX * cameraSwayAmount, 0);
             nodeCam.transform.rotation = Quaternion.Lerp(nodeCam.transform.rotation, originalNodeCamRot * swayRot, Time.deltaTime * 5f);
         }
-        
+
         if (Camera.main == null) return;
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit[] hits = Physics.RaycastAll(ray, 100f);
@@ -229,7 +229,7 @@ public class NodeSelectionManager : MonoBehaviour
             PathNode node = hit.collider.GetComponent<PathNode>();
             if (node != null) { foundNode = node; break; }
         }
-        
+
         if (foundNode != null)
         {
             if (hoveredNode != foundNode) { if (hoveredNode) hoveredNode.SetHover(false); hoveredNode = foundNode; hoveredNode.SetHover(true); }
@@ -243,15 +243,15 @@ public class NodeSelectionManager : MonoBehaviour
     private IEnumerator ConfirmNode(PathNode selectedNode)
     {
         isSelecting = false;
-        if (stateManager) stateManager.ChangeState(PlayerStateManager.State.AutoClimbing); 
+        if (stateManager) stateManager.ChangeState(PlayerStateManager.State.AutoClimbing);
         Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
         Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false;
 
-        Color dimLineColor = new Color(0.2f, 0.2f, 0.2f, 0.3f); Color dimIconColor = new Color(0.3f, 0.3f, 0.3f, 1f); 
+        Color dimLineColor = new Color(0.2f, 0.2f, 0.2f, 0.3f); Color dimIconColor = new Color(0.3f, 0.3f, 0.3f, 1f);
         PathNode[] allCurrentNodes = FindObjectsByType<PathNode>(FindObjectsSortMode.None);
         foreach (PathNode n in allCurrentNodes)
         {
-            if (n != selectedNode) 
+            if (n != selectedNode)
             {
                 if (nodeLines.ContainsKey(n)) nodeLines[n].color = dimLineColor;
                 if (nodeFutureLines.ContainsKey(n)) nodeFutureLines[n].color = dimLineColor;
@@ -305,44 +305,50 @@ public class NodeSelectionManager : MonoBehaviour
         {
             Transform player = stateManager.transform;
             float distance = Vector3.Distance(player.position, finalDestination);
-            
+
             while (distance > 0.1f)
             {
                 player.position = Vector3.MoveTowards(player.position, finalDestination, autoClimbSpeed * Time.deltaTime);
                 distance = Vector3.Distance(player.position, finalDestination);
-                yield return null; 
+                yield return null;
             }
         }
 
-       yield return StartCoroutine(FadeScreen(1f, 1f));
+        yield return StartCoroutine(FadeScreen(1f, 1f));
 
         if (GameManager.Instance != null && GameManager.Instance.playerData != null)
         {
             GameManager.Instance.playerData.currentFloor++;
-            Debug.Log("🔼 ผ่านด่าน! ขึ้นสู่ชั้นที่: " + GameManager.Instance.playerData.currentFloor);
         }
 
-        // 🌟 เพิ่มเงื่อนไข: ถ้าเป็น CampScene "หรือ" Battle ให้โหลดซีนใหม่เลย
-        if (nextRoomType == PathNode.RoomType.CampScene || nextRoomType == PathNode.RoomType.Battle)
+        // 🌟 ระบบ Encounter Routing แยกตามประเภท Node ทั้ง 6 แบบ
+        TriggerNodeEncounter(selectedNode);
+
+        // เช็คว่าโหนดนี้ต้องโหลดเปลี่ยนซีนหรือไม่ (จะโหลดก็ต่อเมื่อมีการพิมพ์ชื่อซีนไว้ใน Inspector)
+        bool shouldLoadNewScene = !string.IsNullOrEmpty(nextScene) &&
+                                  (nextRoomType == PathNode.RoomType.Battle ||
+                                   nextRoomType == PathNode.RoomType.MiniBoss ||
+                                   nextRoomType == PathNode.RoomType.Rest ||
+                                   nextRoomType == PathNode.RoomType.Camp);
+
+        if (shouldLoadNewScene)
         {
-            Debug.Log("⚔️/🏕️ โหลดซีนใหม่ชื่อ: " + nextScene);
-            // เอาคอมเมนต์ออกเพื่อใช้งานคำสั่งโหลดซีนจริงๆ
+            Debug.Log($"🚪 กำลังโหลดเข้าสู่ซีน: {nextScene} (ประเภท: {nextRoomType})");
             UnityEngine.SceneManagement.SceneManager.LoadScene(nextScene);
         }
-        else 
+        else
         {
-            // ถ้าเป็น Climb ถึงจะใช้วิธีเสกห้อง (Room Looping) เหมือนเดิม
-            Debug.Log("✨ สร้างห้องปีนเขาห้องใหม่");
+            // ถ้าเป็นโหนด Normal, Ore หรือซีนพวก Rest/Camp ยังทำไม่เสร็จ ให้เสกหน้าผาปีนต่อทันที!
             if (RoomManager.Instance != null && stateManager != null)
             {
-                RoomManager.Instance.LoadNewRoom(nextRoomType, stateManager.transform);
+                RoomManager.Instance.LoadNewRoom(PathNode.RoomType.Normal, stateManager.transform);
             }
 
             int currentFloor = GameManager.Instance != null ? GameManager.Instance.playerData.currentFloor : 1;
 
             if (camController)
             {
-                if (currentFloor > 1 && nextRoomType == PathNode.RoomType.Climb)
+                if (currentFloor > 1)
                 {
                     camController.walkCam.SetActive(false);
                     camController.climbCam.SetActive(true);
@@ -353,18 +359,60 @@ public class NodeSelectionManager : MonoBehaviour
                     if (camController.climbCam) camController.climbCam.SetActive(false);
                     if (camController.walkCam) camController.walkCam.SetActive(true);
                 }
-                camController.enabled = true; 
+                camController.enabled = true;
             }
 
-            if (stateManager) 
+            if (stateManager)
             {
-                if (currentFloor > 1 && nextRoomType == PathNode.RoomType.Climb)
+                if (currentFloor > 1)
                     stateManager.ChangeState(PlayerStateManager.State.Climbing);
                 else
-                    stateManager.ChangeState(PlayerStateManager.State.Walking); 
+                    stateManager.ChangeState(PlayerStateManager.State.Walking);
             }
 
             yield return StartCoroutine(FadeScreen(0f, 1f));
+        }
+    }
+
+    // 🌟 ฟังก์ชันจัดการเหตุการณ์ของโหนดทั้ง 6 ประเภท (ตอบโจทย์ Acceptance Criteria ข้อ 2)
+    private void TriggerNodeEncounter(PathNode node)
+    {
+        if (node == null) return;
+
+        switch (node.roomType)
+        {
+            case PathNode.RoomType.Normal:
+                Debug.Log("🧗 [Trigger: Normal] เข้าสู่เส้นทางปีนเขาปกติ");
+                break;
+
+            case PathNode.RoomType.Battle:
+                Debug.Log("⚔️ [Trigger: Battle] เข้าสู่เหตุการณ์ต่อสู้มอนสเตอร์ทั่วไป");
+                break;
+
+            case PathNode.RoomType.MiniBoss:
+                Debug.Log("👹 [Trigger: Mini Boss] เข้าสู่เหตุการณ์ปะทะบอสประจำแคมป์!");
+                break;
+
+            case PathNode.RoomType.Ore:
+                if (GameManager.Instance != null && GameManager.Instance.playerData != null)
+                {
+                    GameManager.Instance.playerData.ore += node.oreAmount;
+                    Debug.Log($"⛏️ [Trigger: Ore] ขุดแร่สำเร็จ! ได้รับแร่ +{node.oreAmount} (รวมมีแร่: {GameManager.Instance.playerData.ore})");
+                }
+                break;
+
+            case PathNode.RoomType.Rest:
+                if (GameManager.Instance != null && GameManager.Instance.playerData != null)
+                {
+                    PlayerData data = GameManager.Instance.playerData;
+                    data.stamina = Mathf.Min(data.maxStamina, data.stamina + node.staminaRestore);
+                    Debug.Log($"🔥 [Trigger: Rest] พักผ่อน/เตรียม Loadout/Craft อาวุธ (ฟื้นฟู Stamina +{node.staminaRestore})");
+                }
+                break;
+
+            case PathNode.RoomType.Camp:
+                Debug.Log("🏕️ [Trigger: Camp] เดินทางถึงแคมป์สุดท้ายสำเร็จ!");
+                break;
         }
     }
 
@@ -376,7 +424,7 @@ public class NodeSelectionManager : MonoBehaviour
             if (targetObj == null) yield break;
             time += Time.deltaTime; float progress = time / duration;
             targetObj.transform.localScale = Vector3.Lerp(startScale, Vector3.zero, progress);
-            targetObj.transform.Rotate(Vector3.up * 800f * Time.deltaTime); 
+            targetObj.transform.Rotate(Vector3.up * 800f * Time.deltaTime);
             yield return null;
         }
         if (targetObj != null) Destroy(targetObj);
