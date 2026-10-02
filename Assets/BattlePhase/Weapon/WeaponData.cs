@@ -16,4 +16,15 @@ public class WeaponData : ScriptableObject
 
     [Header("Weapon Skills")]
     public List<WeaponSkill> availableSkills; 
+
+    [Header("Weapon Info")]
+    public string description;
+
+    [Header("Base Stats")]
+    public float attackDamage;
+    public float postureMultiplier;
+
+    [Header("Crafting Cost")]
+    public int gemStoneCost;
+    public int monsterPartCost;
 }

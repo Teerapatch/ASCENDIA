@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 2944514834278719093}
   - component: {fileID: 1029188539989569318}
   m_Layer: 0
-  m_Name: Node_Climb
+  m_Name: Node_Boss
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -127,13 +127,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 131dd24e52cb85f43bef777f113abf25, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PathNode
-  roomType: 0
+  roomType: 2
   sceneToLoad: NextSceneName
+  oreAmount: 5
+  staminaRestore: 50
   nodeIcon: {fileID: 10915, guid: 0000000000000000f000000000000000, type: 0}
   nodeAura3D: {fileID: 0}
   uiMapAura: {fileID: 0}
   uiNodeTransform: {fileID: 0}
-  nodeName: Node_Climb
+  nodeName: Node_Boss
   nodeText: {fileID: 6783298946777333818}
   normalColor: {r: 0, g: 0, b: 0, a: 1}
   hoverColor: {r: 1, g: 1, b: 1, a: 1}

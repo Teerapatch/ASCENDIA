@@ -19,9 +19,10 @@ public class PathNode : MonoBehaviour
     [Tooltip("ใส่ชื่อซีนที่จะโหลด (ถ้ายังไม่มีซีน ให้เว้นว่างไว้ ระบบจะให้ปีนต่อแทน)")]
     public string sceneToLoad = ""; 
 
-    [Header("Node Rewards (สำหรับโหนด Ore / Rest ช่วงเทส)")]
-    public int oreAmount = 5;           // จำนวนแร่ที่ได้เมื่อเลือกโหนด Ore
-    public float staminaRestore = 50f;  // Stamina ที่ฟื้นฟูเมื่อเลือกโหนด Rest
+    [Header("Node Rewards (สำหรับโหนด Ore / Rest)")]
+    public ItemData oreRewardItem;      // 🌟 ลากไฟล์ ItemData แร่ มาใส่ตรงนี้!
+    public int oreAmount = 20;          // 🌟 จำนวนแจ็คพอต (ตั้งเยอะๆ กว่าตามทางได้เลย)
+    public float staminaRestore = 50f; // Stamina ที่ฟื้นฟูเมื่อเลือกโหนด Rest
 
     [Header("Node Identity (Icon)")]
     public Sprite nodeIcon; 

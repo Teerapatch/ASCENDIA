@@ -394,10 +394,18 @@ public class NodeSelectionManager : MonoBehaviour
                 break;
 
             case PathNode.RoomType.Ore:
-                if (GameManager.Instance != null && GameManager.Instance.playerData != null)
+                // 🌟 โยนแร่ก้อนใหญ่เข้ากระเป๋าแบบแจ็คพอต!
+                if (InventoryManager.Instance != null && node.oreRewardItem != null)
                 {
-                    GameManager.Instance.playerData.ore += node.oreAmount;
-                    Debug.Log($"⛏️ [Trigger: Ore] ขุดแร่สำเร็จ! ได้รับแร่ +{node.oreAmount} (รวมมีแร่: {GameManager.Instance.playerData.ore})");
+                    bool success = InventoryManager.Instance.AddItem(node.oreRewardItem, node.oreAmount);
+                    if (success)
+                    {
+                        Debug.Log($"💎 [Trigger: Ore] แจ็คพอต! ได้ {node.oreRewardItem.itemName} จำนวน {node.oreAmount} ชิ้น!");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("⚠️ [Trigger: Ore] กระเป๋าเต็มหรือหนักเกินไป เก็บแร่แจ็คพอตไม่ได้!");
+                    }
                 }
                 break;
 
