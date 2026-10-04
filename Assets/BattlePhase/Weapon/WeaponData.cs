@@ -1,9 +1,18 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
+public enum WeaponType
+{
+    Dagger,
+    LongSword,
+    Bow,
+    Spell
+}
+
 [CreateAssetMenu(fileName = "NewWeapon", menuName = "Ascendia/Weapon Data")]
 public class WeaponData : ScriptableObject
 {
+    public WeaponType weaponType;
     public string weaponName;
     public Sprite weaponIcon;
 
