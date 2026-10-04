@@ -30,9 +30,9 @@ public class PlayerData : ScriptableObject
     public int maxFloorBeforeCamp = 10;
     public int currentCampLevel = 1; // 🌟 จำว่าตอนนี้ถึงแคมป์ที่เท่าไหร่แล้ว (1 ถึง 4)
 
-    [Header("Active Loadout (อาวุธที่เลือกพกไปสู้)")]
-    // 🌟 ใช้ List เก็บอาวุธที่เลือกไปสู้ สูงสุด 4 ชิ้น (เปลี่ยนตาม Camp Level)
-    public List<WeaponData> activeLoadout = new List<WeaponData>();
+    [Header("Active Loadout (ช่องอาวุธทั้ง 4 ช่อง)")]
+    // 🌟 ใช้ Array 4 ช่องตายตัว ถ้าช่องไหนยังไม่ใส่ของ จะมีค่าเป็น null
+    public WeaponData[] activeLoadout = new WeaponData[4];
 
     // 🌟 จำนวนช่องที่ปลดล็อกแล้ว (อิงจาก Camp Level) เริ่มต้นที่ 1 ช่อง
     public int unlockedWeaponSlots = 1;
@@ -53,7 +53,7 @@ public class PlayerData : ScriptableObject
         currentCampLevel = 1;
         unlockedWeaponSlots = 1; // เริ่มใหม่ให้มี 1 ช่อง
 
-        activeLoadout.Clear(); // ล้างของในกระเป๋าสู้
+        activeLoadout = new WeaponData[4]; // เคลียร์ช่องทั้งหมด
         currentWeaponInHand = null;
     }
     public void ReachNextCamp()
