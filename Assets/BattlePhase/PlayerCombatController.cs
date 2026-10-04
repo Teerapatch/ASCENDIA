@@ -34,6 +34,10 @@ public class PlayerCombatController : MonoBehaviour
     private int currentTargetIndex = 0;
     private int pendingActionType = 0; // 0 = ตีปกติ, 1 = สกิล
 
+    [Header("Passive Systems")]
+    public int currentComboStacks = 0;
+    public int totalGunCounterAttacks = 0;
+
     // --- [เพิ่มใหม่] เก็บสกิลที่ผู้เล่นเพิ่งเลือก ---
     private WeaponSkill selectedSkill;
 
@@ -224,6 +228,10 @@ public class PlayerCombatController : MonoBehaviour
             // ตีปกติ ไม่ต้องมี QTE ทำงานได้เลย
             actionState = PlayerActionState.Executing;
             int damage = Mathf.RoundToInt(ActiveWeapon.baseDamage);
+
+            // --- [Passive: Dagger] โจมตีปกติได้ 1 Combo Stack ---
+            AddComboStack(1);
+
             targetEnemy.TakeDamage(damage);
             RestoreAP(1);
             FinishTurnAction();
@@ -361,7 +369,9 @@ public class PlayerCombatController : MonoBehaviour
             EnemyController enemy = hit.collider.GetComponent<EnemyController>();
             if (enemy != null)
             {
-                int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier);
+                float rawDamage = ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier;
+                int finalDamage = Mathf.RoundToInt(rawDamage);
+                //int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier);
                 enemy.TakeDamage(finalDamage);
                 enemy.TakePostureDamage(Mathf.RoundToInt(finalDamage * 0.5f));
                 currentAP -= 1;
@@ -372,6 +382,38 @@ public class PlayerCombatController : MonoBehaviour
     }
 
     public void RestoreAP(int amount) { currentAP = Mathf.Min(currentAP + amount, maxAP); }
+    public void RestoreAPFromAction(int amount, EnemyController attacker = null)
+    {
+        int apOverflow = 0;
+
+        if (currentAP + amount > maxAP)
+        {
+            apOverflow = (currentAP + amount) - maxAP;
+            currentAP = maxAP;
+        }
+        else
+        {
+            currentAP += amount;
+        }
+
+        UpdateAPUI();
+
+        // --- [Passive: Gun] เช็กว่า "มีปืนอยู่ในกระเป๋า" หรือไม่ (ไม่จำเป็นต้องถืออยู่) ---
+        bool hasGunInInventory = false;
+        foreach (var weapon in inventoryWeapons)
+        {
+            if (weapon.weaponType == WeaponType.Gun && weapon.currentDurability > 0)
+            {
+                hasGunInInventory = true;
+                break;
+            }
+        }
+
+        if (apOverflow > 0 && attacker != null && hasGunInInventory)
+        {
+            ExecuteGunCounterAttack(apOverflow, attacker);
+        }
+    }
     public void TakeDamage(int damage)
     {
         if (ActiveWeapon == null) return; // กัน Error
@@ -414,4 +456,47 @@ public class PlayerCombatController : MonoBehaviour
         //}
     }
     void UpdateAPUI() { if (textAP != null) textAP.text = $"{currentAP}/{maxAP}"; }
+
+    // ========================================== WeapnPassiveSystem ==========================================
+    public void AddComboStack(int amount)
+    {
+        // ถ้าอาวุธที่ถือไม่ใช่ Dagger จะไม่เก็บสะสมแต้ม
+        if (ActiveWeapon == null || ActiveWeapon.weaponType != WeaponType.Dagger) return;
+
+        currentComboStacks += amount;
+        Debug.Log($"<color=cyan>COMBO +{amount}! (Total: {currentComboStacks})</color>");
+
+        // [Option] เสกตัวเลขสีฟ้าขึ้นมาบอกผู้เล่นว่าได้ Combo
+        if (DamagePopupManager.Instance != null)
+        {
+            // อาจจะทำ Prefab แยกสำหรับคำว่า "Combo +1" ลอยขึ้นมา
+            DamagePopupManager.Instance.CreatePopup(transform.position + Vector3.up * 1.5f, currentComboStacks, true, Color.cyan);
+        }
+    }
+    public int ConsumeComboStacks()
+    {
+        int stacksToUse = currentComboStacks;
+        currentComboStacks = 0; // รีเซ็ตเป็น 0 เมื่อถูกใช้
+        Debug.Log($"<color=magenta>Consumed {stacksToUse} COMBO Stacks!</color>");
+        return stacksToUse;
+    }
+    private void ExecuteGunCounterAttack(int overflowAmount, EnemyController target)
+    {
+        totalGunCounterAttacks += 1;
+        WeaponData gunData = inventoryWeapons.Find(w => w.weaponType == WeaponType.Gun);
+
+        
+        int counterDamage = Mathf.RoundToInt(gunData.baseDamage * overflowAmount);
+
+        Debug.Log($"<color=red>AP Overflow ({overflowAmount})! Gun Passive Counter-Attacks for {counterDamage} DMG!</color>");
+
+        target.TakeDamage(counterDamage);
+
+        target.TakePostureDamage(Mathf.RoundToInt(counterDamage * 0.3f));
+
+        if (CameraShakeManager.Instance != null)
+        {
+            CameraShakeManager.Instance.Shake(0.5f);
+        }
+    }
 }

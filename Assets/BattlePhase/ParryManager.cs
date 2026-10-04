@@ -168,9 +168,18 @@ public class ParryManager : MonoBehaviour
         Debug.Log($"<color=cyan>PARRY SUCCESS! Countering with {currentPostureDamage} Posture Damage!</color>");
         CameraShakeManager.Instance.Shake(0.1f);
 
-        // ฟื้น AP และหักเกจ Posture ศัตรู[cite: 6]
-        CombatManager.Instance.player.RestoreAP(1);
+        // ฟื้น AP และหักเกจ Posture
+        //CombatManager.Instance.player.RestoreAP(1);
         attackingEnemy.TakePostureDamage(currentPostureDamage);
+
+        // --- Passive Trigger ---
+        if (PlayerCombatController.Instance != null)
+        {
+            PlayerCombatController.Instance.AddComboStack(1);
+
+            // Restore Ap+1
+            PlayerCombatController.Instance.RestoreAPFromAction(1, attackingEnemy);
+        }
     }
 
     void FailStrike(string reason)

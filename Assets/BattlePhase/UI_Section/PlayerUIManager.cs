@@ -58,6 +58,7 @@ public class PlayerUIManager : MonoBehaviour
             TextMeshProUGUI[] texts = btnObj.GetComponentsInChildren<TextMeshProUGUI>();
             if (texts.Length > 0) texts[0].text = skill.skillName;
             if (texts.Length > 1) texts[1].text = $"{skill.apCost} AP";
+            if (texts.Length > 2) texts[2].text = $"{skill.description}";
 
             Button btn = btnObj.GetComponent<Button>();
             btn.onClick.AddListener(() =>

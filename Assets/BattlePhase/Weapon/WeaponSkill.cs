@@ -3,6 +3,7 @@ using UnityEngine;
 
 // คลาสแม่แบบ Abstract (นำไปแปะ Object ไม่ได้ ต้องสร้างคลาสลูกมารับช่วงต่อ)
 [System.Serializable]
+
 public class QTEStep
 {
     [Tooltip("เวลาหน่วงก่อนเริ่ม QTE รอบนี้ (ซิงก์กับ Animation ง้างอาวุธ)")]

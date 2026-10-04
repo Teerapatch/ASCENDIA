@@ -1,5 +1,6 @@
-﻿using UnityEngine;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using UnityEngine;
+using static CombatManager;
 
 public class EnemyController : MonoBehaviour
 {
@@ -97,8 +98,19 @@ public class EnemyController : MonoBehaviour
     {
         if (staggerParticle != null) staggerParticle.Stop();
         Debug.Log($"<color=red>{enemyName} has been defeated!</color>");
-        CombatManager.Instance.RemoveEnemy(this);
-        Destroy(gameObject);
+        // ลบตัวเองออกจากคิวและลิสต์ของศัตรูบนฉาก
+        if (CombatManager.Instance != null)
+        {
+            //CombatManager.Instance.enemies.Remove(this);
+            CombatManager.Instance.RemoveEnemy(this);
+            //CombatManager.Instance.RemoveEnemyFromQueue(this);
+
+            // --- Check Wave ---
+            CombatManager.Instance.CheckBattleEnd();
+        }
+
+
+        Destroy(gameObject, 0.5f);
     }
 }
 
