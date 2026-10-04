@@ -98,7 +98,7 @@ public class WeaponCarousel : MonoBehaviour
                     slotIcons[i].sprite = emptySlotSprite; 
                     slotIcons[i].color = Color.white; 
                     
-                    if (slotNameTexts.Length > i && slotNameTexts[i] != null) slotNameTexts[i].text = "Empty";
+                    if (slotNameTexts.Length > i && slotNameTexts[i] != null) slotNameTexts[i].text = "";
                     if (slotAuraEffects.Length > i && slotAuraEffects[i] != null) slotAuraEffects[i].SetActive(false);
                 }
             }

@@ -60,7 +60,7 @@ public class CampManager : MonoBehaviour
         if (panelToHide != null)
         {
             CanvasGroup hideCg = GetOrAddCanvasGroup(panelToHide);
-            Vector3 startScale = Vector3.one;
+            Vector3 startScale = Vector3.one * 1.01f; // เริ่มจากขนาด 101%
             Vector3 endScale = Vector3.one * 0.8f; // ยุบขนาดลงเหลือ 80%
 
             float elapsed = 0f;
@@ -86,7 +86,7 @@ public class CampManager : MonoBehaviour
             panelToShow.SetActive(true);
             CanvasGroup showCg = GetOrAddCanvasGroup(panelToShow);
             Vector3 startScale = Vector3.one * 0.8f; // เริ่มจากขนาด 80%
-            Vector3 endScale = Vector3.one;
+            Vector3 endScale = Vector3.one * 1.01f; // ขยายขนาดขึ้นไป 101% ก่อนจะกลับมาที่ 100%
 
             float elapsed = 0f;
             while (elapsed < duration)
