@@ -7,28 +7,32 @@ public class WeaponCarousel : MonoBehaviour
 {
     [Header("References")]
     public PlayerData playerData;
-    public CampManager campManager; // 🌟 ไว้สั่งปิดหน้าต่างกลับไปหน้าหลัก
-    public WeaponType carouselWeaponType; 
-    public List<WeaponData> availableWeaponsForThisType; 
+    public CampManager campManager;
+    public List<WeaponData> allWeaponsInGame;
 
-    [Header("UI Elements (ใส่ใน Scene)")]
-    public Image leftImage;   
-    public Image centerImage; 
-    public Image rightImage;  
-    public TextMeshProUGUI weaponNameText; 
+    [Header("UI Elements")]
+    public Image leftImage;
+    public Image centerImage;
+    public Image rightImage;
+    public TextMeshProUGUI weaponNameText;
+
+    public Button equipButton; 
+    public TextMeshProUGUI equipButtonText; 
+
+    [Header("Equipped Status Indicators")]
+    public GameObject leftEquippedGlow;
+    public GameObject centerEquippedGlow;
+    public GameObject rightEquippedGlow;
 
     [Header("Visual Effects")]
-    public float sideImageScale = 0.7f; 
-    public Color unselectedColor = new Color(0.3f, 0.3f, 0.3f, 1f); 
-    public Color selectedColor = Color.white; 
+    public float sideImageScale = 0.7f;
+    public Color unselectedColor = new Color(0.3f, 0.3f, 0.3f, 1f);
+    public Color selectedColor = Color.white;
+    public float animationSpeed = 10f;
     
-    // 🌟 ตัวแปรควบคุมความสมูท (Juiciness)
-    public float animationSpeed = 10f; 
-    public GameObject selectionAuraEffect; // 🌟 ลากออร่า (เช่น Particle หรือ Image เรืองแสง) มาใส่ตรงนี้
+    public GameObject selectionAuraEffect;
 
-    private int currentIndex = 0; 
-
-    // ตัวแปรเก็บค่าเป้าหมาย เพื่อให้ Lerp วิ่งไปหา
+    private int currentIndex = 0;
     private Vector3 centerTargetScale = Vector3.one;
     private Vector3 sideTargetScale;
     private Color centerTargetColor;
@@ -39,106 +43,66 @@ public class WeaponCarousel : MonoBehaviour
         sideTargetScale = Vector3.one * sideImageScale;
         centerTargetColor = selectedColor;
         sideTargetColor = unselectedColor;
-
-        if (selectionAuraEffect != null) selectionAuraEffect.SetActive(false); // ปิดออร่าไว้ก่อน
-
-        InitializeCurrentIndex();
-        UpdateCarouselVisuals(true); // true = อัปเดตแบบข้ามแอนิเมชันตอนเปิดครั้งแรก
+        
+        currentIndex = 0;
+        UpdateCarouselVisuals(true);
     }
 
-    private void InitializeCurrentIndex()
-    {
-        if (playerData == null || availableWeaponsForThisType.Count == 0) return;
-
-        WeaponData currentlyEquipped = null;
-        switch (carouselWeaponType)
-        {
-            case WeaponType.Dagger: currentlyEquipped = playerData.equippedDagger; break;
-            case WeaponType.LongSword: currentlyEquipped = playerData.equippedSword; break;
-            case WeaponType.Bow: currentlyEquipped = playerData.equippedBow; break;
-            case WeaponType.Spell: currentlyEquipped = playerData.equippedSpell; break;
-        }
-
-        if (currentlyEquipped != null)
-        {
-            currentIndex = availableWeaponsForThisType.IndexOf(currentlyEquipped);
-            if(currentIndex == -1) currentIndex = 0; 
-        }
-    }
-
-    // ==========================================
-    // 🌟 แอนิเมชัน Lerp (ทำงานทุกเฟรม)
-    // ==========================================
     private void Update()
     {
-        if (availableWeaponsForThisType.Count == 0) return;
+        if (allWeaponsInGame.Count == 0) return;
 
-        // ค่อยๆ ปรับขนาด (Scale)
-        if (centerImage != null)
-            centerImage.transform.localScale = Vector3.Lerp(centerImage.transform.localScale, centerTargetScale, Time.deltaTime * animationSpeed);
-        if (leftImage != null)
-            leftImage.transform.localScale = Vector3.Lerp(leftImage.transform.localScale, sideTargetScale, Time.deltaTime * animationSpeed);
-        if (rightImage != null)
-            rightImage.transform.localScale = Vector3.Lerp(rightImage.transform.localScale, sideTargetScale, Time.deltaTime * animationSpeed);
+        if (centerImage != null) centerImage.transform.localScale = Vector3.Lerp(centerImage.transform.localScale, centerTargetScale, Time.deltaTime * animationSpeed);
+        if (leftImage != null) leftImage.transform.localScale = Vector3.Lerp(leftImage.transform.localScale, sideTargetScale, Time.deltaTime * animationSpeed);
+        if (rightImage != null) rightImage.transform.localScale = Vector3.Lerp(rightImage.transform.localScale, sideTargetScale, Time.deltaTime * animationSpeed);
 
-        // ค่อยๆ ปรับสี (Color / Fade)
-        if (centerImage != null)
-            centerImage.color = Color.Lerp(centerImage.color, centerTargetColor, Time.deltaTime * animationSpeed);
-        if (leftImage != null)
-            leftImage.color = Color.Lerp(leftImage.color, sideTargetColor, Time.deltaTime * animationSpeed);
-        if (rightImage != null)
-            rightImage.color = Color.Lerp(rightImage.color, sideTargetColor, Time.deltaTime * animationSpeed);
+        if (centerEquippedGlow != null && centerImage != null) centerEquippedGlow.transform.localScale = centerImage.transform.localScale;
+        if (leftEquippedGlow != null && leftImage != null) leftEquippedGlow.transform.localScale = leftImage.transform.localScale;
+        if (rightEquippedGlow != null && rightImage != null) rightEquippedGlow.transform.localScale = rightImage.transform.localScale;
+
+        if (centerImage != null) centerImage.color = Color.Lerp(centerImage.color, centerTargetColor, Time.deltaTime * animationSpeed);
+        if (leftImage != null) leftImage.color = Color.Lerp(leftImage.color, sideTargetColor, Time.deltaTime * animationSpeed);
+        if (rightImage != null) rightImage.color = Color.Lerp(rightImage.color, sideTargetColor, Time.deltaTime * animationSpeed);
     }
 
-    // ==========================================
-    // ควบคุมการเลื่อน ซ้าย/ขวา
-    // ==========================================
     public void SlideLeft()
     {
-        if (availableWeaponsForThisType.Count == 0) return;
+        if (allWeaponsInGame.Count == 0) return;
         currentIndex--;
-        if (currentIndex < 0) currentIndex = availableWeaponsForThisType.Count - 1; 
+        if (currentIndex < 0) currentIndex = allWeaponsInGame.Count - 1;
         UpdateCarouselVisuals(false);
     }
 
     public void SlideRight()
     {
-        if (availableWeaponsForThisType.Count == 0) return;
+        if (allWeaponsInGame.Count == 0) return;
         currentIndex++;
-        if (currentIndex >= availableWeaponsForThisType.Count) currentIndex = 0; 
+        if (currentIndex >= allWeaponsInGame.Count) currentIndex = 0;
         UpdateCarouselVisuals(false);
     }
 
-    // ==========================================
-    // อัปเดตข้อมูลภาพ (แต่ปล่อยให้ Update ทำแอนิเมชัน)
-    // ==========================================
     private void UpdateCarouselVisuals(bool instant = false)
     {
-        if (availableWeaponsForThisType.Count == 0) return;
+        if (allWeaponsInGame.Count == 0) return;
 
-        int totalWeapons = availableWeaponsForThisType.Count;
+        int totalWeapons = allWeaponsInGame.Count;
         int leftIndex = (currentIndex - 1 + totalWeapons) % totalWeapons;
         int rightIndex = (currentIndex + 1) % totalWeapons;
 
-        // สลับรูปภาพ
-        if (centerImage != null) centerImage.sprite = availableWeaponsForThisType[currentIndex].weaponIcon;
-        if (leftImage != null) 
+        if (centerImage != null) centerImage.sprite = allWeaponsInGame[currentIndex].weaponIcon;
+        if (leftImage != null)
         {
-            leftImage.sprite = availableWeaponsForThisType[leftIndex].weaponIcon;
-            leftImage.gameObject.SetActive(totalWeapons > 1); 
+            leftImage.sprite = allWeaponsInGame[leftIndex].weaponIcon;
+            leftImage.gameObject.SetActive(totalWeapons > 1);
         }
         if (rightImage != null)
         {
-            rightImage.sprite = availableWeaponsForThisType[rightIndex].weaponIcon;
-            rightImage.gameObject.SetActive(totalWeapons > 2); 
+            rightImage.sprite = allWeaponsInGame[rightIndex].weaponIcon;
+            rightImage.gameObject.SetActive(totalWeapons > 2);
         }
 
-        if (weaponNameText != null)
-        {
-            weaponNameText.text = availableWeaponsForThisType[currentIndex].weaponName;
-        }
+        if (weaponNameText != null) weaponNameText.text = allWeaponsInGame[currentIndex].weaponName;
 
-        // ถ้าให้เปลี่ยนทันที (เช่น ตอนเปิดหน้าต่าง) ให้เซ็ตค่าตรงๆ เลย
         if (instant)
         {
             if (centerImage != null) { centerImage.transform.localScale = centerTargetScale; centerImage.color = centerTargetColor; }
@@ -147,53 +111,108 @@ public class WeaponCarousel : MonoBehaviour
         }
         else
         {
-            // ถ้าไม่ใส่ instant เราจะทำ "Bounce" แกล้งให้ตรงกลางมันเล็กลงนิดนึง แล้วค่อยให้มัน Lerp เด้งกลับมาที่ขนาดเดิม
-            if (centerImage != null) centerImage.transform.localScale = Vector3.one * 0.8f; 
+            if (centerImage != null) centerImage.transform.localScale = Vector3.one * 0.8f;
         }
+
+        RefreshEquipButtonState(); 
+        RefreshEquippedIndicators(); 
     }
 
-    // ==========================================
-    // ปุ่มยืนยัน "สวมใส่" (Equip)
-    // ==========================================
-    public void EquipSelectedWeapon()
+    private void RefreshEquipButtonState()
     {
-        if (playerData == null || availableWeaponsForThisType.Count == 0) return;
+        if (playerData == null || equipButton == null || equipButtonText == null) return;
 
-        WeaponData selectedWeapon = availableWeaponsForThisType[currentIndex];
+        WeaponData showingWeapon = allWeaponsInGame[currentIndex];
 
-        switch (carouselWeaponType)
+        if (playerData.activeLoadout.Contains(showingWeapon))
         {
-            case WeaponType.Dagger: playerData.equippedDagger = selectedWeapon; break;
-            case WeaponType.LongSword: playerData.equippedSword = selectedWeapon; break;
-            case WeaponType.Bow: playerData.equippedBow = selectedWeapon; break;
-            case WeaponType.Spell: playerData.equippedSpell = selectedWeapon; break;
+            equipButton.interactable = true;
+            equipButtonText.text = "Unequip"; 
+            return;
         }
 
-        // 🌟 1. เปิดเอฟเฟกต์ออร่า
+        if (playerData.activeLoadout.Count >= playerData.currentCampLevel)
+        {
+            equipButton.interactable = false;
+            equipButtonText.text = "Slots Full"; 
+            return;
+        }
+
+        equipButton.interactable = true;
+        equipButtonText.text = "Equip"; 
+    }
+
+    // 🌟 ฟังก์ชันนี้จะจัดการทั้งกรอบแสง และ ออร่าตรงกลางแบบอัตโนมัติ
+    private void RefreshEquippedIndicators()
+    {
+        if (playerData == null || allWeaponsInGame.Count == 0) return;
+
+        int totalWeapons = allWeaponsInGame.Count;
+        int leftIndex = (currentIndex - 1 + totalWeapons) % totalWeapons;
+        int rightIndex = (currentIndex + 1) % totalWeapons;
+
+        bool isLeftEquipped = playerData.activeLoadout.Contains(allWeaponsInGame[leftIndex]);
+        bool isCenterEquipped = playerData.activeLoadout.Contains(allWeaponsInGame[currentIndex]);
+        bool isRightEquipped = playerData.activeLoadout.Contains(allWeaponsInGame[rightIndex]);
+
+        if (leftEquippedGlow != null)
+        {
+            leftEquippedGlow.SetActive(isLeftEquipped);
+            if (isLeftEquipped) leftEquippedGlow.GetComponent<Image>().color = allWeaponsInGame[leftIndex].auraColor;
+        }
+            
+        if (centerEquippedGlow != null)
+        {
+            centerEquippedGlow.SetActive(isCenterEquipped);
+            if (isCenterEquipped) centerEquippedGlow.GetComponent<Image>().color = allWeaponsInGame[currentIndex].auraColor;
+        }
+            
+        if (rightEquippedGlow != null)
+        {
+            rightEquippedGlow.SetActive(isRightEquipped);
+            if (isRightEquipped) rightEquippedGlow.GetComponent<Image>().color = allWeaponsInGame[rightIndex].auraColor;
+        }
+
+        // 🌟 จัดการออร่าระเบิดให้เล่นค้างไว้ตลอดถ้าอาวุธถูกใส่อยู่
         if (selectionAuraEffect != null)
         {
-            selectionAuraEffect.SetActive(true);
+            selectionAuraEffect.SetActive(isCenterEquipped);
+            if (isCenterEquipped)
+            {
+                ParticleSystem ps = selectionAuraEffect.GetComponent<ParticleSystem>();
+                if (ps != null)
+                {
+                    var main = ps.main;
+                    main.startColor = allWeaponsInGame[currentIndex].auraColor;
+                }
+                
+                Image auraImg = selectionAuraEffect.GetComponent<Image>();
+                if (auraImg != null) auraImg.color = allWeaponsInGame[currentIndex].auraColor;
+            }
         }
-
-        // 🌟 2. แสดงข้อความ
-        if (campManager != null)
-        {
-            campManager.ShowSystemMessage($"Equipped: {selectedWeapon.weaponName}");
-        }
-
-        // 🌟 3. สั่งปิดหน้าต่างกลับไปหน้าเมนูหลัก หลังจากดีเลย์นิดหน่อยให้เห็นออร่าก่อน
-        Invoke("CloseWindow", 0.5f); // รอ 0.5 วินาที
     }
 
-    private void CloseWindow()
+    public void EquipSelectedWeapon()
     {
-        if (campManager != null)
+        if (playerData == null || allWeaponsInGame.Count == 0) return;
+
+        WeaponData selectedWeapon = allWeaponsInGame[currentIndex];
+
+        if (playerData.activeLoadout.Contains(selectedWeapon))
         {
-            // ปิดออร่าเตรียมไว้ใช้รอบหน้า
-            if (selectionAuraEffect != null) selectionAuraEffect.SetActive(false);
-            
-            // สั่ง Manager ให้กลับหน้าหลัก
-            campManager.CloseToMainMenu(); 
+            playerData.activeLoadout.Remove(selectedWeapon);
+            if (campManager != null) campManager.ShowSystemMessage($"Unequipped: {selectedWeapon.weaponName}");
         }
+        else
+        {
+            if (playerData.activeLoadout.Count < playerData.currentCampLevel)
+            {
+                playerData.activeLoadout.Add(selectedWeapon);
+                if (campManager != null) campManager.ShowSystemMessage($"Equipped: {selectedWeapon.weaponName}");
+            }
+        }
+
+        RefreshEquipButtonState();
+        RefreshEquippedIndicators(); // อัปเดตทุกอย่างทันทีที่กดใส่/ถอด
     }
 }

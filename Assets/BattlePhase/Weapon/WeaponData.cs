@@ -16,6 +16,9 @@ public class WeaponData : ScriptableObject
     public string weaponName;
     public Sprite weaponIcon;
 
+// 🌟 เพิ่มบรรทัดนี้: สีออร่าประจำอาวุธชิ้นนี้ (ตั้งค่าเริ่มต้นเป็นสีขาว)
+    public Color auraColor = Color.white;
+
     public float baseDamage;
     public float weight;
     public float speed;
