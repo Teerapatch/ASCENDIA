@@ -15,6 +15,7 @@ public class PlayerData : ScriptableObject
 
     [Header("Inventory & Stats")]
     public int gemStone = 0;
+    public int monsterPart = 0;  // ชิ้นส่วนจากมอนสเตอร์
     public float weight = 0f;
     public float maxWeight = 30f;
 

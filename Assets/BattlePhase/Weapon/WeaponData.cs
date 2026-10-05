@@ -14,7 +14,7 @@ public class WeaponData : ScriptableObject
 {
     public float baseDamage;
     public float currentDurability;
-   [Header("Basic Info")]
+    [Header("Basic Info")]
     public WeaponType weaponType;
     public string weaponName;
     public Sprite weaponIcon;
@@ -40,6 +40,7 @@ public class WeaponData : ScriptableObject
     // 🌟 โซนใหม่: ระบบ Forge & Progression
     // ==========================================
     [Header("Forge Status (ห้ามปรับเองตอนเล่น)")]
+    public int requiredCampLevel = 1; // 🌟 เพิ่มบรรทัดนี้: กำหนดว่าต้องการแคมป์เลเวลเท่าไหร่ถึงจะโผล่ให้คราฟต์
     public bool isUnlocked = false; // คราฟต์แล้วหรือยัง? (ถ้ายัง = ต้องใช้ Craft, ถ้าคราฟต์แล้ว = ใช้ Upgrade)
     public int currentLevel = 1;
     public int maxLevel = 5;        // เลเวลตันที่เท่าไหร่
