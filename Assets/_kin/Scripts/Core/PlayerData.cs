@@ -14,7 +14,7 @@ public class PlayerData : ScriptableObject
     public float currentWeaponDUR = 100f;
 
     [Header("Inventory & Stats")]
-    public int ore = 0;
+    public int gemStone = 0;
     public float weight = 0f;
     public float maxWeight = 30f;
 
@@ -44,7 +44,7 @@ public class PlayerData : ScriptableObject
     public void ResetData()
     {
         stamina = maxStamina;
-        ore = 0;
+        gemStone = 0;
         weight = 0f;
         piton = 3;
         currentFloor = 1;

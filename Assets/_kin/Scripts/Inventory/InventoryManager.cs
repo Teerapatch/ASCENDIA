@@ -61,7 +61,7 @@ public class InventoryManager : MonoBehaviour
         if (playerData == null) return;
         
         playerData.weight = 0;
-        playerData.ore = 0; // รีเซ็ตเพื่อนับใหม่จากของในกระเป๋า
+        playerData.gemStone = 0; // รีเซ็ตเพื่อนับใหม่จากของในกระเป๋า
 
         foreach (InventorySlot slot in slots)
         {
@@ -72,7 +72,7 @@ public class InventoryManager : MonoBehaviour
             // (ใช้เช็คจากชื่อ ถ้าตั้งชื่อไอเทมว่ามีคำว่า "Ore" หรือ "แร่")
             if (slot.item.itemName.Contains("Ore") || slot.item.itemName.Contains("แร่"))
             {
-                playerData.ore += slot.amount;
+                playerData.gemStone += slot.amount;
             }
         }
         OnInventoryChanged?.Invoke(); 
