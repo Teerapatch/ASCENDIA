@@ -14,6 +14,9 @@ public class EnemyController : MonoBehaviour
     public int currentPosture;
     public bool isStaggered = false;
 
+    [Header("Debuffs")]
+    public bool isMarkedByGun = false;
+
     [Header("Attack Patterns (Multi-Hit)")]
     // ใช้โครงสร้างใหม่ที่เก็บข้อมูลหลายฮิตแทน
     public List<EnemyAttackPattern> attackPatterns;
@@ -25,6 +28,7 @@ public class EnemyController : MonoBehaviour
     {
         currentHP = maxHP;
         currentPosture = maxPosture;
+        isMarkedByGun = false;
     }
 
     public void StartTurn()
@@ -54,6 +58,17 @@ public class EnemyController : MonoBehaviour
 
         // 2. ส่งทั้งชุดโจมตีไปให้ ParryManager ดำเนินการ
         ParryManager.Instance.StartParrySequence(chosenPattern, this);
+    }
+    public void ApplyGunMark()
+    {
+        if (!isMarkedByGun)
+        {
+            isMarkedByGun = true;
+            Debug.Log($"<color=red> {enemyName} has been MARKED! Takes +50% Free-Aim DMG!</color>");
+
+            // [Option] ถ้ามีระบบ Particle Effect หรือ UI Icon บนหัวศัตรู ให้เรียกใช้ตรงนี้ได้เลย
+            // เช่น Instantiate(targetLockIconPrefab, transform.position + Vector3.up * 2f, Quaternion.identity, transform);
+        }
     }
 
     public void TakeDamage(int damage)

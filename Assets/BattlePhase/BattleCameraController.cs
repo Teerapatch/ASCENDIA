@@ -68,6 +68,7 @@ public class BattleCameraController : MonoBehaviour
     {
         targetPosition = targetTransform.position + offset;
         targetSize = zoomOrthoSize;
+
     }
 
     // เรียกฟังก์ชันนี้เมื่อจบเทิร์น หรือยกเลิกการเลือก

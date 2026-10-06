@@ -2,6 +2,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using static CombatManager;
 
 // --- [แก้ไข] เพิ่ม State "ChoosingSkill" เข้ามา ---
 public enum PlayerActionState { Waiting, ChoosingAction, ChoosingSkill, ChoosingTarget, DoingQTE, Executing }
@@ -17,7 +18,9 @@ public class PlayerCombatController : MonoBehaviour
     public TextMeshProUGUI textAP;
 
     [Header("Weapons")]
-    public List<WeaponData> inventoryWeapons;
+    //public List<WeaponData> inventoryWeapons;
+    public List<WeaponData> baseInventoryWeapons;
+    [HideInInspector] public List<WeaponData> inventoryWeapons = new List<WeaponData>();
     public int currentWeaponIndex = 0;
 
     public WeaponData CurrentWeapon => inventoryWeapons[currentWeaponIndex];
@@ -44,6 +47,23 @@ public class PlayerCombatController : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        inventoryWeapons.Clear();
+        foreach (var baseWeapon in baseInventoryWeapons)
+        {
+            // ใช้ Instantiate กับ ScriptableObject จะได้ตัวก๊อปปี้ที่รีเซ็ตค่าเสมอเมื่อโหลดฉาก
+            WeaponData clonedWeapon = Instantiate(baseWeapon);
+
+            // รีเซ็ตค่าสำคัญๆ ให้เต็ม (กันเหนียว)
+            clonedWeapon.currentDurability = clonedWeapon.maxDurability;
+
+            inventoryWeapons.Add(clonedWeapon);
+        }
+
+        // เซ็ตอาวุธชิ้นแรกเป็นอาวุธเริ่มต้น
+        if (inventoryWeapons.Count > 0)
+        {
+            ActiveWeapon = inventoryWeapons[0];
+        }
     }
 
     private void Start()
@@ -54,6 +74,14 @@ public class PlayerCombatController : MonoBehaviour
 
     private void Update()
     {
+        if (actionState == PlayerActionState.Waiting)
+        {
+            if (ControlPromptUI.Instance != null)
+            {
+                ControlPromptUI.Instance.HidePrompt();
+            }
+        }
+
         if (CombatManager.Instance.currentState != CombatState.PlayerTurn)
         {
             if (isAiming) ExitAimMode();
@@ -63,13 +91,29 @@ public class PlayerCombatController : MonoBehaviour
         if (actionState == PlayerActionState.ChoosingSkill)
         {
             HandleSkillSelectionInput();
+            if (ControlPromptUI.Instance != null)
+            {
+                ControlPromptUI.Instance.ShowPrompt("<color=#FFaaaa>[ESC]</color> Back");
+            }
             return;
         }
 
         else if (actionState == PlayerActionState.ChoosingTarget)
         {
             HandleTargetSelectionInput();
+            if (ControlPromptUI.Instance != null)
+            {
+                ControlPromptUI.Instance.ShowPrompt("<color=#FFFFaa>[F]</color> Target Selection     <color=#FFaaaa>[ESC]</color> Back");
+            }
             return;
+        }
+
+        else if (actionState == PlayerActionState.ChoosingAction)
+        {
+            if (ControlPromptUI.Instance != null)
+            {
+                ControlPromptUI.Instance.HidePrompt();
+            }
         }
 
         // โหมด Free Aim (คลิกขวาค้าง)
@@ -372,6 +416,25 @@ public class PlayerCombatController : MonoBehaviour
                 float rawDamage = ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier;
                 int finalDamage = Mathf.RoundToInt(rawDamage);
                 //int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier);
+
+                if (enemy.isMarkedByGun)
+                {
+                    // คูณดาเมจเพิ่มอีก 50% เข้าไปตรงๆ ทบกับ Passive ของปืน
+                    finalDamage = Mathf.RoundToInt(finalDamage * 1.5f);
+
+                    Debug.Log($"<color=red>TARGET MARKED: Free-Aim damage amplified by 50%! Final DMG: {finalDamage}</color>");
+
+                    // สั่นกล้องให้สะใจขึ้น เพราะทำดาเมจจุดอ่อนสำเร็จ
+                    if (CameraShakeManager.Instance != null)
+                        CameraShakeManager.Instance.Shake(1.0f);
+                }
+                else
+                {
+                    // สั่นกล้องปกติ
+                    if (CameraShakeManager.Instance != null)
+                        CameraShakeManager.Instance.Shake(0.6f);
+                }
+
                 enemy.TakeDamage(finalDamage);
                 enemy.TakePostureDamage(Mathf.RoundToInt(finalDamage * 0.5f));
                 currentAP -= 1;
@@ -458,10 +521,16 @@ public class PlayerCombatController : MonoBehaviour
     void UpdateAPUI() { if (textAP != null) textAP.text = $"{currentAP}/{maxAP}"; }
 
     // ========================================== WeapnPassiveSystem ==========================================
-    public void AddComboStack(int amount)
+    public void AddComboStack(int amount, bool isFromSkill = false)
     {
         // ถ้าอาวุธที่ถือไม่ใช่ Dagger จะไม่เก็บสะสมแต้ม
-        if (ActiveWeapon == null || ActiveWeapon.weaponType != WeaponType.Dagger) return;
+        if (!isFromSkill)
+        {
+            if (ActiveWeapon == null || ActiveWeapon.weaponType != WeaponType.Dagger)
+            {
+                return;
+            }
+        }
 
         currentComboStacks += amount;
         Debug.Log($"<color=cyan>COMBO +{amount}! (Total: {currentComboStacks})</color>");

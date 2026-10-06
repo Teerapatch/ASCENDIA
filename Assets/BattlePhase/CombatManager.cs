@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using UnityEditor.Overlays;
 using UnityEngine;
 
 public enum CombatState { Setup, CalculateTurn, PlayerTurn, EnemyTurn, ParryPhase, GameOver, Victory }
@@ -86,6 +85,10 @@ public class CombatManager : MonoBehaviour
         {
             currentState = CombatState.GameOver;
             Debug.Log("<color=red>GAME OVER! All weapons broken.</color>");
+
+            // PREPARE TO DELETE IT
+            if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowGameOver();
+
             return;
         }
 
@@ -118,6 +121,7 @@ public class CombatManager : MonoBehaviour
                 Debug.Log("<color=green>BATTLE WON! All Waves Cleared.</color>");
 
                 // ... (ใส่โค้ดแจก EXP / โหลดกลับฉากแผนที่ ตรงนี้) ...
+                if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowVictory();
             }
         }
     }
@@ -314,6 +318,7 @@ public class CombatManager : MonoBehaviour
         {
             currentState = CombatState.GameOver;
             Debug.Log("DEFEAT! All weapons broken. Game Over.");
+            if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowGameOver();
         }
         else
         {
