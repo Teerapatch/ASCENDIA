@@ -149,62 +149,82 @@ public class NodeSelectionManager : MonoBehaviour
 
         if (uiLinePrefab != null && uiLineContainer != null && playerUIIcon != null)
         {
-            Vector3[] corners = new Vector3[4];
-            mapUIPanel.GetComponent<RectTransform>().GetWorldCorners(corners);
-            float bottomY = corners[0].y; // ขอบล่างหน้าต่างแผนที่
-            float topY = corners[1].y + 50f;
+            RectTransform mapRect = mapUIPanel.GetComponent<RectTransform>();
+            Vector3[] localCorners = new Vector3[4];
+            mapRect.GetLocalCorners(localCorners);
+
+            float bottomY = localCorners[0].y;
+            float topY = localCorners[1].y;
 
             if (generatedUINodes.Count > 0)
             {
-                // 🌟 1. หาจุดกึ่งกลางของแกน X
+                // หาจุดกึ่งกลางจาก Local Space
                 float centerX = 0f;
+                float nodeY = 0f;
                 foreach (RectTransform rt in generatedUINodes)
                 {
-                    centerX += rt.position.x;
+                    Vector3 localPos = mapRect.InverseTransformPoint(rt.position);
+                    centerX += localPos.x;
+                    nodeY = localPos.y;
                 }
                 centerX /= generatedUINodes.Count;
-
-                // 🌟 2. หาความสูงของโหนด แล้วบังคับดึงวงกลมผู้เล่นลงมาให้อยู่ "ต่ำกว่า" เสมอ!
-                float nodeY = generatedUINodes[0].position.y;
-                // จัดให้อยู่สูงจากขอบจอล่างขึ้นมา 40% (ปรับเลข 0.4f ได้ถ้าอยากให้สูง/ต่ำกว่านี้)
                 float playerY = Mathf.Lerp(bottomY, nodeY, 0.4f);
 
-                playerUIIcon.position = new Vector3(centerX, playerY, playerUIIcon.position.z);
-            }
+                // ย้ายผู้เล่น
+                playerUIIcon.position = mapRect.TransformPoint(new Vector3(centerX, playerY, 0));
+                playerUIIcon.SetAsLastSibling();
 
-            // 🌟 3. ลากเส้นสีเหลืองขึ้นมาจากขอบจอล่าง
-            Vector3 pastStart = new Vector3(playerUIIcon.position.x, bottomY - 50f, 0);
-            DrawUILine(pastStart, playerUIIcon.position, auraLineColor);
+                // ลากเส้นสีเหลืองขึ้นมาจากขอบจอล่าง
+                Vector3 pastStartWorld = mapRect.TransformPoint(new Vector3(centerX, bottomY - 50f, 0));
+                DrawUILine(pastStartWorld, playerUIIcon.position, auraLineColor);
 
-            // 🌟 4. ลากเส้นกิ่งก้านสาขา
-            for (int i = 0; i < generatedUINodes.Count; i++)
-            {
-                RectTransform targetNode = generatedUINodes[i];
-                PathNode logicNode = currentNodes[i];
+                for (int i = 0; i < generatedUINodes.Count; i++)
+                {
+                    RectTransform targetNode = generatedUINodes[i];
+                    PathNode logicNode = currentNodes[i];
 
-                Image branchLine = DrawUILine(playerUIIcon.position, targetNode.position, normalLineColor);
-                nodeLines.Add(logicNode, branchLine);
+                    Image branchLine = DrawUILine(playerUIIcon.position, targetNode.position, normalLineColor);
+                    nodeLines.Add(logicNode, branchLine);
 
-                Vector3 futureEnd = new Vector3(targetNode.position.x, topY, 0);
-                Image futureLine = DrawUILine(targetNode.position, futureEnd, normalLineColor);
-                nodeFutureLines.Add(logicNode, futureLine);
+                    // ลากเส้นอนาคตพุ่งทะลุขอบบน
+                    Vector3 localTarget = mapRect.InverseTransformPoint(targetNode.position);
+                    Vector3 futureEndWorld = mapRect.TransformPoint(new Vector3(localTarget.x, topY + 50f, 0));
+                    Image futureLine = DrawUILine(targetNode.position, futureEndWorld, normalLineColor);
+                    nodeFutureLines.Add(logicNode, futureLine);
+                }
             }
         }
     }
 
-    private Image DrawUILine(Vector3 startPos, Vector3 endPos, Color lineColor)
+    private Image DrawUILine(Vector3 startWorldPos, Vector3 endWorldPos, Color lineColor)
     {
         if (uiLinePrefab == null || uiLineContainer == null) return null;
         GameObject lineObj = Instantiate(uiLinePrefab, uiLineContainer);
         RectTransform lineRect = lineObj.GetComponent<RectTransform>();
         Image lineImg = lineObj.GetComponent<Image>();
-        Vector3 dir = endPos - startPos;
-        lineRect.position = startPos + (dir / 2f);
+
+        // 🌟 1. แปลงพิกัดโลก 3D ให้กลายเป็นพิกัดแบนๆ 2D บนกระดาน UI (ตัดปัญหา Canvas เอียง)
+        Vector3 localStart = uiLineContainer.InverseTransformPoint(startWorldPos);
+        Vector3 localEnd = uiLineContainer.InverseTransformPoint(endWorldPos);
+        localStart.z = 0; localEnd.z = 0;
+
+        // 🌟 2. ตั้ง Pivot ไปด้านซ้ายกลาง (0, 0.5) แล้ววางตำแหน่งที่จุดเริ่มต้น
+        lineRect.pivot = new Vector2(0f, 0.5f);
+        lineRect.localPosition = localStart;
+
+        // 🌟 3. หมุนเส้น (ใช้พิกัด Local คำนวณ มุมจะตรงเป๊ะ 100%)
+        Vector3 dir = localEnd - localStart;
         float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
-        lineRect.rotation = Quaternion.Euler(0, 0, angle);
-        float dist = Vector3.Distance(startPos, endPos);
-        lineRect.sizeDelta = new Vector2(dist / mapUIPanel.transform.lossyScale.x, lineThickness);
-        lineImg.color = lineColor; return lineImg;
+        lineRect.localRotation = Quaternion.Euler(0, 0, angle);
+
+        // 🌟 4. ความยาวเส้น = ระยะทางใน Local Space (ไม่ต้องหาร Scale ให้วุ่นวายแล้ว)
+        float dist = dir.magnitude;
+        lineRect.sizeDelta = new Vector2(dist, lineThickness);
+
+        lineImg.color = lineColor;
+        lineRect.SetAsFirstSibling(); // ดันไปอยู่หลังสุด
+
+        return lineImg;
     }
 
     private void Update()
@@ -244,8 +264,8 @@ public class NodeSelectionManager : MonoBehaviour
     {
         isSelecting = false;
         if (stateManager) stateManager.ChangeState(PlayerStateManager.State.AutoClimbing);
-        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
-        Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false;
+
+        // 🌟 เอาคำสั่งซ่อนเมาส์ตรงนี้ออกไปก่อน เพื่อให้เมาส์ยังอยู่ตอน UI เล่นอนิเมชัน
 
         Color dimLineColor = new Color(0.2f, 0.2f, 0.2f, 0.3f); Color dimIconColor = new Color(0.3f, 0.3f, 0.3f, 1f);
         PathNode[] allCurrentNodes = FindObjectsByType<PathNode>(FindObjectsSortMode.None);
@@ -267,21 +287,37 @@ public class NodeSelectionManager : MonoBehaviour
 
         if (playerUIIcon != null && selectedNode.uiNodeTransform != null)
         {
-            Vector3 startPos = playerUIIcon.position; Vector3 endPos = selectedNode.uiNodeTransform.position;
+            Vector3 startWorld = playerUIIcon.position;
+            Vector3 endWorld = selectedNode.uiNodeTransform.position;
+
+            // แปลงพิกัดเป็น Local ให้หมด
+            Vector3 localStart = uiLineContainer.InverseTransformPoint(startWorld);
+            Vector3 localEnd = uiLineContainer.InverseTransformPoint(endWorld);
+            localStart.z = 0; localEnd.z = 0;
+
             GameObject dynamicAuraObj = Instantiate(uiLinePrefab, uiLineContainer);
             RectTransform dynamicAuraRect = dynamicAuraObj.GetComponent<RectTransform>();
             Image dynamicAuraImg = dynamicAuraObj.GetComponent<Image>();
             dynamicAuraImg.color = auraLineColor;
+
+            dynamicAuraRect.pivot = new Vector2(0f, 0.5f);
+            Vector3 dir = localEnd - localStart;
+            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+            dynamicAuraRect.localRotation = Quaternion.Euler(0, 0, angle);
+
             float t = 0;
             while (t < uiPlayerMoveDuration)
             {
                 t += Time.deltaTime; float progress = t / uiPlayerMoveDuration; if (progress > 1f) progress = 1f;
-                Vector3 currentPos = Vector3.Lerp(startPos, endPos, progress);
-                playerUIIcon.position = currentPos;
-                Vector3 dir = currentPos - startPos; dynamicAuraRect.position = startPos + (dir / 2f);
-                float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg; dynamicAuraRect.rotation = Quaternion.Euler(0, 0, angle);
-                float trailDistance = Vector3.Distance(startPos, currentPos);
-                dynamicAuraRect.sizeDelta = new Vector2(trailDistance / mapUIPanel.transform.lossyScale.x, lineThickness);
+
+                // ขยับไอคอนผู้เล่นในโลก 3D
+                playerUIIcon.position = Vector3.Lerp(startWorld, endWorld, progress);
+
+                // ขยับและยืดความยาวเส้นในโลก Local
+                Vector3 currentLocal = Vector3.Lerp(localStart, localEnd, progress);
+                dynamicAuraRect.localPosition = localStart;
+                dynamicAuraRect.sizeDelta = new Vector2(Vector3.Distance(localStart, currentLocal), lineThickness);
+
                 yield return null;
             }
         }
@@ -289,6 +325,11 @@ public class NodeSelectionManager : MonoBehaviour
         if (mapUIPanel) mapUIPanel.SetActive(false);
         if (nodeCam) nodeCam.SetActive(false);
         if (camController && camController.climbCam) camController.climbCam.SetActive(true);
+
+        // 🌟 ย้ายคำสั่งซ่อนและล็อคเมาส์มาไว้ตรงนี้! (รอจนปิดหน้าต่าง UI ไปแล้วค่อยล็อค)
+        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
 
         PathNode.RoomType nextRoomType = selectedNode.roomType;
         string nextScene = selectedNode.sceneToLoad;
@@ -321,15 +362,17 @@ public class NodeSelectionManager : MonoBehaviour
             GameManager.Instance.playerData.currentFloor++;
         }
 
-        // 🌟 ระบบ Encounter Routing แยกตามประเภท Node ทั้ง 6 แบบ
         TriggerNodeEncounter(selectedNode);
 
-        // เช็คว่าโหนดนี้ต้องโหลดเปลี่ยนซีนหรือไม่ (จะโหลดก็ต่อเมื่อมีการพิมพ์ชื่อซีนไว้ใน Inspector)
         bool shouldLoadNewScene = !string.IsNullOrEmpty(nextScene) &&
                                   (nextRoomType == PathNode.RoomType.Battle ||
                                    nextRoomType == PathNode.RoomType.MiniBoss ||
                                    nextRoomType == PathNode.RoomType.Rest ||
                                    nextRoomType == PathNode.RoomType.Camp);
+
+        // 🌟 ปลดล็อคเมาส์ก่อนโหลดซีนใหม่ เผื่อต้องคลิกอะไร
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
 
         if (shouldLoadNewScene)
         {
@@ -338,7 +381,10 @@ public class NodeSelectionManager : MonoBehaviour
         }
         else
         {
-            // ถ้าเป็นโหนด Normal, Ore หรือซีนพวก Rest/Camp ยังทำไม่เสร็จ ให้เสกหน้าผาปีนต่อทันที!
+            // ถ้าปีนต่อ ล็อคเมาส์กลับให้เรียบร้อย
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+
             if (RoomManager.Instance != null && stateManager != null)
             {
                 RoomManager.Instance.LoadNewRoom(PathNode.RoomType.Normal, stateManager.transform);
@@ -373,7 +419,6 @@ public class NodeSelectionManager : MonoBehaviour
             yield return StartCoroutine(FadeScreen(0f, 1f));
         }
     }
-
     // 🌟 ฟังก์ชันจัดการเหตุการณ์ของโหนดทั้ง 6 ประเภท (ตอบโจทย์ Acceptance Criteria ข้อ 2)
     private void TriggerNodeEncounter(PathNode node)
     {

@@ -23,7 +23,7 @@ public class WeaponData : ScriptableObject
 
     [Header("Base Stats (ค่าเริ่มต้น)")]
     public float attackDamage;
-    public float speed;         // สปีด หรือ AP
+    public float speed;
     public float postureMultiplier;
     public float weight;
     public float maxDurability;
@@ -36,34 +36,39 @@ public class WeaponData : ScriptableObject
     [Header("Weapon Skills")]
     public List<WeaponSkill> availableSkills; 
 
-    // ==========================================
-    // 🌟 โซนใหม่: ระบบ Forge & Progression
-    // ==========================================
     [Header("Forge Status (ห้ามปรับเองตอนเล่น)")]
-    public int requiredCampLevel = 1; // 🌟 เพิ่มบรรทัดนี้: กำหนดว่าต้องการแคมป์เลเวลเท่าไหร่ถึงจะโผล่ให้คราฟต์
-    public bool isUnlocked = false; // คราฟต์แล้วหรือยัง? (ถ้ายัง = ต้องใช้ Craft, ถ้าคราฟต์แล้ว = ใช้ Upgrade)
+    public int requiredCampLevel = 1; 
+    public bool isUnlocked = false; 
     public int currentLevel = 1;
-    public int maxLevel = 5;        // เลเวลตันที่เท่าไหร่
+    public int maxLevel = 5;      
 
-    [Header("Upgrade Paths (จำนวนครั้งที่อัปเกรด)")]
-    public int damageUpgradeCount = 0; // อัปเกรดสายดาเมจไปกี่ครั้ง
-    public int apUpgradeCount = 0;     // อัปเกรดสายลด AP ไปกี่ครั้ง
+    // ==========================================
+    // 🌟 โซนใหม่: กำหนดค่าอัปเกรดตายตัว (Fixed Stats)
+    // ==========================================
+    [Header("Upgrade Values (สเตตัสที่ได้เพิ่มต่อ 1 เลเวล)")]
+    public float attackIncreasePerLevel = 5f; // เพิ่ม ATK ทีละเท่าไหร่
+    public float speedIncreasePerLevel = -2f; // เพิ่ม/ลด Speed ทีละเท่าไหร่
 
-    // --- ฟังก์ชันคำนวณสเตตัสปัจจุบัน (เอาไปโชว์ใน UI ได้เลย) ---
-    
-    // สมมติ: อัปสายดาเมจ 1 ครั้ง เพิ่มดาเมจ 5 หน่วย
+    // --- ฟังก์ชันคำนวณสเตตัส ---
     public float GetCurrentDamage() 
     { 
-        return attackDamage + (damageUpgradeCount * 5f); 
+        return attackDamage + (attackIncreasePerLevel * (currentLevel - 1)); 
     }
-
-    // สมมติ: อัปสาย AP 1 ครั้ง ลดค่า AP/Speed ลง 2 หน่วย (ยิ่งน้อยยิ่งดี)
     public float GetCurrentSpeed() 
     { 
-        return speed - (apUpgradeCount * 2f); 
+        return speed + (speedIncreasePerLevel * (currentLevel - 1)); 
     }
 
-    // คำนวณวัตถุดิบที่ต้องใช้ในเลเวลถัดไป (ยิ่งเลเวลสูง ยิ่งใช้ของเยอะขึ้น)
+    public float GetNextLevelDamage() 
+    { 
+        return attackDamage + (attackIncreasePerLevel * currentLevel); 
+    }
+    public float GetNextLevelSpeed() 
+    { 
+        return speed + (speedIncreasePerLevel * currentLevel); 
+    }
+
+    // ราคาวัตถุดิบ (ยิ่งเลเวลสูง ยิ่งใช้ของเยอะขึ้น)
     public int GetNextLevelGemCost() 
     { 
         return gemStoneCost * currentLevel; 
@@ -73,13 +78,10 @@ public class WeaponData : ScriptableObject
         return monsterPartCost * currentLevel; 
     }
 
-    // รีเซ็ตอาวุธกลับเป็นเลเวล 1 (เอาไว้เรียกใช้ตอนเริ่มเกมใหม่)
     [ContextMenu("Reset Weapon Status")]
     public void ResetWeaponStatus()
     {
         isUnlocked = false;
         currentLevel = 1;
-        damageUpgradeCount = 0;
-        apUpgradeCount = 0;
     }
 }

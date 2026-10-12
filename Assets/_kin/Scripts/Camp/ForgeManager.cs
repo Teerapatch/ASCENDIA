@@ -5,8 +5,6 @@ using TMPro;
 
 public class ForgeManager : MonoBehaviour
 {
-    public enum UpgradePath { None, Damage, AP }
-
     [Header("Core References")]
     public PlayerData playerData;
     public List<WeaponData> allWeaponsInGame;
@@ -21,12 +19,7 @@ public class ForgeManager : MonoBehaviour
     public TextMeshProUGUI gemStoneCostText;
     public TextMeshProUGUI monsterPartCostText;
     
-    public GameObject pathSelectionGroup; 
-    public Button pathDamageBtn;
-    public Button pathAPBtn;
-    public Image pathDamageHighlight; 
-    public Image pathAPHighlight;     
-
+    // 🌟 เอาปุ่ม Path Selection ออกทั้งหมด เหลือแค่ปุ่ม Action หลักปุ่มเดียว
     public Button actionButton;       
     public TextMeshProUGUI actionButtonText;
 
@@ -39,7 +32,6 @@ public class ForgeManager : MonoBehaviour
     public ParticleSystem successEffect;
 
     private WeaponData currentWeapon;
-    private UpgradePath selectedPath = UpgradePath.None;
 
     private void OnEnable()
     {
@@ -64,14 +56,14 @@ public class ForgeManager : MonoBehaviour
         }
 
         int unlockedCount = GetUnlockedWeaponCount();
-        bool canUnlockNewWeapon = unlockedCount < playerData.currentCampLevel;
+        bool canCraftNewWeapon = unlockedCount < playerData.currentCampLevel;
 
         foreach (WeaponData weapon in allWeaponsInGame)
         {
             GameObject btnObj = Instantiate(blueprintPrefab, gridContent);
             Image icon = btnObj.transform.Find("Icon").GetComponent<Image>();
             
-            bool isAvailable = weapon.isUnlocked || canUnlockNewWeapon;
+            bool isAvailable = weapon.isUnlocked || canCraftNewWeapon;
 
             if (icon != null) 
             {
@@ -92,19 +84,6 @@ public class ForgeManager : MonoBehaviour
     private void OnWeaponSelected(WeaponData weapon)
     {
         currentWeapon = weapon;
-        selectedPath = currentWeapon.isUnlocked ? UpgradePath.Damage : UpgradePath.None; 
-        RefreshForgeUI();
-    }
-
-    public void SelectPathDamage()
-    {
-        selectedPath = UpgradePath.Damage;
-        RefreshForgeUI();
-    }
-
-    public void SelectPathAP()
-    {
-        selectedPath = UpgradePath.AP;
         RefreshForgeUI();
     }
 
@@ -113,107 +92,84 @@ public class ForgeManager : MonoBehaviour
         if (currentWeapon == null) return;
 
         int unlockedCount = GetUnlockedWeaponCount();
-        bool canUnlockNewWeapon = unlockedCount < playerData.currentCampLevel;
+        bool canCraftNewWeapon = unlockedCount < playerData.currentCampLevel;
         
-        bool isAvailableToView = currentWeapon.isUnlocked || canUnlockNewWeapon;
+        bool isAvailableToView = currentWeapon.isUnlocked || canCraftNewWeapon;
 
         centerWeaponIcon.sprite = currentWeapon.weaponIcon;
         centerWeaponIcon.color = isAvailableToView ? Color.white : new Color(0.2f, 0.2f, 0.2f, 1f);
         
         weaponNameText.text = currentWeapon.weaponName;
 
-        // ==========================================
-        // 🌟 กรณีที่โควตาหมด (ล็อคการปลดชิ้นใหม่)
-        // ==========================================
+        // กรณีโควตาเต็ม
         if (!isAvailableToView)
         {
-            if (pathSelectionGroup != null) pathSelectionGroup.SetActive(false);
-            
             gemStoneCostText.text = "- / -";
             monsterPartCostText.text = "- / -";
             gemStoneCostText.color = Color.gray;
             monsterPartCostText.color = Color.gray;
             actionButton.interactable = false;
 
-            descriptionText.text = "You have reached the unlock limit for this Camp. Progress further to unlock more weapons.";
-            statsText.text = $"<color=red>REQUIRES CAMP LEVEL {unlockedCount + 1}</color>";
+            descriptionText.text = "You have already bound a weapon for this Camp. Progress further to craft another one.";
+            statsText.text = $"<color=red>NO CRAFTING QUOTA LEFT (Requires Camp Lv.{unlockedCount + 1})</color>";
             actionButtonText.text = "Camp Limit Reached";
             return; 
         }
 
-        // ==========================================
-        // กรณีปกติ: รับฟรีได้ หรือ อัปเกรดชิ้นเดิมได้
-        // ==========================================
         descriptionText.text = currentWeapon.description;
 
-        if (pathSelectionGroup != null) pathSelectionGroup.SetActive(currentWeapon.isUnlocked);
-        
-        if (pathDamageHighlight != null) pathDamageHighlight.enabled = (selectedPath == UpgradePath.Damage);
-        if (pathAPHighlight != null) pathAPHighlight.enabled = (selectedPath == UpgradePath.AP);
+        // ดึงราคา (ถ้ายังไม่คราฟต์ใช้ราคา Base, ถ้าคราฟต์แล้วใช้ราคา Next Level)
+        int reqGem = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelGemCost() : currentWeapon.gemStoneCost;
+        int reqMonster = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelMonsterPartCost() : currentWeapon.monsterPartCost;
+
+        bool hasEnoughGem = playerData.gemStone >= reqGem;
+        bool hasEnoughMonster = playerData.monsterPart >= reqMonster;
+
+        gemStoneCostText.text = $"{playerData.gemStone} / {reqGem}";
+        gemStoneCostText.color = hasEnoughGem ? Color.white : Color.red;
+
+        monsterPartCostText.text = $"{playerData.monsterPart} / {reqMonster}";
+        monsterPartCostText.color = hasEnoughMonster ? Color.white : Color.red;
 
         bool isMaxLevel = currentWeapon.currentLevel >= currentWeapon.maxLevel;
 
-        // 🌟 ถ้ายืนยันจะปลดล็อคชิ้นใหม่ -> ให้ขึ้นว่า FREE
+        // 🌟 แยกแสดงผลตามสถานะของอาวุธ
         if (!currentWeapon.isUnlocked)
         {
-            gemStoneCostText.text = "FREE";
-            gemStoneCostText.color = Color.green;
-            monsterPartCostText.text = "FREE";
-            monsterPartCostText.color = Color.green;
-
-            statsText.text = $"<color=#FFD700>Lv.0 ➔ Lv.1 (FREE UNLOCK)</color>\n" +
+            // ยังไม่ได้คราฟต์
+            statsText.text = $"<color=#FFD700>Lv.0 ➔ Lv.1 (CRAFT TO BIND)</color>\n" +
                              $"ATK: {currentWeapon.attackDamage}\n" +
                              $"AP (Speed): {currentWeapon.speed}";
                              
-            actionButtonText.text = "Unlock Blueprint";
-            actionButton.interactable = true; // โควตามีแล้ว กดรับฟรีได้เลย
+            actionButtonText.text = "Craft Weapon";
+            actionButton.interactable = hasEnoughGem && hasEnoughMonster; // ต้องมีของพอถึงจะกดได้
         }
         else if (isMaxLevel)
         {
-            // 🌟 กรณีเลเวลตัน
-            gemStoneCostText.text = "- / -";
-            monsterPartCostText.text = "- / -";
-            gemStoneCostText.color = Color.white;
-            monsterPartCostText.color = Color.white;
-
+            // เลเวลตัน
             statsText.text = $"<color=#FFD700>MAX LEVEL (Lv.{currentWeapon.maxLevel})</color>\n" +
                              $"ATK: {currentWeapon.GetCurrentDamage()}\n" +
                              $"AP (Speed): {currentWeapon.GetCurrentSpeed()}";
                              
             actionButtonText.text = "Max Level Reached";
             actionButton.interactable = false; 
+            gemStoneCostText.text = "- / -";
+            monsterPartCostText.text = "- / -";
+            gemStoneCostText.color = Color.white;
+            monsterPartCostText.color = Color.white;
         }
         else
         {
-            // 🌟 กรณีอัปเกรด (ต้องใช้แร่)
-            int reqGem = currentWeapon.GetNextLevelGemCost();
-            int reqMonster = currentWeapon.GetNextLevelMonsterPartCost();
-
-            bool hasEnoughGem = playerData.gemStone >= reqGem;
-            bool hasEnoughMonster = playerData.monsterPart >= reqMonster;
-
-            gemStoneCostText.text = $"{playerData.gemStone} / {reqGem}";
-            gemStoneCostText.color = hasEnoughGem ? Color.white : Color.red;
-
-            monsterPartCostText.text = $"{playerData.monsterPart} / {reqMonster}";
-            monsterPartCostText.color = hasEnoughMonster ? Color.white : Color.red;
-
-            string previewStats = $"<color=#FFD700>Lv.{currentWeapon.currentLevel} ➔ Lv.{currentWeapon.currentLevel + 1}</color>\n";
+            // กำลังอัปเกรด (โชว์พรีวิวสเตตัสแบบรวบตึง)
             float curDmg = currentWeapon.GetCurrentDamage();
+            float nextDmg = currentWeapon.GetNextLevelDamage();
             float curSpeed = currentWeapon.GetCurrentSpeed();
+            float nextSpeed = currentWeapon.GetNextLevelSpeed();
 
-            if (selectedPath == UpgradePath.Damage)
-            {
-                previewStats += $"ATK: {curDmg} ➔ <color=#00FF00>{curDmg + 5}</color>\n";
-                previewStats += $"AP (Speed): {curSpeed}"; 
-            }
-            else if (selectedPath == UpgradePath.AP)
-            {
-                previewStats += $"ATK: {curDmg}\n"; 
-                previewStats += $"AP (Speed): {curSpeed} ➔ <color=#00FF00>{curSpeed - 2}</color>";
-            }
+            statsText.text = $"<color=#FFD700>Lv.{currentWeapon.currentLevel} ➔ Lv.{currentWeapon.currentLevel + 1}</color>\n" +
+                             $"ATK: {curDmg} ➔ <color=#00FF00>{nextDmg}</color>\n" +
+                             $"AP (Speed): {curSpeed} ➔ <color=#00FF00>{nextSpeed}</color>";
 
-            statsText.text = previewStats;
             actionButtonText.text = "Upgrade";
             actionButton.interactable = hasEnoughGem && hasEnoughMonster;
         }
@@ -224,31 +180,38 @@ public class ForgeManager : MonoBehaviour
         if (currentWeapon == null) return;
         if (currentWeapon.isUnlocked && currentWeapon.currentLevel >= currentWeapon.maxLevel) return;
 
+        int reqGem = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelGemCost() : currentWeapon.gemStoneCost;
+        int reqMonster = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelMonsterPartCost() : currentWeapon.monsterPartCost;
+
+        playerData.gemStone -= reqGem;
+        playerData.monsterPart -= reqMonster;
+
         if (!currentWeapon.isUnlocked)
         {
-            // 🌟 1. ปลดล็อคอาวุธใหม่ (ฟรี ไม่หักแร่)
+            // 🌟 1. จ่ายของเพื่อคราฟต์
             currentWeapon.isUnlocked = true;
-            if (campManager != null) campManager.ShowSystemMessage($"Unlocked: {currentWeapon.weaponName}! Go to Loadout to equip it.");
+            currentWeapon.currentLevel = 1;
+            
+            // นำเข้า Loadout อัตโนมัติ
+            for (int i = 0; i < playerData.activeLoadout.Length; i++)
+            {
+                if (playerData.activeLoadout[i] == null)
+                {
+                    playerData.activeLoadout[i] = currentWeapon;
+                    break;
+                }
+            }
+
+            if (campManager != null) campManager.ShowSystemMessage($"Crafted & Bound: {currentWeapon.weaponName}!");
         }
         else
         {
-            // 🌟 2. อัปเกรดอาวุธเดิม (หักแร่ตามปกติ)
-            int reqGem = currentWeapon.GetNextLevelGemCost();
-            int reqMonster = currentWeapon.GetNextLevelMonsterPartCost();
-
-            playerData.gemStone -= reqGem;
-            playerData.monsterPart -= reqMonster;
-
+            // 🌟 2. จ่ายของเพื่ออัปเกรด
             currentWeapon.currentLevel++;
-            if (selectedPath == UpgradePath.Damage) currentWeapon.damageUpgradeCount++;
-            else if (selectedPath == UpgradePath.AP) currentWeapon.apUpgradeCount++;
-
             if (campManager != null) campManager.ShowSystemMessage($"{currentWeapon.weaponName} upgraded to Lv.{currentWeapon.currentLevel}!");
         }
 
         if (successEffect != null) successEffect.Play();
-
-        selectedPath = currentWeapon.isUnlocked ? UpgradePath.Damage : UpgradePath.None;
         
         InitializeBlueprintList();
         RefreshForgeUI();

@@ -30,18 +30,15 @@ public class WeaponCarousel : MonoBehaviour
     private int currentSelectingSlot = -1;
     private Vector2[] iconOriginalPositions;
 
-    // 🌟 ตัวแปรใหม่สำหรับคุมอนิเมชันหน้าต่างซ้าย
     private Vector2 panelOriginalPos;
     private CanvasGroup panelCanvasGroup;
     private Coroutine panelCoroutine;
 
     private void Start()
     {
-        // เก็บตำแหน่งดั้งเดิมของหน้าต่างตารางเอาไว้
         RectTransform panelRect = selectionPanel.GetComponent<RectTransform>();
         panelOriginalPos = panelRect.anchoredPosition;
 
-        // เช็คว่ามี CanvasGroup ไหม ถ้าไม่มีให้โค้ดแอบใส่ให้เอง (เอาไว้คุมการ Fade โปร่งใส)
         panelCanvasGroup = selectionPanel.GetComponent<CanvasGroup>();
         if (panelCanvasGroup == null) panelCanvasGroup = selectionPanel.AddComponent<CanvasGroup>();
 
@@ -59,9 +56,6 @@ public class WeaponCarousel : MonoBehaviour
         RefreshMainSlots();
     }
 
-    // ==========================================
-    // 1. อัปเดตช่องหลัก
-    // ==========================================
     public void RefreshMainSlots()
     {
         if (playerData == null) return;
@@ -125,9 +119,6 @@ public class WeaponCarousel : MonoBehaviour
         if (img != null) img.color = c;
     }
 
-    // ==========================================
-    // 2. เมื่อกดที่ช่อง 1-4
-    // ==========================================
     public void OnClickSlot(int slotIndex)
     {
         if (slotIndex < playerData.currentCampLevel)
@@ -180,14 +171,10 @@ public class WeaponCarousel : MonoBehaviour
         if (btn != null) btn.interactable = true;
     }
 
-    // ==========================================
-    // เปิด/ปิด หน้าต่าง เลือกอาวุธ
-    // ==========================================
     private void OpenSelectionGrid()
     {
-        bool wasClosed = !selectionPanel.activeSelf; // เช็คว่าก่อนหน้านี้ปิดอยู่ไหม
+        bool wasClosed = !selectionPanel.activeSelf; 
 
-        // ถ้าหน้าต่างปิดอยู่ ให้จัดตำแหน่งไปหลบทางซ้ายก่อนเปิด เพื่อเตรียมสไลด์เข้า
         if (wasClosed)
         {
             RectTransform rect = selectionPanel.GetComponent<RectTransform>();
@@ -203,6 +190,9 @@ public class WeaponCarousel : MonoBehaviour
 
         foreach (WeaponData weapon in allWeaponsInGame)
         {
+            // 🌟 🌟 เพิ่มบรรทัดนี้: โชว์เฉพาะอาวุธที่ "คราฟต์แล้ว" เท่านั้น! 🌟 🌟
+            if (!weapon.isUnlocked) continue;
+
             GameObject newBtnObj = Instantiate(weaponGridPrefab, gridContent);
             
             Image iconImage = newBtnObj.transform.Find("Icon").GetComponent<Image>();
@@ -239,7 +229,6 @@ public class WeaponCarousel : MonoBehaviour
             btn.onClick.AddListener(() => OnWeaponSelectedFromGrid(weapon));
         }
 
-        // 🌟 เริ่มเล่นอนิเมชันเปิดหน้าต่าง
         if (wasClosed)
         {
             if (panelCoroutine != null) StopCoroutine(panelCoroutine);
@@ -247,7 +236,6 @@ public class WeaponCarousel : MonoBehaviour
         }
     }
 
-    // ฟังก์ชันสั่งปิดเมื่อกดปุ่มกากบาท
     public void CloseSelectionGrid()
     {
         if (selectionPanel.activeSelf)
@@ -257,16 +245,15 @@ public class WeaponCarousel : MonoBehaviour
         }
     }
 
-    // 🌟 6. อนิเมชัน เฟด+สไลด์ ของหน้าต่างซ้าย
     private IEnumerator AnimatePanel(bool isOpen)
     {
         RectTransform rect = selectionPanel.GetComponent<RectTransform>();
         
-        float duration = 0.25f; // ความเร็วในการสไลด์ (0.25 วินาที)
+        float duration = 0.25f; 
         float elapsed = 0f;
 
         Vector2 visiblePos = panelOriginalPos;
-        Vector2 hiddenPos = panelOriginalPos - new Vector2(300f, 0f); // ระยะที่ซ่อนไปทางซ้าย 300 พิกเซล
+        Vector2 hiddenPos = panelOriginalPos - new Vector2(300f, 0f); 
 
         Vector2 startPos = isOpen ? hiddenPos : visiblePos;
         Vector2 endPos = isOpen ? visiblePos : hiddenPos;
@@ -278,7 +265,7 @@ public class WeaponCarousel : MonoBehaviour
         {
             elapsed += Time.deltaTime;
             float t = elapsed / duration;
-            float smoothT = 1f - Mathf.Pow(1f - t, 3f); // สมูทตอนใกล้จบ (Ease Out)
+            float smoothT = 1f - Mathf.Pow(1f - t, 3f); 
 
             rect.anchoredPosition = Vector2.Lerp(startPos, endPos, smoothT);
             panelCanvasGroup.alpha = Mathf.Lerp(startAlpha, endAlpha, smoothT);

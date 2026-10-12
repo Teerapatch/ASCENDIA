@@ -15,7 +15,7 @@ public class InventoryManager : MonoBehaviour
     public static InventoryManager Instance;
 
     [Header("Linked Data (ลาก PlayerData มาใส่)")]
-    public PlayerData playerData; 
+    public PlayerData playerData;
 
     [Header("Content")]
     public List<InventorySlot> slots = new List<InventorySlot>();
@@ -59,22 +59,26 @@ public class InventoryManager : MonoBehaviour
     private void UpdatePlayerData()
     {
         if (playerData == null) return;
-        
+
         playerData.weight = 0;
-        playerData.gemStone = 0; // รีเซ็ตเพื่อนับใหม่จากของในกระเป๋า
+        playerData.gemStone = 0;
+        playerData.monsterPart = 0; // 🌟 เพิ่มการรีเซ็ตชิ้นส่วนมอนสเตอร์
 
         foreach (InventorySlot slot in slots)
         {
             // คำนวณน้ำหนักรวม
             playerData.weight += slot.item.weightPerItem * slot.amount;
-            
-            // ถ้าไอเทมนี้เป็นแร่ ให้บวกเข้าตัวแปร ore ของ PlayerData ด้วย
-            // (ใช้เช็คจากชื่อ ถ้าตั้งชื่อไอเทมว่ามีคำว่า "Ore" หรือ "แร่")
-            if (slot.item.itemName.Contains("Ore") || slot.item.itemName.Contains("แร่"))
+
+            // 🌟 เช็คชื่อไอเทมว่าเป็น แร่ หรือ ชิ้นส่วนมอนสเตอร์
+            if (slot.item.itemName.Contains("Ore") || slot.item.itemName.Contains("Gem") || slot.item.itemName.Contains("แร่"))
             {
                 playerData.gemStone += slot.amount;
             }
+            else if (slot.item.itemName.Contains("Monster") || slot.item.itemName.Contains("ชิ้นส่วน"))
+            {
+                playerData.monsterPart += slot.amount;
+            }
         }
-        OnInventoryChanged?.Invoke(); 
+        OnInventoryChanged?.Invoke();
     }
 }
