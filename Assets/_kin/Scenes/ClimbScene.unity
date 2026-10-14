@@ -2121,7 +2121,10 @@ MonoBehaviour:
   walkCam: {fileID: 1849588010}
   climbCam: {fileID: 1737665397}
   lookTarget: {fileID: 1399366460}
+  cameraSwayAmount: 30
+  cameraSwaySpeed: 5
   mouseSensitivity: 3
+  requireRightClick: 1
 --- !u!114 &864942019
 MonoBehaviour:
   m_ObjectHideFlags: 0
