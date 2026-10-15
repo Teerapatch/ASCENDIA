@@ -15,6 +15,10 @@ public class EnemyUI : MonoBehaviour
     [Header("Animation Settings")]
     public float smoothSpeed = 10f;
 
+    [Header("Status UI")]
+    public Transform statusContainer; // กล่องที่จะเอาไอคอนไปเรียงต่อกัน
+    public GameObject statusIconPrefab; // ตัว Prefab รูปไอคอน
+
     private Camera mainCam;
     private float targetHpFill;
     private float targetPostureScale;
@@ -30,6 +34,40 @@ public class EnemyUI : MonoBehaviour
         // เซ็ตหลอด Posture ให้เริ่มต้นที่ 0 (มองไม่เห็น)
         if (postureFillRect != null)
             postureFillRect.localScale = new Vector3(0, 1, 1);
+
+        if (enemy != null)
+        {
+            enemy.OnStatusChanged += RefreshStatusIcons;
+            RefreshStatusIcons();
+        }
+    }
+    private void OnDestroy()
+    {
+        // ยกเลิกการรับข่าวสารเมื่อศัตรูตาย ป้องกัน Error
+        if (enemy != null)
+        {
+            enemy.OnStatusChanged -= RefreshStatusIcons;
+        }
+    }
+    public void RefreshStatusIcons()
+    {
+        if (statusContainer == null || statusIconPrefab == null) return;
+
+        foreach (Transform child in statusContainer)
+        {
+            Destroy(child.gameObject);
+        }
+
+        foreach (var status in enemy.activeStatuses)
+        {
+            GameObject iconObj = Instantiate(statusIconPrefab, statusContainer);
+
+            Image img = iconObj.GetComponent<Image>();
+            if (img != null && status.icon != null)
+            {
+                img.sprite = status.icon;
+            }
+        }
     }
 
     private void LateUpdate()

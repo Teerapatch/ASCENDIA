@@ -16,9 +16,37 @@ public class EnemyController : MonoBehaviour
 
     [Header("Debuffs")]
     public bool isMarkedByGun = false;
+    public Sprite gunMarkIcon;
+
+    [System.Serializable]
+    public class StatusEffect
+    {
+        public string statusID;
+        public Sprite icon;
+    }
+
+    public List<StatusEffect> activeStatuses = new List<StatusEffect>();
+
+    public System.Action OnStatusChanged;
+    public void AddStatus(string id, Sprite icon)
+    {
+        // เช็กว่ามีสถานะนี้อยู่แล้วหรือยัง ถ้ายังให้เพิ่มเข้าไป
+        if (!activeStatuses.Exists(s => s.statusID == id))
+        {
+            activeStatuses.Add(new StatusEffect { statusID = id, icon = icon });
+            OnStatusChanged?.Invoke();
+        }
+    }
+    public void RemoveStatus(string id)
+    {
+        int removedCount = activeStatuses.RemoveAll(s => s.statusID == id);
+        if (removedCount > 0)
+        {
+            OnStatusChanged?.Invoke();
+        }
+    }
 
     [Header("Attack Patterns (Multi-Hit)")]
-    // ใช้โครงสร้างใหม่ที่เก็บข้อมูลหลายฮิตแทน
     public List<EnemyAttackPattern> attackPatterns;
 
     [Header("Visual Effects")]
@@ -66,8 +94,10 @@ public class EnemyController : MonoBehaviour
             isMarkedByGun = true;
             Debug.Log($"<color=red> {enemyName} has been MARKED! Takes +50% Free-Aim DMG!</color>");
 
-            // [Option] ถ้ามีระบบ Particle Effect หรือ UI Icon บนหัวศัตรู ให้เรียกใช้ตรงนี้ได้เลย
-            // เช่น Instantiate(targetLockIconPrefab, transform.position + Vector3.up * 2f, Quaternion.identity, transform);
+            if (gunMarkIcon != null)
+            {
+                AddStatus("Gun_Mark", gunMarkIcon);
+            }
         }
     }
 
