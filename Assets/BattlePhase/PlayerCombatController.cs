@@ -18,7 +18,6 @@ public class PlayerCombatController : MonoBehaviour
     public TextMeshProUGUI textAP;
 
     [Header("Weapons")]
-    //public List<WeaponData> inventoryWeapons;
     public List<WeaponData> baseInventoryWeapons;
     [HideInInspector] public List<WeaponData> inventoryWeapons = new List<WeaponData>();
     public int currentWeaponIndex = 0;
@@ -117,7 +116,7 @@ public class PlayerCombatController : MonoBehaviour
         }
 
         // โหมด Free Aim (คลิกขวาค้าง)
-        if (actionState != PlayerActionState.ChoosingSkill) 
+        if (actionState != PlayerActionState.ChoosingSkill)
         {
             if (Mouse.current != null && Mouse.current.rightButton.isPressed)
             {
@@ -129,8 +128,6 @@ public class PlayerCombatController : MonoBehaviour
                 if (isAiming) ExitAimMode();
             }
         }
-
-        
     }
 
     // ==========================================
@@ -150,7 +147,14 @@ public class PlayerCombatController : MonoBehaviour
         {
             PlayerUIManager.Instance.ShowSkillMenu(ActiveWeapon);
         }
+
+        // --- [อัปเกรดกล้อง] เปลี่ยนเป็นโหมดเลือกสกิล (Over-the-shoulder) ---
+        if (BattleCameraController.Instance != null)
+        {
+            BattleCameraController.Instance.SetState(CameraState.SkillSelecting, transform);
+        }
     }
+
     public void UI_SelectSkill(int skillIndex)
     {
         if (actionState != PlayerActionState.ChoosingSkill) return;
@@ -172,7 +176,6 @@ public class PlayerCombatController : MonoBehaviour
         else
         {
             Debug.Log($"<color=red>AP ไม่พอ! (ต้องการ {skillToCast.apCost} แต่มี {currentAP})</color>");
-            // TODO: เล่นเสียง Error หรือสั่น UI
         }
     }
 
@@ -190,6 +193,12 @@ public class PlayerCombatController : MonoBehaviour
             if (PlayerUIManager.Instance != null)
             {
                 PlayerUIManager.Instance.ShowActionMenu();
+            }
+
+            // --- [อัปเกรดกล้อง] รีเซ็ตกลับ Overview ---
+            if (BattleCameraController.Instance != null)
+            {
+                BattleCameraController.Instance.SetState(CameraState.Overview, transform);
             }
         }
     }
@@ -237,15 +246,25 @@ public class PlayerCombatController : MonoBehaviour
                 // ถ้ายกเลิกสกิล ให้เปิดหน้า List สกิลกลับมา
                 actionState = PlayerActionState.ChoosingSkill;
                 if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowSkillMenu(ActiveWeapon);
+
+                // --- [อัปเกรดกล้อง] กลับไปโฟกัสโหมดเลือกสกิล ---
+                if (BattleCameraController.Instance != null)
+                {
+                    BattleCameraController.Instance.SetState(CameraState.SkillSelecting, transform);
+                }
             }
             else
             {
                 // ถ้ายกเลิกโจมตีปกติ ให้เปิดหน้าเมนูหลักกลับมา
                 actionState = PlayerActionState.ChoosingAction;
                 if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
-            }
 
-            if (BattleCameraController.Instance != null) BattleCameraController.Instance.ResetCamera();
+                // --- [อัปเกรดกล้อง] รีเซ็ตกลับ Overview ---
+                if (BattleCameraController.Instance != null)
+                {
+                    BattleCameraController.Instance.SetState(CameraState.Overview, transform);
+                }
+            }
         }
     }
 
@@ -258,7 +277,7 @@ public class PlayerCombatController : MonoBehaviour
 
         if (BattleCameraController.Instance != null)
         {
-            BattleCameraController.Instance.FocusOnTarget(target.transform);
+            BattleCameraController.Instance.SetState(CameraState.TargetSelecting, transform, target.transform);
         }
     }
 
@@ -313,7 +332,12 @@ public class PlayerCombatController : MonoBehaviour
     private void FinishTurnAction()
     {
         UpdateAPUI();
-        if (BattleCameraController.Instance != null) BattleCameraController.Instance.ResetCamera();
+
+        // --- [อัปเกรดกล้อง] รีเซ็ตกล้องกลับ Overview ---
+        if (BattleCameraController.Instance != null)
+        {
+            BattleCameraController.Instance.SetState(CameraState.Overview);
+        }
 
         if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
 
@@ -333,6 +357,12 @@ public class PlayerCombatController : MonoBehaviour
 
         actionState = PlayerActionState.ChoosingAction;
         UpdateAPUI();
+
+        // --- [อัปเกรดกล้อง] เมื่อเริ่มเทิร์น เซ็ตกล้องเป็นมุม Overview กว้างเห็นภาพรวม ---
+        if (BattleCameraController.Instance != null)
+        {
+            BattleCameraController.Instance.SetState(CameraState.Overview, transform);
+        }
 
         if (WeaponUIManager.Instance != null)
         {
@@ -376,7 +406,12 @@ public class PlayerCombatController : MonoBehaviour
             }
 
             actionState = PlayerActionState.Waiting;
-            if (BattleCameraController.Instance != null) BattleCameraController.Instance.ResetCamera();
+
+            // --- [อัปเกรดกล้อง] รีเซ็ตกล้อง ---
+            if (BattleCameraController.Instance != null)
+            {
+                BattleCameraController.Instance.SetState(CameraState.Overview, transform);
+            }
         }
         else if (nextIndex == currentWeaponIndex)
         {
@@ -384,14 +419,17 @@ public class PlayerCombatController : MonoBehaviour
         }
     }
 
-    void EnterAimMode() 
-    { 
-        isAiming = true; if (crosshairUI != null) crosshairUI.SetActive(true);
+    void EnterAimMode()
+    {
+        isAiming = true;
+        if (crosshairUI != null) crosshairUI.SetActive(true);
         if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
     }
-    void ExitAimMode() 
-    { 
-        isAiming = false; if (crosshairUI != null) crosshairUI.SetActive(false);
+
+    void ExitAimMode()
+    {
+        isAiming = false;
+        if (crosshairUI != null) crosshairUI.SetActive(false);
         if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
     }
 
@@ -408,35 +446,61 @@ public class PlayerCombatController : MonoBehaviour
         if (currentAP < 1) return;
 
         Ray ray = mainCam.ScreenPointToRay(screenPos);
+
         if (Physics.Raycast(ray, out RaycastHit hit, 1000f, enemyLayer))
         {
-            EnemyController enemy = hit.collider.GetComponent<EnemyController>();
+            EnemyWeakPoint weakPoint = hit.collider.GetComponent<EnemyWeakPoint>();
+            EnemyController enemy = null;
+            bool hitWeakPoint = false;
+
+            if (weakPoint != null && !weakPoint.isBroken)
+            {
+                // ถ้ายิงโดนจุดอ่อนที่ยังไม่แตก ให้ดึงข้อมูลศัตรูหลักมาจากสคริปต์จุดอ่อน
+                enemy = weakPoint.mainEnemy;
+                hitWeakPoint = true;
+            }
+            else
+            {
+                // ถ้าไม่โดนจุดอ่อน ให้หา EnemyController ตามปกติ
+                enemy = hit.collider.GetComponentInParent<EnemyController>();
+            }
+
             if (enemy != null)
             {
                 float rawDamage = ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier;
                 int finalDamage = Mathf.RoundToInt(rawDamage);
-                //int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier);
 
                 if (enemy.isMarkedByGun)
                 {
-                    // คูณดาเมจเพิ่มอีก 50% เข้าไปตรงๆ ทบกับ Passive ของปืน
                     finalDamage = Mathf.RoundToInt(finalDamage * 1.5f);
-
                     Debug.Log($"<color=red>TARGET MARKED: Free-Aim damage amplified by 50%! Final DMG: {finalDamage}</color>");
 
-                    // สั่นกล้องให้สะใจขึ้น เพราะทำดาเมจจุดอ่อนสำเร็จ
-                    if (CameraShakeManager.Instance != null)
-                        CameraShakeManager.Instance.Shake(1.0f);
+                    // --- [อัปเกรดกล้อง] สั่งสั่นกล้องผ่าน BattleCameraController (Impulse) ---
+                    if (BattleCameraController.Instance != null)
+                        BattleCameraController.Instance.TriggerImpulse(1.0f);
                 }
                 else
                 {
-                    // สั่นกล้องปกติ
-                    if (CameraShakeManager.Instance != null)
-                        CameraShakeManager.Instance.Shake(0.6f);
+                    if (BattleCameraController.Instance != null)
+                        BattleCameraController.Instance.TriggerImpulse(0.6f);
+                }
+
+                int postureDamage = Mathf.RoundToInt(finalDamage * 0.5f);
+
+                if (hitWeakPoint)
+                {
+                    postureDamage = Mathf.RoundToInt(postureDamage * weakPoint.postureDamageMultiplier);
+                    weakPoint.BreakWeakPoint();
+
+                    Debug.Log($"<color=red>CRITICAL HIT! Posture Damage increased to {postureDamage}!</color>");
+
+                    // --- [อัปเกรดกล้อง] สั่นกล้องแรงสะใจเมื่อยิงโดนจุดอ่อน ---
+                    if (BattleCameraController.Instance != null)
+                        BattleCameraController.Instance.TriggerImpulse(1.5f);
                 }
 
                 enemy.TakeDamage(finalDamage);
-                enemy.TakePostureDamage(Mathf.RoundToInt(finalDamage * 0.5f));
+                enemy.TakePostureDamage(postureDamage);
                 currentAP -= 1;
                 ExitAimMode();
             }
@@ -445,6 +509,7 @@ public class PlayerCombatController : MonoBehaviour
     }
 
     public void RestoreAP(int amount) { currentAP = Mathf.Min(currentAP + amount, maxAP); }
+
     public void RestoreAPFromAction(int amount, EnemyController attacker = null)
     {
         int apOverflow = 0;
@@ -461,7 +526,6 @@ public class PlayerCombatController : MonoBehaviour
 
         UpdateAPUI();
 
-        // --- [Passive: Gun] เช็กว่า "มีปืนอยู่ในกระเป๋า" หรือไม่ (ไม่จำเป็นต้องถืออยู่) ---
         bool hasGunInInventory = false;
         foreach (var weapon in inventoryWeapons)
         {
@@ -477,9 +541,10 @@ public class PlayerCombatController : MonoBehaviour
             ExecuteGunCounterAttack(apOverflow, attacker);
         }
     }
+
     public void TakeDamage(int damage)
     {
-        if (ActiveWeapon == null) return; // กัน Error
+        if (ActiveWeapon == null) return;
 
         ActiveWeapon.currentDurability -= damage;
         Debug.Log($"{ActiveWeapon.weaponName} took {damage} damage. Remaining: {ActiveWeapon.currentDurability}");
@@ -491,19 +556,21 @@ public class PlayerCombatController : MonoBehaviour
             WeaponUIManager.Instance.UpdateWeaponUI(inventoryWeapons, ActiveWeapon);
         }
 
-        if (CameraShakeManager.Instance != null)
-            CameraShakeManager.Instance.Shake(0.8f);
+        // --- [อัปเกรดกล้อง] สั่นกล้องตอนโดนโจมตี ---
+        if (BattleCameraController.Instance != null)
+            BattleCameraController.Instance.TriggerImpulse(0.8f);
 
         if (CurrentWeapon.currentDurability <= 0)
         {
             Debug.Log($"{CurrentWeapon.weaponName} is BROKEN!");
 
-            if (CameraShakeManager.Instance != null)
-                CameraShakeManager.Instance.Shake(1.2f);
+            if (BattleCameraController.Instance != null)
+                BattleCameraController.Instance.TriggerImpulse(1.2f);
 
             HandleWeaponBreak();
         }
     }
+
     void HandleWeaponBreak()
     {
         Debug.Log($"<color=red>{ActiveWeapon.weaponName} is BROKEN!</color>");
@@ -512,18 +579,13 @@ public class PlayerCombatController : MonoBehaviour
         {
             CombatManager.Instance.RemoveWeapon(ActiveWeapon);
         }
-
-        //if (CombatManager.Instance.currentState != CombatState.GameOver)
-        //{
-        //    Command_SwitchWeapon();
-        //}
     }
+
     void UpdateAPUI() { if (textAP != null) textAP.text = $"{currentAP}/{maxAP}"; }
 
-    // ========================================== WeapnPassiveSystem ==========================================
+    // ========================================== WeaponPassiveSystem ==========================================
     public void AddComboStack(int amount, bool isFromSkill = false)
     {
-        // ถ้าอาวุธที่ถือไม่ใช่ Dagger จะไม่เก็บสะสมแต้ม
         if (!isFromSkill)
         {
             if (ActiveWeapon == null || ActiveWeapon.weaponType != WeaponType.Dagger)
@@ -535,37 +597,35 @@ public class PlayerCombatController : MonoBehaviour
         currentComboStacks += amount;
         Debug.Log($"<color=cyan>COMBO +{amount}! (Total: {currentComboStacks})</color>");
 
-        // [Option] เสกตัวเลขสีฟ้าขึ้นมาบอกผู้เล่นว่าได้ Combo
         if (DamagePopupManager.Instance != null)
         {
-            // อาจจะทำ Prefab แยกสำหรับคำว่า "Combo +1" ลอยขึ้นมา
             DamagePopupManager.Instance.CreatePopup(transform.position + Vector3.up * 1.5f, currentComboStacks, true, Color.cyan);
         }
     }
+
     public int ConsumeComboStacks()
     {
         int stacksToUse = currentComboStacks;
-        currentComboStacks = 0; // รีเซ็ตเป็น 0 เมื่อถูกใช้
+        currentComboStacks = 0;
         Debug.Log($"<color=magenta>Consumed {stacksToUse} COMBO Stacks!</color>");
         return stacksToUse;
     }
+
     private void ExecuteGunCounterAttack(int overflowAmount, EnemyController target)
     {
         totalGunCounterAttacks += 1;
         WeaponData gunData = inventoryWeapons.Find(w => w.weaponType == WeaponType.Gun);
 
-        
         int counterDamage = Mathf.RoundToInt(gunData.baseDamage * overflowAmount);
 
         Debug.Log($"<color=red>AP Overflow ({overflowAmount})! Gun Passive Counter-Attacks for {counterDamage} DMG!</color>");
 
         target.TakeDamage(counterDamage);
-
         target.TakePostureDamage(Mathf.RoundToInt(counterDamage * 0.3f));
 
-        if (CameraShakeManager.Instance != null)
+        if (BattleCameraController.Instance != null)
         {
-            CameraShakeManager.Instance.Shake(0.5f);
+            BattleCameraController.Instance.TriggerImpulse(0.5f);
         }
     }
 }
