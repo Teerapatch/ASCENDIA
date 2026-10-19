@@ -129,9 +129,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PathNode
   roomType: 0
   sceneToLoad: NextSceneName
+  oreRewardItem: {fileID: 0}
   oreAmount: 5
   staminaRestore: 50
-  nodeIcon: {fileID: 10915, guid: 0000000000000000f000000000000000, type: 0}
+  nodeIcon: {fileID: 21300000, guid: b33344ac0dd8ccc47a3afc402f034b69, type: 3}
   nodeAura3D: {fileID: 0}
   uiMapAura: {fileID: 0}
   uiNodeTransform: {fileID: 0}

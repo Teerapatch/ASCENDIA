@@ -211,7 +211,7 @@ GameObject:
   - component: {fileID: 580680558146783224}
   - component: {fileID: 2290710436006105993}
   m_Layer: 0
-  m_Name: GemStoneRed_Pickup
+  m_Name: GemStonePurple_Pickup
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

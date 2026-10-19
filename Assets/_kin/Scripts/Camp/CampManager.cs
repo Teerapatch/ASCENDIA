@@ -1,33 +1,38 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System.Collections;
 using TMPro;
 
 public class CampManager : MonoBehaviour
 {
     [Header("Core References")]
-    public PlayerData playerData; 
+    public PlayerData playerData;
     
     [Header("UI Panels")]
     public GameObject mainMenuPanel;
     public GameObject loadoutPanel; 
     public GameObject forgePanel;
 
-    [Header("Resting System")]
+    [Header("Resting & Progression System")]
     public TextMeshProUGUI systemMessageText; 
+    public string climbSceneName = "ClimbScene";
+    public float delayBeforeLoadScene = 1.5f;
 
-    // 🌟 ตัวแปรใหม่สำหรับคุมอนิเมชัน
     private GameObject currentActivePanel;
-    private bool isTransitioning = false; // ป้องกันผู้เล่นกดรัวๆ ตอนกำลังเล่นอนิเมชัน
+    private bool isTransitioning = false; 
 
     private void Start()
     {
-        // 1. ซ่อนทุกหน้าต่างก่อนเริ่ม
+        if (playerData == null && GameManager.Instance != null)
+        {
+            playerData = GameManager.Instance.playerData;
+        }
+
         if (mainMenuPanel != null) mainMenuPanel.SetActive(false);
         if (loadoutPanel != null) loadoutPanel.SetActive(false);
         if (forgePanel != null) forgePanel.SetActive(false);
         if (systemMessageText != null) systemMessageText.gameObject.SetActive(false);
 
-        // 2. เปิดหน้า Main Menu ทันทีตอนเริ่มฉาก
         currentActivePanel = mainMenuPanel;
         if (currentActivePanel != null)
         {
@@ -37,38 +42,45 @@ public class CampManager : MonoBehaviour
             currentActivePanel.transform.localScale = Vector3.one;
         }
 
-        ShowSystemMessage("Welcome to Base Camp");
+        if (playerData != null)
+        {
+            // 🌟 เช็คว่าพอกดออกจากแคมป์นี้แล้ว จะเข้าสู่ช่วงสุดท้ายที่ต้องเจอบอสใหญ่หรือไม่
+            bool isLastCampBeforeBoss = (playerData.currentCampLevel + 1 >= playerData.finalCampLevel);
+
+            if (isLastCampBeforeBoss)
+            {
+                ShowSystemMessage($"⚠️ FINAL CAMP (Camp {playerData.currentCampLevel}) - Prepare yourself! The BOSS awaits at the top of the next climb!");
+            }
+            else
+            {
+                ShowSystemMessage($"Welcome to Base Camp (Camp {playerData.currentCampLevel} / {playerData.finalCampLevel})");
+            }
+        }
     }
 
-    // ==========================================
-    // 🛠️ ระบบจัดการหน้าต่าง UI เปิด/ปิด (พร้อมอนิเมชัน)
-    // ==========================================
     public void ShowPanel(GameObject panelToShow)
     {
-        // ถ้ากำลังเล่นอนิเมชันอยู่ หรือกดเปิดหน้าต่างเดิมซ้ำ ให้เพิกเฉยไปเลย
         if (isTransitioning || currentActivePanel == panelToShow) return;
-        
         StartCoroutine(AnimatePanelTransition(currentActivePanel, panelToShow));
     }
 
     private IEnumerator AnimatePanelTransition(GameObject panelToHide, GameObject panelToShow)
     {
         isTransitioning = true;
-        float duration = 0.2f; // ความเร็วในการเปิด/ปิดหน้าต่าง (0.2 วินาที)
+        float duration = 0.2f; 
 
-        // 🌟 1. อนิเมชันยุบปิด (Fade Out + Shrink)
         if (panelToHide != null)
         {
             CanvasGroup hideCg = GetOrAddCanvasGroup(panelToHide);
-            Vector3 startScale = Vector3.one * 1.01f; // เริ่มจากขนาด 101%
-            Vector3 endScale = Vector3.one * 0.8f; // ยุบขนาดลงเหลือ 80%
-
+            Vector3 startScale = Vector3.one * 1.01f; 
+            Vector3 endScale = Vector3.one * 0.8f; 
             float elapsed = 0f;
+
             while (elapsed < duration)
             {
                 elapsed += Time.deltaTime;
                 float t = elapsed / duration;
-                float smoothT = 1f - Mathf.Pow(1f - t, 3f); // สมูทตอนปลาย
+                float smoothT = 1f - Mathf.Pow(1f - t, 3f); 
 
                 hideCg.alpha = Mathf.Lerp(1f, 0f, smoothT);
                 panelToHide.transform.localScale = Vector3.Lerp(startScale, endScale, smoothT);
@@ -80,15 +92,14 @@ public class CampManager : MonoBehaviour
 
         currentActivePanel = panelToShow;
 
-        // 🌟 2. อนิเมชันโผล่เปิด (Fade In + Pop Up)
         if (panelToShow != null)
         {
             panelToShow.SetActive(true);
             CanvasGroup showCg = GetOrAddCanvasGroup(panelToShow);
-            Vector3 startScale = Vector3.one * 0.8f; // เริ่มจากขนาด 80%
-            Vector3 endScale = Vector3.one * 1.01f; // ขยายขนาดขึ้นไป 101% ก่อนจะกลับมาที่ 100%
-
+            Vector3 startScale = Vector3.one * 0.8f; 
+            Vector3 endScale = Vector3.one * 1.01f; 
             float elapsed = 0f;
+
             while (elapsed < duration)
             {
                 elapsed += Time.deltaTime;
@@ -100,15 +111,13 @@ public class CampManager : MonoBehaviour
                 yield return null;
             }
             
-            // เซ็ตค่าสุดท้ายให้เป๊ะ
             showCg.alpha = 1f;
             panelToShow.transform.localScale = endScale;
         }
 
-        isTransitioning = false; // ปลดล็อคให้กดปุ่มอื่นต่อได้
+        isTransitioning = false; 
     }
 
-    // ฟังก์ชันตัวช่วย: ถ้า GameObject ไม่มี CanvasGroup ให้มันสร้างใส่ให้เองเลย
     private CanvasGroup GetOrAddCanvasGroup(GameObject obj)
     {
         CanvasGroup cg = obj.GetComponent<CanvasGroup>();
@@ -121,20 +130,36 @@ public class CampManager : MonoBehaviour
         ShowPanel(mainMenuPanel);
     }
 
-    // ==========================================
-    // 🏕️ ระบบ Resting (พักผ่อนฟื้นพลัง)
-    // ==========================================
     public void OnClickRest()
     {
-        if (playerData == null) return;
-        playerData.stamina = playerData.maxStamina;
-        playerData.currentWeaponDUR = playerData.maxWeaponDUR; 
-        ShowSystemMessage("Resting... Stamina and Durability Fully Restored!");
+        if (isTransitioning || playerData == null) return;
+        StartCoroutine(RestAndProceedRoutine());
     }
 
-    // ==========================================
-    // 💬 ฟังก์ชันตัวช่วยแสดงข้อความเตือน
-    // ==========================================
+    private IEnumerator RestAndProceedRoutine()
+    {
+        isTransitioning = true;
+
+        playerData.stamina = playerData.maxStamina;
+        playerData.currentWeaponDUR = playerData.maxWeaponDUR;
+
+        playerData.ReachNextCamp();
+        playerData.currentFloor = 1;
+
+        if (playerData.IsFinalBossStage)
+        {
+            ShowSystemMessage("Resting Complete! Entering the FINAL CLIMB towards the BOSS...");
+        }
+        else
+        {
+            ShowSystemMessage($"Resting Complete! Moving to Stage {playerData.currentCampLevel}...");
+        }
+
+        yield return new WaitForSeconds(delayBeforeLoadScene);
+
+        SceneManager.LoadScene(climbSceneName);
+    }
+
     public void ShowSystemMessage(string msg)
     {
         if (systemMessageText != null) 
