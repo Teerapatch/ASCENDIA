@@ -19,11 +19,15 @@ public class BattleCameraController : MonoBehaviour
     [SerializeField] private CinemachineCamera activeVCam;
     [SerializeField] private CinemachineImpulseSource impulseSource;
 
+    [Header("UI Focus Anchor")]
+    [Tooltip("ลาก GameObject ของ UI เมนูสกิลมาใส่ที่นี่")]
+    public Transform skillMenuUIPos;
+
     [System.Serializable]
     public struct CameraPreset
     {
         public string presetName;
-        public Vector3 positionOffset; // Offset สัมพัทธ์ทิศทางกล้อง
+        public Vector3 positionOffset;
         public float lensSize;
         public float transitionDuration;
     }
@@ -31,19 +35,18 @@ public class BattleCameraController : MonoBehaviour
     [Header("Presets (Expedition 33 Style)")]
     private CameraPreset overviewPreset;
 
-    // --- [ปรับปรุง] ตั้งค่า Offset ใหม่สำหรับการเลือกสกิลและเลือกเป้าหมาย ---
     public CameraPreset skillSelectPreset = new CameraPreset
     {
         presetName = "SkillSelect",
-        positionOffset = new Vector3(-1.5f, 1.2f, -4f), // ยืนเยื้องซ้ายข้ามไหล่ตัวละคร
-        lensSize = 4.5f,
+        positionOffset = new Vector3(0f, 0.5f, -3.5f),
+        lensSize = 3.5f,
         transitionDuration = 0.4f
     };
 
     public CameraPreset targetFocusPreset = new CameraPreset
     {
         presetName = "TargetFocus",
-        positionOffset = new Vector3(0f, 1.0f, -5.5f), // มองตรงไปที่ศัตรูจากระยะกำลังดี
+        positionOffset = new Vector3(0f, 1.0f, -5.5f), // ค่ามาตรฐานสำหรับศัตรูขนาดกลาง
         lensSize = 4f,
         transitionDuration = 0.4f
     };
@@ -64,10 +67,7 @@ public class BattleCameraController : MonoBehaviour
         Instance = this;
         if (activeVCam == null) activeVCam = GetComponent<CinemachineCamera>();
         if (impulseSource == null) impulseSource = GetComponent<CinemachineImpulseSource>();
-    }
 
-    private void Start()
-    {
         if (activeVCam != null)
         {
             sceneDefaultPosition = activeVCam.transform.position;
@@ -86,6 +86,11 @@ public class BattleCameraController : MonoBehaviour
         SetState(CameraState.Overview);
     }
 
+    private void Start()
+    {
+        // โค้ดตั้งต้นตามโครงสร้างเดิม
+    }
+
     public void SetState(CameraState newState, Transform attacker = null, Transform target = null)
     {
         CurrentState = newState;
@@ -99,32 +104,65 @@ public class BattleCameraController : MonoBehaviour
                 break;
 
             case CameraState.SkillSelecting:
-                if (currentAttacker != null)
+                Vector3 focusPoint;
+                if (skillMenuUIPos != null)
                 {
-                    // เอามุมการหันหน้าของผู้เล่นมาคิดเป็นทิศทางกล้องข้ามไหล่
-                    Vector3 focusPoint = currentAttacker.position + Vector3.up * 1.2f;
-                    Vector3 camPos = focusPoint + (currentAttacker.rotation * skillSelectPreset.positionOffset);
-                    Quaternion camRot = Quaternion.LookRotation(focusPoint - camPos);
-
-                    ApplyCustomTransition(camPos, camRot, skillSelectPreset.lensSize, skillSelectPreset.transitionDuration);
+                    focusPoint = skillMenuUIPos.position;
                 }
+                else if (currentAttacker != null)
+                {
+                    focusPoint = currentAttacker.position + Vector3.up * 1.2f;
+                }
+                else
+                {
+                    focusPoint = Vector3.zero;
+                }
+
+                Vector3 lookDirUI = (focusPoint - sceneDefaultPosition).normalized;
+                if (lookDirUI == Vector3.zero) lookDirUI = Vector3.forward;
+
+                Vector3 skillCamPos = focusPoint - (lookDirUI * Mathf.Abs(skillSelectPreset.positionOffset.z)) + Vector3.up * skillSelectPreset.positionOffset.y;
+                Quaternion skillCamRot = Quaternion.LookRotation(focusPoint - skillCamPos);
+
+                ApplyCustomTransition(skillCamPos, skillCamRot, skillSelectPreset.lensSize, skillSelectPreset.transitionDuration);
                 break;
 
             case CameraState.TargetSelecting:
                 if (currentTarget != null)
                 {
-                    // --- [แก้ไขสำคัญ] ให้กล้องหันไปหาจุดศูนย์กลางของศัตรูตรงๆ ---
-                    Vector3 enemyCenter = currentTarget.position + Vector3.up * 1.0f; // ยกขึ้นมาระดับอก/หัวศัตรู
+                    // --- [ระบบใหม่] กำหนดค่า Offset เริ่มต้นตาม Preset ปกติ (Medium Enemy) ---
+                    float targetZOffset = targetFocusPreset.positionOffset.z; // ค่าติดลบ เช่น -5.5f (ระยะห่าง)
+                    float targetYOffset = targetFocusPreset.positionOffset.y; // เช่น 1.0f (ความสูงกล้อง)
+                    float targetLensSize = targetFocusPreset.lensSize;          // เช่น 4f (ขนาดเลนส์)
+                    float enemyCenterHeight = 1.0f;                             // จุดศูนย์กลางความสูงของศัตรู
 
-                    // คำนวณพิกัดกล้องโดยเอา Vector ทิศทางจาก Overview หรือจากจุดศูนย์กลางฉากมาช่วยปรับ
-                    Vector3 lookDir = (enemyCenter - sceneDefaultPosition).normalized;
-                    if (lookDir == Vector3.zero) lookDir = Vector3.forward;
+                    // --- เช็ก Tag ของศัตรูเพื่อปรับแต่ง Offset ตามขนาด (Size Scaling) ---
+                    if (currentTarget.CompareTag("Boss") || currentTarget.CompareTag("Large"))
+                    {
+                        // ศัตรูตัวใหญ่ / บอส: ถอยกล้องออกห่าง, ยกกล้องสูงขึ้น, และขยาย Ortho Size
+                        targetZOffset = -8.5f; // ถอยไกลขึ้น
+                        targetYOffset = 1.8f;  // ยกสูงขึ้นเพื่อมองภาพรวม
+                        targetLensSize = 5.5f; // ขยายมุมมองให้กว้างขึ้น
+                        enemyCenterHeight = 1.5f; // เล็งตรงกลางอก/หัวบอส
+                    }
+                    else if (currentTarget.CompareTag("Small"))
+                    {
+                        // ศัตรูตัวเล็ก: ซูมกล้องเข้าไปใกล้ขึ้น
+                        targetZOffset = -4.0f; // ขยับเข้าใกล้
+                        targetYOffset = 0.8f;  // ลดระดับความสูงลงนิดหน่อย
+                        targetLensSize = 3.2f; // บีบมุมมองให้แคบลง (ซูม)
+                        enemyCenterHeight = 0.7f; // จุดศูนย์กลางต่ำลงตามตัว
+                    }
 
-                    // ถอยกล้องออกมาตามระยะที่ตั้งไว้ใน TargetFocusPreset
-                    Vector3 targetCamPos = enemyCenter - (lookDir * Mathf.Abs(targetFocusPreset.positionOffset.z)) + Vector3.up * targetFocusPreset.positionOffset.y;
+                    // คำนวณตำแหน่งพิกัดเป้าหมาย
+                    Vector3 enemyCenter = currentTarget.position + Vector3.up * enemyCenterHeight;
+                    Vector3 lookDirEnemy = (enemyCenter - sceneDefaultPosition).normalized;
+                    if (lookDirEnemy == Vector3.zero) lookDirEnemy = Vector3.forward;
+
+                    Vector3 targetCamPos = enemyCenter - (lookDirEnemy * Mathf.Abs(targetZOffset)) + Vector3.up * targetYOffset;
                     Quaternion targetCamRot = Quaternion.LookRotation(enemyCenter - targetCamPos);
 
-                    ApplyCustomTransition(targetCamPos, targetCamRot, targetFocusPreset.lensSize, targetFocusPreset.transitionDuration);
+                    ApplyCustomTransition(targetCamPos, targetCamRot, targetLensSize, targetFocusPreset.transitionDuration);
                 }
                 break;
         }

@@ -78,6 +78,17 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        BossSummonBehavior summonBehavior = GetComponent<BossSummonBehavior>();
+        if (summonBehavior != null)
+        {
+            // ลองเรียกใช้งาน ถ้าเลือด <= 50% และทำสำเร็จ ฟังก์ชันจะคืนค่า true และจบเทิร์นเอง
+            if (summonBehavior.TryExecuteSummon())
+            {
+                CombatManager.Instance.EndCurrentTurn();
+                return;
+            }
+        }
+
         // 1. สุ่มท่าโจมตีจากชุดคอมโบ
         int attackIndex = Random.Range(0, attackPatterns.Count);
         EnemyAttackPattern chosenPattern = attackPatterns[attackIndex];

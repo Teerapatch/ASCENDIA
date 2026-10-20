@@ -97,7 +97,7 @@ public class ParryManager : MonoBehaviour
         Vector2 mouseScreenPos = Mouse.current.position.ReadValue();
         Vector3 mouseWorldPos = GetWorldPosition(mouseScreenPos);
 
-        // กดคลิกเริ่มลาก[cite: 6]
+        // กดคลิกเริ่มลาก
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
             startPosScreen = mouseScreenPos;
@@ -105,31 +105,36 @@ public class ParryManager : MonoBehaviour
 
             if (showSwipeTrail && swipeLine != null)
             {
-                swipeLine.positionCount = 2; //[cite: 6]
+                swipeLine.positionCount = 2;
                 swipeLine.SetPosition(0, mouseWorldPos);
                 swipeLine.SetPosition(1, mouseWorldPos);
             }
         }
 
-        // กำลังลาก (อัปเดตเส้น)[cite: 6]
+        // กำลังลาก
         if (isSwiping && showSwipeTrail && swipeLine != null)
         {
             swipeLine.SetPosition(1, mouseWorldPos);
         }
 
-        // ปล่อยเมาส์ เช็คผลลัพธ์[cite: 6]
+        // ปล่อยเมาส์
         if (Mouse.current.leftButton.wasReleasedThisFrame && isSwiping)
         {
             isSwiping = false;
             if (swipeLine) swipeLine.positionCount = 0;
 
             Vector2 swipeDelta = mouseScreenPos - startPosScreen;
-            if (swipeDelta.magnitude >= swipeThreshold) //[cite: 6, 7]
+            if (swipeDelta.magnitude >= swipeThreshold)
             {
-                // ตรวจสอบ Dot Product ว่าลากตรงทิศหรือไม่[cite: 6, 7]
                 float dot = Vector2.Dot(swipeDelta.normalized, requiredDirection);
-                if (dot > 0.8f) SuccessStrike(); //[cite: 6, 7]
-                else FailStrike("Wrong direction!"); //[cite: 6]
+                if (dot > 0.8f)
+                {
+                    Vector3 startWorldPos = GetWorldPosition(startPosScreen);
+                    Vector3 endWorldPos = GetWorldPosition(mouseScreenPos);
+
+                    OnParrySuccess(startWorldPos, endWorldPos);
+                }
+                else FailStrike("Wrong direction!");
             }
             else
             {
@@ -156,29 +161,70 @@ public class ParryManager : MonoBehaviour
 
     Vector3 GetWorldPosition(Vector2 screenPos)
     {
-        Vector3 pos = new Vector3(screenPos.x, screenPos.y, 10f); //[cite: 6]
-        return mainCam.ScreenToWorldPoint(pos); //[cite: 6]
+        Vector3 pos = new Vector3(screenPos.x, screenPos.y, 10f);
+        return mainCam.ScreenToWorldPoint(pos);
+
+        //Ray ray = mainCam.ScreenPointToRay(screenPos);
+
+        //Vector3 planeCenter = (attackingEnemy != null) ? attackingEnemy.transform.position : transform.position;
+        //Plane combatPlane = new Plane(-mainCam.transform.forward, planeCenter);
+
+        //if (combatPlane.Raycast(ray, out float enter))
+        //{
+        //    return ray.GetPoint(enter);
+        //}
+
+        //return mainCam.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 5f));
     }
 
-    void SuccessStrike()
+    public void OnParrySuccess(Vector3 startPos, Vector3 endPos)
     {
         isStrikeResolved = true;
         isAwaitingInput = false;
 
+        bool isSpellActive = (PlayerCombatController.Instance != null &&
+                              PlayerCombatController.Instance.ActiveWeapon != null &&
+                              PlayerCombatController.Instance.ActiveWeapon.weaponType == WeaponType.Spell);
+
         Debug.Log($"<color=cyan>PARRY SUCCESS! Countering with {currentPostureDamage} Posture Damage!</color>");
         CameraShakeManager.Instance.Shake(0.1f);
 
-        // ฟื้น AP และหักเกจ Posture
-        //CombatManager.Instance.player.RestoreAP(1);
-        attackingEnemy.TakePostureDamage(currentPostureDamage);
-
-        // --- Passive Trigger ---
-        if (PlayerCombatController.Instance != null)
+        if (isSpellActive)
         {
-            PlayerCombatController.Instance.AddComboStack(1);
+            int smallPosture = Mathf.RoundToInt(currentPostureDamage * 0.4f);
+            attackingEnemy.TakePostureDamage(smallPosture);
 
-            // Restore Ap+1
-            PlayerCombatController.Instance.RestoreAPFromAction(1, attackingEnemy);
+            // แปะดีบัฟเพิ่มความเสียหายที่ศัตรูได้รับ (สมมติมีฟังก์ชัน ApplyVulnerabilityDebuff บน EnemyController)
+            // attackingEnemy.ApplyVulnerabilityDebuff(1.25f, 2); // รับดาเมจเพิ่ม 25% เป็นเวลา 2 เทิร์น
+
+            // สุ่มหรือกำหนดธาตุใส่ Slot เวท
+
+            ElementType[] allElements = { ElementType.Fire, ElementType.Water, ElementType.Wind, ElementType.Earth };
+            ElementType randomElement = allElements[Random.Range(0, allElements.Length)];
+
+            // ส่งธาตุที่สุ่มได้เข้าไปเก็บใน Slot ของผู้เล่น
+            PlayerCombatController.Instance.AddElement(randomElement);
+
+            Debug.Log("<color=cyan>Applied Vulnerability Debuff, Gained Elemental Slot</color>");
+        }
+        else
+        {
+            attackingEnemy.TakePostureDamage(currentPostureDamage);
+            if (PlayerCombatController.Instance != null)
+            {
+                PlayerCombatController.Instance.AddComboStack(1);
+                PlayerCombatController.Instance.RestoreAPFromAction(1, attackingEnemy);
+            }
+        }
+
+        if (VFXManager.Instance != null)
+        {
+            VFXManager.Instance.SpawnParrySlash(startPos, endPos);
+        }
+
+        if (HitstopManager.Instance != null)
+        {
+            HitstopManager.Instance.Freeze(0.12f);
         }
     }
 

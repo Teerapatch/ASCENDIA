@@ -15,6 +15,8 @@ public class SkillQTEManager : MonoBehaviour
     [Header("Hit Detection UI")]
     public RectTransform hitZoneUI;
     public RectTransform indicatorUI;
+    public RectTransform Bg_Circle;
+    public RectTransform Bg_Diamond;
     public Transform indicatorTip;
 
     private List<QTEStep> currentSteps;
@@ -82,6 +84,8 @@ public class SkillQTEManager : MonoBehaviour
         {
             indicatorUI.localRotation = Quaternion.Euler(0, 0, currentAngleDistance);
             indicatorUI.gameObject.SetActive(false);
+            Bg_Circle.gameObject.SetActive(false);
+            Bg_Diamond.gameObject.SetActive(false);
             hitZoneUI.gameObject.SetActive(false);
         }
 
@@ -91,6 +95,8 @@ public class SkillQTEManager : MonoBehaviour
         // 3. ครบเวลา โชว์เข็ม และเปิดระบบรับ Input
         if (indicatorUI != null) indicatorUI.gameObject.SetActive(true);
         if (hitZoneUI != null) hitZoneUI.gameObject.SetActive(true);
+        if (Bg_Circle != null) Bg_Circle.gameObject.SetActive(true);
+        if (Bg_Diamond != null) Bg_Diamond.gameObject.SetActive(true);
         isQTEActive = true;
     }
 

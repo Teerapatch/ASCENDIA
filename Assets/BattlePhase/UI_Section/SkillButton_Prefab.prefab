@@ -361,6 +361,7 @@ GameObject:
   - component: {fileID: 5878302848522256453}
   - component: {fileID: 441242245147258246}
   - component: {fileID: 4562919675006473411}
+  - component: {fileID: 1596335838911887217}
   m_Layer: 0
   m_Name: SkillButton_Prefab
   m_TagString: Untagged
@@ -473,6 +474,27 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &1596335838911887217
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4117617805130222351}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d782e6a83bafd164dad4ce9dc11c6156, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIButtonJuice
+  normalScale: 1
+  hoverScale: 1.1
+  pressedScale: 0.92
+  animSpeed: 15
+  useColorTint: 1
+  targetImage: {fileID: 0}
+  normalColor: {r: 0, g: 0, b: 0, a: 1}
+  hoverColor: {r: 0, g: 0, b: 0, a: 1}
+  pressedColor: {r: 0, g: 0, b: 0, a: 1}
 --- !u!1 &5754218105824634946
 GameObject:
   m_ObjectHideFlags: 0

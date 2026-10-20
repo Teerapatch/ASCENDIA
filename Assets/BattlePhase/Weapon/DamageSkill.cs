@@ -16,4 +16,4 @@ public class DamageSkill : WeaponSkill
 
         target.TakeDamage(finalDamage);
     }
-}
+}   

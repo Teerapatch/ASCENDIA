@@ -483,4 +483,84 @@ public class CombatManager : MonoBehaviour
 
         return results;
     }
+
+    /// <summary>
+    /// ฟังก์ชันสำหรับเสกลูกน้องของบอสกลางคัน และอัปเดต Timeline ทันที
+    /// </summary>
+    public void SpawnMinions(List<GameObject> minionPrefabs)
+    {
+        if (minionPrefabs == null || minionPrefabs.Count == 0) return;
+
+        int spawnedCount = 0;
+
+        foreach (var minionPrefab in minionPrefabs)
+        {
+            // หาจุดเกิดที่ว่างอยู่ (ใช้ enemySpawnPoints ที่เหลือ หรือจุดใกล้เคียง)
+            Transform spawnPoint = GetAvailableSpawnPoint();
+            if (spawnPoint != null)
+            {
+                GameObject minionObj = Instantiate(minionPrefab, spawnPoint.position, spawnPoint.rotation);
+                EnemyController minionController = minionObj.GetComponent<EnemyController>();
+
+                if (minionController != null)
+                {
+                    // 1. เพิ่มเข้าลิสต์ศัตรูหลักในฉาก
+                    enemies.Add(minionController);
+
+                    // 2. สร้าง TurnNode ใหม่ให้กับลูกน้องที่เพิ่งเกิด
+                    TurnNode minionNode = new TurnNode();
+                    minionNode.ActorID = "E_" + minionController.GetInstanceID();
+                    minionNode.Name = minionController.enemyName;
+                    minionNode.Speed = minionController.baseSpeed;
+                    minionNode.IsEnemy = true;
+                    minionNode.EnemyRef = minionController;
+
+                    // ให้ลูกน้องมีค่า AV เริ่มต้นเท่ากับคนอื่นๆ เพื่อให้แทรกเข้าคิวได้สมูท
+                    minionNode.CurrentAV = 10000f / minionController.baseSpeed;
+
+                    // 3. ยัดลงไปในคิวเทิร์น (Turn Queue)
+                    turnQueue.Add(minionNode);
+                    spawnedCount++;
+                }
+            }
+        }
+
+        Debug.Log($"<color=magenta>✨ Successfully summoned {spawnedCount} minions into the battle!</color>");
+
+        // 4. จัดเรียงลำดับคิวใหม่ทั้งหมดตาม AV (Order by AV)
+        turnQueue = turnQueue.OrderBy(x => x.CurrentAV).ToList();
+
+        // 5. อัปเดต Turn Order UI ทันทีเพื่อให้ผู้เล่นเห็นลูกน้องโผล่บน Timeline
+        if (turnOrderUI != null)
+        {
+            List<PredictedTurn> predictions = PredictNextTurns(6);
+            turnOrderUI.UpdateUI(predictions);
+        }
+    }
+
+    /// <summary>
+    /// Helper: หาจุดเกิดที่ยังว่างอยู่ หรือสุ่มจุดเกิดสำรอง
+    /// </summary>
+    private Transform GetAvailableSpawnPoint()
+    {
+        if (enemySpawnPoints == null || enemySpawnPoints.Count == 0) return null;
+
+        // ค้นหาจุดเกิดที่ไม่มีศัตรูยืนทับอยู่ (เช็กคร่าวๆ จากตำแหน่ง)
+        foreach (var sp in enemySpawnPoints)
+        {
+            bool isOccupied = false;
+            foreach (var enemy in enemies)
+            {
+                if (enemy != null && Vector3.Distance(enemy.transform.position, sp.position) < 1.0f)
+                {
+                    isOccupied = true;
+                    break;
+                }
+            }
+            if (!isOccupied) return sp;
+        }
+
+        // ถ้าเต็มหมดแล้ว ให้คืนค่าจุดแรกสุดสำรองไปก่อน
+        return enemySpawnPoints[Random.Range(0, enemySpawnPoints.Count)];
+    }
 }

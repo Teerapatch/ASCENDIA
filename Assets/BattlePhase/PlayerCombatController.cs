@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using static CombatManager;
 
-// --- [แก้ไข] เพิ่ม State "ChoosingSkill" เข้ามา ---
 public enum PlayerActionState { Waiting, ChoosingAction, ChoosingSkill, ChoosingTarget, DoingQTE, Executing }
 
 public class PlayerCombatController : MonoBehaviour
@@ -40,7 +39,11 @@ public class PlayerCombatController : MonoBehaviour
     public int currentComboStacks = 0;
     public int totalGunCounterAttacks = 0;
 
-    // --- [เพิ่มใหม่] เก็บสกิลที่ผู้เล่นเพิ่งเลือก ---
+    [Header("Spell Elemental Sigil System")]
+    public List<ElementType> elementSlots = new List<ElementType>();
+    private bool hasHarvestedThisTurn = false;
+
+
     private WeaponSkill selectedSkill;
 
     private void Awake()
@@ -290,12 +293,51 @@ public class PlayerCombatController : MonoBehaviour
         {
             // ตีปกติ ไม่ต้องมี QTE ทำงานได้เลย
             actionState = PlayerActionState.Executing;
-            int damage = Mathf.RoundToInt(ActiveWeapon.baseDamage);
+            int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage);
+            int postureDamage = Mathf.RoundToInt(finalDamage * ActiveWeapon.postureDamageMultiplier);
 
-            // --- [Passive: Dagger] โจมตีปกติได้ 1 Combo Stack ---
-            AddComboStack(1);
+            if (ActiveWeapon.weaponType == WeaponType.LongSword)
+            {
+                // 1. สร้างเกจ Posture มากกว่าปกติหลายเท่า
+                postureDamage = Mathf.RoundToInt(postureDamage * ActiveWeapon.postureDamageMultiplier);
 
-            targetEnemy.TakeDamage(damage);
+                // 2. ถ้าเป้าหมายกำลังติด Stagger อยู่ดาเมจคูณเพิ่มมหาศาล!
+                if (targetEnemy.isStaggered)
+                {
+                    finalDamage = Mathf.RoundToInt(finalDamage * ActiveWeapon.staggerDamageMultiplier);
+                    Debug.Log($"<color=orange>⚔️ HEAVY EXECUTION! LongSword deals {ActiveWeapon.staggerDamageMultiplier}x DMG to Staggered target! Final: {finalDamage}</color>");
+
+                    // สั่นกล้องแรงสะใจ
+                    if (CameraShakeManager.Instance != null)
+                        CameraShakeManager.Instance.Shake(1.6f);
+                }
+                else
+                {
+                    // สั่นกล้องธรรมดาเวลาฟันโดน
+                    if (CameraShakeManager.Instance != null)
+                        CameraShakeManager.Instance.Shake(0.8f);
+                }
+            }
+            else
+            {
+                // ถ้าเป็นอาวุธประเภทอื่น (เช่น Dagger)
+                if (ActiveWeapon.weaponType == WeaponType.Dagger)
+                {
+                    AddComboStack(1);
+                }
+
+                if (ActiveWeapon.weaponType == WeaponType.Spell)
+                {
+                    ElementType[] allElements = { ElementType.Fire, ElementType.Water, ElementType.Wind, ElementType.Earth };
+                    ElementType randomElement = allElements[Random.Range(0, allElements.Length)];
+
+                    AddElement(randomElement);
+                }
+            }
+
+            targetEnemy.TakeDamage(finalDamage);
+            targetEnemy.TakePostureDamage(postureDamage);
+
             RestoreAP(1);
             FinishTurnAction();
         }
@@ -357,6 +399,16 @@ public class PlayerCombatController : MonoBehaviour
 
         actionState = PlayerActionState.ChoosingAction;
         UpdateAPUI();
+
+        if (ActiveWeapon.weaponType == WeaponType.Spell)
+        {
+            hasHarvestedThisTurn = false;
+
+            if (SpellOrbManager.Instance != null)
+            {
+                SpellOrbManager.Instance.SpawnSpellOrbs();
+            }
+        }
 
         // --- [อัปเกรดกล้อง] เมื่อเริ่มเทิร์น เซ็ตกล้องเป็นมุม Overview กว้างเห็นภาพรวม ---
         if (BattleCameraController.Instance != null)
@@ -424,6 +476,14 @@ public class PlayerCombatController : MonoBehaviour
         isAiming = true;
         if (crosshairUI != null) crosshairUI.SetActive(true);
         if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
+
+        if (ActiveWeapon != null && ActiveWeapon.weaponType == WeaponType.Spell)
+        {
+            if (SpellOrbManager.Instance != null)
+            {
+                SpellOrbManager.Instance.ToggleOrbsVisibility(true);
+            }
+        }
     }
 
     void ExitAimMode()
@@ -431,6 +491,14 @@ public class PlayerCombatController : MonoBehaviour
         isAiming = false;
         if (crosshairUI != null) crosshairUI.SetActive(false);
         if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
+
+        if (ActiveWeapon != null && ActiveWeapon.weaponType == WeaponType.Spell)
+        {
+            if (SpellOrbManager.Instance != null)
+            {
+                SpellOrbManager.Instance.ToggleOrbsVisibility(false);
+            }
+        }
     }
 
     void AimingRoutine()
@@ -446,6 +514,35 @@ public class PlayerCombatController : MonoBehaviour
         if (currentAP < 1) return;
 
         Ray ray = mainCam.ScreenPointToRay(screenPos);
+
+        if (ActiveWeapon != null && ActiveWeapon.weaponType == WeaponType.Spell)
+        {
+            if (hasHarvestedThisTurn)
+            {
+                Debug.Log("<color=red>Spell Free-Aim has already been used to harvest this turn!</color>");
+                return;
+            }
+
+            if (Physics.Raycast(ray, out RaycastHit harvestHit, 1000f))
+            {
+                FloatingElementOrb orb = harvestHit.collider.GetComponent<FloatingElementOrb>();
+                if (orb != null)
+                {
+                    // เก็บธาตุเข้า Slot
+                    AddElement(orb.elementType);
+                    orb.Harvest();
+
+                    hasHarvestedThisTurn = true; // ใช้สิทธิ์หมดแล้วในเทิร์นนี้
+                    ExitAimMode();
+                }
+                else
+                {
+                    Debug.Log("Free-Aim Spell: No elemental orb hit!");
+                }
+            }
+            UpdateAPUI();
+            return; // จบการทำงานของ Spell Free-Aim ไม่ให้ไปทำดาเมจใส่ศัตรู
+        }
 
         if (Physics.Raycast(ray, out RaycastHit hit, 1000f, enemyLayer))
         {
@@ -627,5 +724,25 @@ public class PlayerCombatController : MonoBehaviour
         {
             BattleCameraController.Instance.TriggerImpulse(0.5f);
         }
+    }
+
+    public void AddElement(ElementType element)
+    {
+        if (ActiveWeapon == null || ActiveWeapon.weaponType != WeaponType.Spell) return;
+
+        if (elementSlots.Count < ActiveWeapon.maxElementSlots)
+        {
+            elementSlots.Add(element);
+            Debug.Log($"<color=magenta>🔮 Elemental Slot +1 [{element}] (Total: {elementSlots.Count}/{ActiveWeapon.maxElementSlots})</color>");
+        }
+        else
+        {
+            // ตัวเลือก: ถือว่าช่องเต็มแล้ว หรือดันตัวเก่าออก (FIFO)
+            //elementSlots.RemoveAt(0);
+            //elementSlots.Add(element);
+            Debug.Log($"<color=yellow>🔮 Slots Full! Shifted and added [{element}]</color>");
+        }
+
+        // UI Update Spell
     }
 }
