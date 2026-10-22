@@ -30,7 +30,7 @@ public class GameManager : MonoBehaviour
 
     public void AddOre(int amount)
     {
-        playerData.ore += amount;
+        playerData.gemStone += amount;
     }
 
     public void AddWeight(float amount)

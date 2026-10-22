@@ -749,7 +749,7 @@ GameObject:
   - component: {fileID: 8879455890102404385}
   - component: {fileID: 4734750437452564808}
   m_Layer: 0
-  m_Name: Top Mountain Prefab
+  m_Name: Ground
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -863,9 +863,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c98727fe1f7a76c4bbad033be256656e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NodeSpawner
-  climbNodePrefab: {fileID: 2899634743671070633, guid: 86b26c0a42833384f84c814eaaa96e18, type: 3}
+  normalNodePrefab: {fileID: 2899634743671070633, guid: 044099827d3042f4c965aa94077b80e9, type: 3}
   battleNodePrefab: {fileID: 6093463273094828769, guid: 0fa696f05d9db2f44bfdc3233bc7316f, type: 3}
+  miniBossNodePrefab: {fileID: 2899634743671070633, guid: 69353d92f9871204aaa172e8d1eaa0de, type: 3}
+  oreNodePrefab: {fileID: 2899634743671070633, guid: b540138ea0f44984b85a1d8d6ca19d48, type: 3}
+  restNodePrefab: {fileID: 2899634743671070633, guid: 517509980ed5da04facf35dc82235cb4, type: 3}
   campNodePrefab: {fileID: 8534430917132918103, guid: 9cbf0abb6b02a304f97b8ee2fa536ed3, type: 3}
-  leftSpawn: {fileID: 4012849071527783223}
-  centerSpawn: {fileID: 7357599657591662769}
-  rightSpawn: {fileID: 6780319949529223935}
+  leftPoint: {fileID: 0}
+  centerPoint: {fileID: 0}
+  rightPoint: {fileID: 0}

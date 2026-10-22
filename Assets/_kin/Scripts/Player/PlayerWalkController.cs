@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem; // 🌟 1. เรียกใช้งาน NameSpace ของระบบ Input ใหม่
 
 [RequireComponent(typeof(PlayerStateManager), typeof(PlayerCameraController))]
 public class PlayerWalkController : MonoBehaviour
@@ -7,6 +8,9 @@ public class PlayerWalkController : MonoBehaviour
     public float walkSpeed = 5f;
     public float wallDetectDistance = 0.8f;
 
+    [Header("Input Configuration")]
+    public InputActionReference moveAction; // 🌟 2. สร้างช่องรับค่า Action จาก Inspector
+
     private PlayerStateManager stateManager;
     private PlayerCameraController camController;
 
@@ -14,6 +18,17 @@ public class PlayerWalkController : MonoBehaviour
     {
         stateManager = GetComponent<PlayerStateManager>();
         camController = GetComponent<PlayerCameraController>();
+    }
+
+    // 🌟 3. ต้องสั่งเปิด/ปิด การรับค่า Input เสมอเพื่อป้องกัน Memory Leak
+    private void OnEnable()
+    {
+        if (moveAction != null) moveAction.action.Enable();
+    }
+
+    private void OnDisable()
+    {
+        if (moveAction != null) moveAction.action.Disable();
     }
 
     private void Update()
@@ -26,9 +41,9 @@ public class PlayerWalkController : MonoBehaviour
 
     private void HandleWalking()
     {
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
-        Vector3 movement = new Vector3(h, 0, v).normalized;
+        // 🌟 4. อ่านค่าแบบ Vector2 (รองรับทั้งปุ่ม WASD, ลูกศร และก้าน Analog ของจอยสติ๊กพร้อมกัน)
+        Vector2 inputVal = moveAction != null ? moveAction.action.ReadValue<Vector2>() : Vector2.zero;
+        Vector3 movement = new Vector3(inputVal.x, 0, inputVal.y).normalized;
 
         if (movement.magnitude > 0.1f)
         {
