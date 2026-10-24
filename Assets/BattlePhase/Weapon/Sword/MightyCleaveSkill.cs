@@ -41,9 +41,6 @@ public class MightyCleaveSkill : WeaponSkill
         Debug.Log($"<color=orange> MIGHTY CLEAVE! Swept all {hitCount} enemies for {finalDamage} DMG each!</color>");
 
         // สั่นกล้องแรงสะใจเพราะเป็นการโจมตีวงกว้าง
-        if (CameraShakeManager.Instance != null)
-        {
-            CameraShakeManager.Instance.Shake(1.5f);
-        }
+        CameraShakeManager.TryShake(1.5f);
     }
 }

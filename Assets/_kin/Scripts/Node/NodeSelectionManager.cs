@@ -71,6 +71,11 @@ public class NodeSelectionManager : MonoBehaviour
         }
 
         if (mapUIPanel != null) mapUIPanel.SetActive(false);
+
+        if (BattleSession.TryConsumeResult(out BattleResult battleResult))
+        {
+            StartCoroutine(ResumeAfterBattle(battleResult));
+        }
     }
 
     public void StartSelection(Transform playerTransform)
@@ -317,6 +322,10 @@ public class NodeSelectionManager : MonoBehaviour
         string nextScene = selectedNode.sceneToLoad;
         Vector3 finalDestination = selectedNode.climbTarget.position;
 
+        // เก็บข้อมูลการต่อสู้ไว้ก่อน เพราะโหนดจะถูก Destroy ระหว่างทาง
+        bool isBattleNode = selectedNode.IsBattle;
+        EncounterData encounter = isBattleNode ? selectedNode.PickEncounter() : null;
+
         if (selectedNode != null && selectedNode.gameObject != null)
         {
             if (selectedNode.nodeText != null) selectedNode.nodeText.gameObject.SetActive(false);
@@ -346,59 +355,111 @@ public class NodeSelectionManager : MonoBehaviour
 
         TriggerNodeEncounter(selectedNode);
 
-        // 🌟 รองรับทั้ง Battle, MiniBoss, Boss, Rest และ Camp
-        bool shouldLoadNewScene = !string.IsNullOrEmpty(nextScene) &&
-                                (nextRoomType == PathNode.RoomType.Battle ||
-                                nextRoomType == PathNode.RoomType.MiniBoss ||
-                                nextRoomType == PathNode.RoomType.Boss ||
-                                nextRoomType == PathNode.RoomType.Camp);
-
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        if (shouldLoadNewScene)
+        if (isBattleNode)
+        {
+            // 🌟 Battle / MiniBoss / Boss -> เข้าฉากต่อสู้ผ่าน BattleSession แล้วจะถูกโหลดกลับมาที่ฉากนี้เอง
+            string battleScene = nextScene;
+            if (!Application.CanStreamedLevelBeLoaded(battleScene))
+            {
+                Debug.LogWarning($"⚠️ ไม่พบซีน '{battleScene}' ใน Build Settings ใช้ {BattleSession.DefaultBattleScene} แทน");
+                battleScene = BattleSession.DefaultBattleScene;
+            }
+
+            Debug.Log($"⚔️ กำลังเข้าสู่การต่อสู้: {battleScene} (ประเภท: {nextRoomType}, Encounter: {(encounter != null ? encounter.encounterName : "ค่าในฉาก")})");
+            BattleSession.Begin(new BattleRequest
+            {
+                encounter = encounter,
+                weapons = GameManager.Instance != null ? GameManager.Instance.playerData.GetEquippedWeapons() : null,
+                battleSceneName = battleScene
+            });
+        }
+        else if (nextRoomType == PathNode.RoomType.Camp && !string.IsNullOrEmpty(nextScene))
         {
             Debug.Log($"🚪 กำลังโหลดเข้าสู่ซีน: {nextScene} (ประเภท: {nextRoomType})");
             UnityEngine.SceneManagement.SceneManager.LoadScene(nextScene);
         }
         else
         {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-
             if (RoomManager.Instance != null && stateManager != null)
             {
                 RoomManager.Instance.LoadNewRoom(PathNode.RoomType.Normal, stateManager.transform);
             }
 
-            int currentFloor = GameManager.Instance != null ? GameManager.Instance.playerData.currentFloor : 1;
-
-            if (camController)
-            {
-                if (currentFloor > 1)
-                {
-                    camController.walkCam.SetActive(false);
-                    camController.climbCam.SetActive(true);
-                    camController.SwitchToClimbCam(stateManager.transform.eulerAngles.y);
-                }
-                else
-                {
-                    if (camController.climbCam) camController.climbCam.SetActive(false);
-                    if (camController.walkCam) camController.walkCam.SetActive(true);
-                }
-                camController.enabled = true;
-            }
-
-            if (stateManager)
-            {
-                if (currentFloor > 1)
-                    stateManager.ChangeState(PlayerStateManager.State.Climbing);
-                else
-                    stateManager.ChangeState(PlayerStateManager.State.Walking);
-            }
+            ApplyFloorStartState();
 
             yield return StartCoroutine(FadeScreen(0f, 1f));
         }
+    }
+
+    // ตั้งกล้อง/สถานะผู้เล่นให้ตรงกับชั้นปัจจุบัน (ชั้น 1 = เดินบนพื้น, ชั้นอื่น = เกาะกำแพง)
+    private void ApplyFloorStartState()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        int currentFloor = GameManager.Instance != null ? GameManager.Instance.playerData.currentFloor : 1;
+
+        if (camController)
+        {
+            if (currentFloor > 1)
+            {
+                camController.walkCam.SetActive(false);
+                camController.climbCam.SetActive(true);
+                camController.SwitchToClimbCam(stateManager.transform.eulerAngles.y);
+            }
+            else
+            {
+                if (camController.climbCam) camController.climbCam.SetActive(false);
+                if (camController.walkCam) camController.walkCam.SetActive(true);
+            }
+            camController.enabled = true;
+        }
+
+        if (stateManager)
+        {
+            if (currentFloor > 1)
+                stateManager.ChangeState(PlayerStateManager.State.Climbing);
+            else
+                stateManager.ChangeState(PlayerStateManager.State.Walking);
+        }
+    }
+
+    // ถูกเรียกเมื่อโหลดกลับมาจากฉากต่อสู้ (ฉากนี้ถูกโหลดใหม่ทั้งหมด ข้อมูลที่เหลือรอดมีแค่ใน PlayerData)
+    private IEnumerator ResumeAfterBattle(BattleResult result)
+    {
+        // รอ 1 เฟรมให้ Start() ของกล้อง/ผู้เล่น/RoomManager ทำงานเสร็จก่อน แล้วค่อยตั้งสถานะทับ
+        yield return null;
+
+        ApplyBattleResult(result);
+        ApplyFloorStartState();
+    }
+
+    private void ApplyBattleResult(BattleResult result)
+    {
+        if (result.outcome == BattleOutcome.Victory)
+        {
+            EncounterData enc = result.encounter;
+            if (enc != null && enc.rewardItem != null && enc.rewardAmount > 0 && InventoryManager.Instance != null)
+            {
+                bool added = InventoryManager.Instance.AddItem(enc.rewardItem, enc.rewardAmount);
+                Debug.Log(added
+                    ? $"🏆 ชนะการต่อสู้! ได้ {enc.rewardItem.itemName} x{enc.rewardAmount}"
+                    : "⚠️ ชนะการต่อสู้ แต่กระเป๋าเต็มหรือหนักเกินไป เก็บของรางวัลไม่ได้!");
+            }
+            return;
+        }
+
+        // แพ้การต่อสู้ = เสียหมุด (Piton) 1 อัน เหมือนตกจากกำแพง
+        if (GameManager.Instance == null) return;
+
+        GameManager.Instance.UsePiton();
+        Debug.Log($"💀 แพ้การต่อสู้! เสียหมุด 1 อัน (เหลือ {GameManager.Instance.playerData.piton})");
+
+        PitonUIController pitonUI = FindFirstObjectByType<PitonUIController>();
+        if (pitonUI != null) pitonUI.ShowLostPitonAlert(GameManager.Instance.playerData.piton);
     }
 
     private void TriggerNodeEncounter(PathNode node)

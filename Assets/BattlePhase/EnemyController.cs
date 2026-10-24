@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
-using static CombatManager;
 
 public class EnemyController : MonoBehaviour
 {
@@ -13,6 +12,9 @@ public class EnemyController : MonoBehaviour
     public int maxPosture = 100;
     public int currentPosture;
     public bool isStaggered = false;
+
+    // ตายแล้วแต่ยังไม่ถูก Destroy (หน่วง 0.5 วิ) กันไม่ให้โดนตีซ้ำแล้ว Die() ซ้ำ
+    public bool IsDead { get; private set; }
 
     [Header("Debuffs")]
     public bool isMarkedByGun = false;
@@ -114,6 +116,7 @@ public class EnemyController : MonoBehaviour
 
     public void TakeDamage(int damage)
     {
+        if (IsDead) return;
         if (isStaggered) damage = Mathf.RoundToInt(damage * 1.5f);
 
         currentHP -= damage;
@@ -122,15 +125,14 @@ public class EnemyController : MonoBehaviour
         Color dmgColor = isStaggered ? Color.yellow : Color.white;
         DamagePopupManager.Instance.CreatePopup(transform.position, damage, isStaggered, dmgColor);
 
-        if (CameraShakeManager.Instance != null)
-            CameraShakeManager.Instance.Shake(0.3f);
+        CameraShakeManager.TryShake(0.3f);
 
         if (currentHP <= 0) Die();
     }
 
     public void TakePostureDamage(int postureDamage)
     {
-        if (isStaggered) return;
+        if (IsDead || isStaggered) return;
 
         currentPosture -= postureDamage;
         Debug.Log($"{enemyName} took {postureDamage} Posture Damage! (Posture: {currentPosture}/{maxPosture})");
@@ -145,21 +147,19 @@ public class EnemyController : MonoBehaviour
                 staggerParticle.Play();
             }
 
-            if (CameraShakeManager.Instance != null)
-                CameraShakeManager.Instance.Shake(1.5f);
+            CameraShakeManager.TryShake(1.5f);
         }
     }
 
     private void Die()
     {
+        IsDead = true;
         if (staggerParticle != null) staggerParticle.Stop();
         Debug.Log($"<color=red>{enemyName} has been defeated!</color>");
         // ลบตัวเองออกจากคิวและลิสต์ของศัตรูบนฉาก
         if (CombatManager.Instance != null)
         {
-            //CombatManager.Instance.enemies.Remove(this);
             CombatManager.Instance.RemoveEnemy(this);
-            //CombatManager.Instance.RemoveEnemyFromQueue(this);
 
             // --- Check Wave ---
             CombatManager.Instance.CheckBattleEnd();

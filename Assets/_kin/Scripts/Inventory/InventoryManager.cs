@@ -17,8 +17,8 @@ public class InventoryManager : MonoBehaviour
     [Header("Linked Data (ลาก PlayerData มาใส่)")]
     public PlayerData playerData;
 
-    [Header("Content")]
-    public List<InventorySlot> slots = new List<InventorySlot>();
+    // ของในกระเป๋าเก็บอยู่ใน PlayerData (ไม่ใช่ในฉาก) จึงไม่หายตอนไปฉากต่อสู้แล้วกลับมา
+    public List<InventorySlot> slots => playerData.inventorySlots;
     public event Action OnInventoryChanged;
 
     private void Awake()

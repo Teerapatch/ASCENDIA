@@ -128,7 +128,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PathNode
   roomType: 2
-  sceneToLoad: NextSceneName
+  sceneToLoad: TurnBase_Phase
   oreRewardItem: {fileID: 0}
   oreAmount: 5
   staminaRestore: 50

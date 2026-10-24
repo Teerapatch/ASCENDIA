@@ -146,6 +146,9 @@ public class CampManager : MonoBehaviour
         playerData.ReachNextCamp();
         playerData.currentFloor = 1;
 
+        // เทกระเป๋าทิ้งที่แคมป์ เริ่มปีนช่วงใหม่ด้วยกระเป๋าว่าง (เหมือนพฤติกรรมเดิมก่อนย้ายกระเป๋าไป PlayerData)
+        playerData.inventorySlots.Clear();
+
         if (playerData.IsFinalBossStage)
         {
             ShowSystemMessage("Resting Complete! Entering the FINAL CLIMB towards the BOSS...");

@@ -43,7 +43,7 @@ public class DaggerMultiHitSkill : WeaponSkill
         for (int i = 0; i < numberOfHits; i++)
         {
             // หยุดถ้าศัตรูตายไปก่อนจะฟันครบ
-            if (target == null || target.currentHP <= 0)
+            if (target == null || target.IsDead)
             {
                 Debug.Log($"<color=gray>Target died before all hits connected. Stopped at hit {i}.</color>");
                 break;
@@ -60,12 +60,8 @@ public class DaggerMultiHitSkill : WeaponSkill
             player.AddComboStack(comboStacksPerHit, true);
 
             // --- 3. [Visual Feedback] สั่นกล้องเบาๆ ทุกฮิต ---
-            if (CameraShakeManager.Instance != null)
-            {
-                // ฮิตสุดท้ายสั่นแรงหน่อย
-                float shakeForce = (i == numberOfHits - 1) ? 0.6f : 0.3f;
-                CameraShakeManager.Instance.Shake(shakeForce);
-            }
+            // ฮิตสุดท้ายสั่นแรงหน่อย
+            CameraShakeManager.TryShake((i == numberOfHits - 1) ? 0.6f : 0.3f);
 
             // (Optional: ใส่โค้ดเรียก Particle Effect เอฟเฟกต์ฟันตรงนี้)
             // (Optional: ใส่โค้ดเล่นเสียงฟันตรงนี้)

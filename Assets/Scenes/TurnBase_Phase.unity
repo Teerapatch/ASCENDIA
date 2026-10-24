@@ -4126,9 +4126,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 59a306bc606e88b45b9c43af2b73afe7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BowUI
-  comboText: {fileID: 214870487}
   animSpeed: 12
   popScale: 1.4
+  comboText: {fileID: 214870487}
 --- !u!1 &744996760
 GameObject:
   m_ObjectHideFlags: 0
@@ -9250,9 +9250,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3eddbbb677f39274b9519d863faaf351, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GunUI
-  comboText: {fileID: 124123353}
   animSpeed: 12
   popScale: 1.4
+  comboText: {fileID: 124123353}
 --- !u!1 &1898773127
 GameObject:
   m_ObjectHideFlags: 0
@@ -9599,9 +9599,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18e910d0a1d615c46aeee121ccece2b4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpellUI
-  elementText: {fileID: 213388541}
   animSpeed: 12
   popScale: 1.3
+  elementText: {fileID: 213388541}
 --- !u!225 &1925327763
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -10161,12 +10161,9 @@ MonoBehaviour:
   currentAP: 3
   textAP: {fileID: 1707270052}
   baseInventoryWeapons:
-  - {fileID: 11400000, guid: ee086747ffdf24449bd44b961145608d, type: 2}
-  - {fileID: 11400000, guid: 5bc551e1078d1884a9da79a31844fca8, type: 2}
-  - {fileID: 11400000, guid: c75f7515e1a724b4ea3692cce48f39e5, type: 2}
-  inventoryWeapons:
-  - {fileID: 11400000, guid: ee086747ffdf24449bd44b961145608d, type: 2}
-  - {fileID: 11400000, guid: 5bc551e1078d1884a9da79a31844fca8, type: 2}
+  - {fileID: 11400000, guid: b157a3436ed34094da748b980763a7e0, type: 2}
+  - {fileID: 11400000, guid: c5e169c3b683e4e45b20d307a95a2f82, type: 2}
+  - {fileID: 11400000, guid: 471d8b947d88bbd4fa97545db55b9371, type: 2}
   currentWeaponIndex: 0
   ActiveWeapon: {fileID: 0}
   crosshairUI: {fileID: 919835078}
@@ -15547,7 +15544,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BattleCameraController
   activeVCam: {fileID: 1830529213}
-  impulseSource: {fileID: 180243330}
   skillMenuUIPos: {fileID: 408319472}
   skillSelectPreset:
     presetName: 

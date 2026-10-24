@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
@@ -17,7 +18,11 @@ public class PathNode : MonoBehaviour
     [Header("Node Action & Routing")]
     public RoomType roomType = RoomType.Normal; 
     [Tooltip("ชื่อซีนที่ต้องการโหลดเมื่อเลือกโหนดนี้ (เช่น BattleScene, MiniBossScene, BossScene, CampScene)")]
-    public string sceneToLoad = ""; 
+    public string sceneToLoad = "";
+
+    [Header("Battle (เฉพาะ Battle / MiniBoss / Boss)")]
+    [Tooltip("สุ่ม 1 อันตอนเลือกโหนดนี้ ถ้าว่างฉากต่อสู้จะใช้ศัตรูที่ตั้งไว้ในฉากเอง")]
+    public List<EncounterData> encounterPool = new List<EncounterData>();
 
     [Header("Node Rewards (เฉพาะ Ore / Rest)")]
     public ItemData oreRewardItem;
@@ -48,6 +53,14 @@ public class PathNode : MonoBehaviour
     private Vector3 originalScale;
     private Vector3 targetScale;
     private bool isHovering = false;
+
+    public bool IsBattle => roomType == RoomType.Battle || roomType == RoomType.MiniBoss || roomType == RoomType.Boss;
+
+    public EncounterData PickEncounter()
+    {
+        List<EncounterData> valid = encounterPool.FindAll(e => e != null);
+        return valid.Count > 0 ? valid[Random.Range(0, valid.Count)] : null;
+    }
 
     private void Start()
     {

@@ -30,9 +30,6 @@ public class PommelBashSkill : WeaponSkill
         Debug.Log($"<color=orange>🗡️ POMMEL BASH! Low DMG ({finalDamage}), Massive Posture DMG ({finalPosture})!</color>");
 
         // สั่นกล้องเบาๆ พอมีแรงกระแทก
-        if (CameraShakeManager.Instance != null)
-        {
-            CameraShakeManager.Instance.Shake(0.7f);
-        }
+        CameraShakeManager.TryShake(0.7f);
     }
 }

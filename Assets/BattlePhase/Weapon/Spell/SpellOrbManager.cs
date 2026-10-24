@@ -32,8 +32,6 @@ public class SpellOrbManager : MonoBehaviour
             return;
         }
 
-        ElementType[] allElements = { ElementType.Fire, ElementType.Water, ElementType.Wind, ElementType.Earth };
-
         for (int i = 0; i < 3; i++)
         {
             // สุ่มตำแหน่งรอบๆ จุดศูนย์กลาง
@@ -49,14 +47,14 @@ public class SpellOrbManager : MonoBehaviour
                 orb.Initialize(spawnPos);
 
                 // สุ่มประเภทธาตุ
-                ElementType randomElem = allElements[Random.Range(0, allElements.Length)];
+                ElementType randomElem = ElementTypes.RandomPlayable();
                 orb.elementType = randomElem;
 
-                // เปลื่ยนสี Material ตามธาตุ
+                // เปลื่ยนสี Material ตามธาตุ (ใช้สีชุดเดียวกับ SpellUI)
                 MeshRenderer mr = orbObj.GetComponent<MeshRenderer>();
                 if (mr != null)
                 {
-                    mr.material.color = GetElementColor(randomElem);
+                    mr.material.color = ElementTypes.GetColor(randomElem);
                 }
             }
 
@@ -93,17 +91,5 @@ public class SpellOrbManager : MonoBehaviour
             if (orbObj != null) Destroy(orbObj);
         }
         activeOrbs.Clear();
-    }
-
-    private Color GetElementColor(ElementType type)
-    {
-        switch (type)
-        {
-            case ElementType.Fire: return Color.red;
-            case ElementType.Water: return Color.blue;
-            case ElementType.Wind: return Color.green;
-            case ElementType.Earth: return Color.yellow;
-            default: return Color.white;
-        }
     }
 }

@@ -1,6 +1,9 @@
 ﻿using UnityEngine;
 using UnityEngine.SceneManagement;
 
+// หน้าจอเริ่ม/จบการต่อสู้
+//  - ถูกเรียกผ่าน BattleSession: ข้ามหน้า Start และปุ่ม Restart จะพากลับฉากที่เรียกมา
+//  - เปิดฉากนี้ตรงๆ (ทดสอบใน Editor): ทำงานแบบเดิม มีหน้า Start และ Restart = โหลดฉากซ้ำ
 public class TempGameFlowUI : MonoBehaviour
 {
     public static TempGameFlowUI Instance;
@@ -10,17 +13,36 @@ public class TempGameFlowUI : MonoBehaviour
     public GameObject gameOverPanel;
     public GameObject victoryPanel;
 
+    private BattleOutcome lastOutcome = BattleOutcome.Defeat;
+
     private void Awake()
     {
         Instance = this;
 
-        // เริ่มเกมมา บังคับเปิดหน้า Start และปิดหน้าอื่นๆ
-        startPanel.SetActive(true);
         gameOverPanel.SetActive(false);
         victoryPanel.SetActive(false);
 
-        // --- หยุดเวลา (Pause) ไว้ก่อน จนกว่าจะกดเริ่ม ---
-        Time.timeScale = 0f;
+        if (BattleSession.IsActive)
+        {
+            startPanel.SetActive(false);
+            Time.timeScale = 1f;
+        }
+        else
+        {
+            // หยุดเวลา (Pause) ไว้ก่อน จนกว่าจะกดเริ่ม
+            startPanel.SetActive(true);
+            Time.timeScale = 0f;
+        }
+    }
+
+    private void OnEnable()
+    {
+        CombatManager.OnBattleEnded += ShowResult;
+    }
+
+    private void OnDisable()
+    {
+        CombatManager.OnBattleEnded -= ShowResult;
     }
 
     // ==========================================
@@ -36,12 +58,20 @@ public class TempGameFlowUI : MonoBehaviour
         Time.timeScale = 1f;
     }
 
-    // ฟังก์ชันสำหรับปุ่ม "Play Again" บนหน้า Game Over / Victory
+    // ฟังก์ชันสำหรับปุ่มบนหน้า Game Over / Victory
     public void OnClickRestart()
     {
-        // โหลด Scene ปัจจุบันซ้ำอีกรอบ
         Time.timeScale = 1f; // เผื่อเผลอหยุดเวลาไว้ ให้เดินปกติ
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+
+        if (BattleSession.IsActive)
+        {
+            // ส่งผลการต่อสู้กลับไปให้ฉากที่เรียก (เช่น ClimbScene)
+            BattleSession.Finish(lastOutcome);
+        }
+        else
+        {
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        }
     }
 
     // ฟังก์ชันสำหรับปุ่ม "Quit"
@@ -52,20 +82,15 @@ public class TempGameFlowUI : MonoBehaviour
     }
 
     // ==========================================
-    // ถูกเรียกจาก CombatManager
+    // ถูกเรียกเมื่อ CombatManager แจ้งว่าการต่อสู้จบ
     // ==========================================
-
-    public void ShowGameOver()
+    private void ShowResult(BattleOutcome outcome)
     {
-        gameOverPanel.SetActive(true);
-        // (Optional) อาจจะปลดเคอร์เซอร์เมาส์เผื่อโดนซ่อนอยู่
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
-    }
+        lastOutcome = outcome;
 
-    public void ShowVictory()
-    {
-        victoryPanel.SetActive(true);
+        GameObject panel = outcome == BattleOutcome.Victory ? victoryPanel : gameOverPanel;
+        panel.SetActive(true);
+
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }

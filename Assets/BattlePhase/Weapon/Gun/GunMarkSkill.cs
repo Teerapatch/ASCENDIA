@@ -22,9 +22,6 @@ public class GunMarkSkill : WeaponSkill
         // --- Mark ใส่เป้าหมาย ---
         target.ApplyGunMark();
 
-        if (CameraShakeManager.Instance != null)
-        {
-            CameraShakeManager.Instance.Shake(0.4f);
-        }
+        CameraShakeManager.TryShake(0.4f);
     }
 }

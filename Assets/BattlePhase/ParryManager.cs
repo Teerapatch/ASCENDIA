@@ -44,6 +44,8 @@ public class ParryManager : MonoBehaviour
 
     private IEnumerator PlaySequenceRoutine(EnemyAttackPattern pattern)
     {
+        int turnNumber = CombatManager.Instance.TurnNumber;
+
         // ลูปตามจำนวนการฟัน (Strikes) ในชุดคอมโบ
         for (int i = 0; i < pattern.strikes.Count; i++)
         {
@@ -51,6 +53,9 @@ public class ParryManager : MonoBehaviour
 
             // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ)
             yield return new WaitForSeconds(strike.delayBeforeStrike);
+
+            // ผู้โจมตีตายจากการสวนกลับ หรือการต่อสู้จบไปแล้ว -> หยุดคอมโบที่เหลือ
+            if (!IsSequenceStillValid(turnNumber)) break;
 
             // 2. ตั้งค่าการป้องกันสำหรับฮิตนี้
             requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
@@ -86,8 +91,25 @@ public class ParryManager : MonoBehaviour
             if (swipeLine) swipeLine.positionCount = 0;
         }
 
-        // จบชุดคอมโบ ส่งเทิร์นคืนให้ Timeline[cite: 6]
-        CombatManager.Instance.EndCurrentTurn();
+        hintParticle.SetActive(false);
+        if (swipeLine) swipeLine.positionCount = 0;
+        isAwaitingInput = false;
+
+        // จบชุดคอมโบ ส่งเทิร์นคืนให้ Timeline (เฉพาะถ้ายังเป็นเทิร์นเดิม ไม่ใช่เทิร์นของ Wave ใหม่)
+        if (CombatManager.Instance.TurnNumber == turnNumber)
+        {
+            CombatManager.Instance.EndCurrentTurn();
+        }
+    }
+
+    private bool IsSequenceStillValid(int turnNumber)
+    {
+        CombatManager combat = CombatManager.Instance;
+        return combat != null
+            && !combat.IsBattleOver
+            && combat.TurnNumber == turnNumber
+            && attackingEnemy != null
+            && !attackingEnemy.IsDead;
     }
 
     void HandleSwipeInput()
@@ -187,7 +209,7 @@ public class ParryManager : MonoBehaviour
                               PlayerCombatController.Instance.ActiveWeapon.weaponType == WeaponType.Spell);
 
         Debug.Log($"<color=cyan>PARRY SUCCESS! Countering with {currentPostureDamage} Posture Damage!</color>");
-        CameraShakeManager.Instance.Shake(0.1f);
+        CameraShakeManager.TryShake(0.1f);
 
         if (isSpellActive)
         {
@@ -197,13 +219,8 @@ public class ParryManager : MonoBehaviour
             // แปะดีบัฟเพิ่มความเสียหายที่ศัตรูได้รับ (สมมติมีฟังก์ชัน ApplyVulnerabilityDebuff บน EnemyController)
             // attackingEnemy.ApplyVulnerabilityDebuff(1.25f, 2); // รับดาเมจเพิ่ม 25% เป็นเวลา 2 เทิร์น
 
-            // สุ่มหรือกำหนดธาตุใส่ Slot เวท
-
-            ElementType[] allElements = { ElementType.Fire, ElementType.Water, ElementType.Wind, ElementType.Earth };
-            ElementType randomElement = allElements[Random.Range(0, allElements.Length)];
-
-            // ส่งธาตุที่สุ่มได้เข้าไปเก็บใน Slot ของผู้เล่น
-            PlayerCombatController.Instance.AddElement(randomElement);
+            // สุ่มธาตุแล้วส่งเข้าไปเก็บใน Slot ของผู้เล่น
+            PlayerCombatController.Instance.AddElement(ElementTypes.RandomPlayable());
 
             Debug.Log("<color=cyan>Applied Vulnerability Debuff, Gained Elemental Slot</color>");
         }
@@ -234,7 +251,7 @@ public class ParryManager : MonoBehaviour
         isAwaitingInput = false;
 
         Debug.Log($"<color=red>PARRY FAILED ({reason}) - Took {incomingDamage} Damage!</color>");
-        CameraShakeManager.Instance.Shake(0.8f);
+        CameraShakeManager.TryShake(0.8f);
 
         // รับดาเมจเข้าตัว/อาวุธผู้เล่น[cite: 6]
         CombatManager.Instance.player.TakeDamage(incomingDamage);

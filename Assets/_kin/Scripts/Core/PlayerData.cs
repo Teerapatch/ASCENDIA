@@ -14,6 +14,8 @@ public class PlayerData : ScriptableObject
     public float currentWeaponDUR = 100f;
 
     [Header("Inventory & Stats")]
+    [Tooltip("ของในกระเป๋าระหว่างปีน เก็บไว้ที่นี่เพื่อให้อยู่รอดตอนโหลดฉาก (เช่น ไปสู้แล้วกลับมา)")]
+    public List<InventorySlot> inventorySlots = new List<InventorySlot>();
     public int gemStone = 0;
     public int monsterPart = 0;
     public float weight = 0f;
@@ -44,9 +46,21 @@ public class PlayerData : ScriptableObject
     // เช็คว่าตอนนี้อยู่ในช่วงสุดท้ายที่จะเจอบอสใหญ่หรือยัง
     public bool IsFinalBossStage => currentCampLevel >= finalCampLevel;
 
+    // อาวุธที่ใส่อยู่ใน Loadout (ข้ามช่องว่าง) ใช้ส่งเข้าฉากต่อสู้
+    public List<WeaponData> GetEquippedWeapons()
+    {
+        List<WeaponData> equipped = new List<WeaponData>();
+        foreach (WeaponData weapon in activeLoadout)
+        {
+            if (weapon != null) equipped.Add(weapon);
+        }
+        return equipped;
+    }
+
     public void ResetData()
     {
         stamina = maxStamina;
+        inventorySlots.Clear();
         gemStone = 0;
         weight = 0f;
         piton = 3;

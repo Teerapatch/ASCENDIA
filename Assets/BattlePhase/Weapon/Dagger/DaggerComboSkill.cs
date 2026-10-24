@@ -42,11 +42,8 @@ public class DaggerComboSkill : WeaponSkill
         // --- [Visual & Game Feel Feedback] ---
 
         // สั่นกล้อง: ยิ่งสะสม Stack มาเยอะ กล้องยิ่งสั่นกระแทกแรง
-        if (CameraShakeManager.Instance != null)
-        {
-            float shakeForce = 0.5f + (currentStacks * 0.3f); // เริ่มที่ 0.5 และบวก 0.3 ทุกๆ 1 Stack
-            CameraShakeManager.Instance.Shake(shakeForce);
-        }
+        float shakeForce = 0.5f + (currentStacks * 0.3f); // เริ่มที่ 0.5 และบวก 0.3 ทุกๆ 1 Stack
+        CameraShakeManager.TryShake(shakeForce);
 
         // แจ้งเตือนบน Console (ช่วยคุณเช็กบั๊กตอนเทสต์)
         Debug.Log($"<color=magenta>[{skillName}] Executed! | Stacks Used: {currentStacks} | Total DMG: {finalDamage}</color>");

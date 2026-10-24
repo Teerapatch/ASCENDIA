@@ -17,7 +17,6 @@ public class BattleCameraController : MonoBehaviour
 
     [Header("Cinemachine Core")]
     [SerializeField] private CinemachineCamera activeVCam;
-    [SerializeField] private CinemachineImpulseSource impulseSource;
 
     [Header("UI Focus Anchor")]
     [Tooltip("ลาก GameObject ของ UI เมนูสกิลมาใส่ที่นี่")]
@@ -66,7 +65,6 @@ public class BattleCameraController : MonoBehaviour
     {
         Instance = this;
         if (activeVCam == null) activeVCam = GetComponent<CinemachineCamera>();
-        if (impulseSource == null) impulseSource = GetComponent<CinemachineImpulseSource>();
 
         if (activeVCam != null)
         {
@@ -86,11 +84,6 @@ public class BattleCameraController : MonoBehaviour
         SetState(CameraState.Overview);
     }
 
-    private void Start()
-    {
-        // โค้ดตั้งต้นตามโครงสร้างเดิม
-    }
-
     public void SetState(CameraState newState, Transform attacker = null, Transform target = null)
     {
         CurrentState = newState;
@@ -100,7 +93,8 @@ public class BattleCameraController : MonoBehaviour
         switch (newState)
         {
             case CameraState.Overview:
-                StartCoroutine(SmoothCameraTransition(sceneDefaultPosition, sceneDefaultRotation, sceneDefaultLensSize, overviewPreset.transitionDuration));
+                // ใช้ ApplyCustomTransition เหมือนโหมดอื่น เพื่อหยุด Transition เก่าก่อน (เดิมวิ่งซ้อนกันได้)
+                ApplyCustomTransition(sceneDefaultPosition, sceneDefaultRotation, sceneDefaultLensSize, overviewPreset.transitionDuration);
                 break;
 
             case CameraState.SkillSelecting:
@@ -165,14 +159,6 @@ public class BattleCameraController : MonoBehaviour
                     ApplyCustomTransition(targetCamPos, targetCamRot, targetLensSize, targetFocusPreset.transitionDuration);
                 }
                 break;
-        }
-    }
-
-    public void TriggerImpulse(float force = 1.0f)
-    {
-        if (impulseSource != null)
-        {
-            impulseSource.GenerateImpulse(force);
         }
     }
 

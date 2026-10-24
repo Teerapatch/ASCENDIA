@@ -138,7 +138,7 @@ public class ForgeManager : MonoBehaviour
         {
             // ยังไม่ได้คราฟต์
             statsText.text = $"<color=#FFD700>Lv.0 ➔ Lv.1 (CRAFT TO BIND)</color>\n" +
-                             $"ATK: {currentWeapon.attackDamage}\n" +
+                             $"ATK: {currentWeapon.baseDamage}\n" +
                              $"AP (Speed): {currentWeapon.speed}";
                              
             actionButtonText.text = "Craft Weapon";
