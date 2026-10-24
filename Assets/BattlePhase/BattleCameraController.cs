@@ -15,9 +15,9 @@ public class BattleCameraController : MonoBehaviour
 {
     public static BattleCameraController Instance;
 
+    // การสั่นกล้องทั้งหมดใช้ CameraShakeManager.Shake() ที่เดียว
     [Header("Cinemachine Core")]
     [SerializeField] private CinemachineCamera activeVCam;
-    [SerializeField] private CinemachineImpulseSource impulseSource;
 
     [Header("UI Focus Anchor")]
     [Tooltip("ลาก GameObject ของ UI เมนูสกิลมาใส่ที่นี่")]
@@ -66,7 +66,6 @@ public class BattleCameraController : MonoBehaviour
     {
         Instance = this;
         if (activeVCam == null) activeVCam = GetComponent<CinemachineCamera>();
-        if (impulseSource == null) impulseSource = GetComponent<CinemachineImpulseSource>();
 
         if (activeVCam != null)
         {
@@ -84,11 +83,6 @@ public class BattleCameraController : MonoBehaviour
         };
 
         SetState(CameraState.Overview);
-    }
-
-    private void Start()
-    {
-        // โค้ดตั้งต้นตามโครงสร้างเดิม
     }
 
     public void SetState(CameraState newState, Transform attacker = null, Transform target = null)
@@ -165,14 +159,6 @@ public class BattleCameraController : MonoBehaviour
                     ApplyCustomTransition(targetCamPos, targetCamRot, targetLensSize, targetFocusPreset.transitionDuration);
                 }
                 break;
-        }
-    }
-
-    public void TriggerImpulse(float force = 1.0f)
-    {
-        if (impulseSource != null)
-        {
-            impulseSource.GenerateImpulse(force);
         }
     }
 

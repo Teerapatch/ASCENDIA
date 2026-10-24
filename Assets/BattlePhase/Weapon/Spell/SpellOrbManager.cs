@@ -32,8 +32,6 @@ public class SpellOrbManager : MonoBehaviour
             return;
         }
 
-        ElementType[] allElements = { ElementType.Fire, ElementType.Water, ElementType.Wind, ElementType.Earth };
-
         for (int i = 0; i < 3; i++)
         {
             // สุ่มตำแหน่งรอบๆ จุดศูนย์กลาง
@@ -49,7 +47,7 @@ public class SpellOrbManager : MonoBehaviour
                 orb.Initialize(spawnPos);
 
                 // สุ่มประเภทธาตุ
-                ElementType randomElem = allElements[Random.Range(0, allElements.Length)];
+                ElementType randomElem = ElementTypeUtil.Random();
                 orb.elementType = randomElem;
 
                 // เปลื่ยนสี Material ตามธาตุ

@@ -35,5 +35,12 @@ public class HitstopManager : MonoBehaviour
 
         // 3. คืนค่าเวลาเป็นปกติ
         Time.timeScale = 1f;
+        hitstopCoroutine = null;
+    }
+
+    // ถ้าออกจากฉากต่อสู้ระหว่าง Hitstop ห้ามปล่อยให้ timeScale ค้างที่ 0 ไปถึงฉากอื่น
+    private void OnDestroy()
+    {
+        if (hitstopCoroutine != null) Time.timeScale = 1f;
     }
 }

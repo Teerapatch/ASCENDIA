@@ -11,7 +11,7 @@ public class PommelBashSkill : WeaponSkill
     {
         if (target == null || player == null || player.ActiveWeapon == null) return;
 
-        float baseDmg = player.ActiveWeapon.baseDamage;
+        float baseDmg = player.ActiveWeapon.GetCurrentDamage();
         int finalDamage = Mathf.RoundToInt(baseDmg * damageMultiplier);
 
         int basePosture = Mathf.RoundToInt(baseDmg * 0.5f);

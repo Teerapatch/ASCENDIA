@@ -81,10 +81,9 @@ public class EnemyController : MonoBehaviour
         BossSummonBehavior summonBehavior = GetComponent<BossSummonBehavior>();
         if (summonBehavior != null)
         {
-            // ลองเรียกใช้งาน ถ้าเลือด <= 50% และทำสำเร็จ ฟังก์ชันจะคืนค่า true และจบเทิร์นเอง
+            // ลองเรียกใช้งาน ถ้าเลือด <= 50% และทำสำเร็จ ฟังก์ชันจะคืนค่า true และจบเทิร์นเองหลังเสกเสร็จ
             if (summonBehavior.TryExecuteSummon())
             {
-                CombatManager.Instance.EndCurrentTurn();
                 return;
             }
         }

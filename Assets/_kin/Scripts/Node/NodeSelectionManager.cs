@@ -356,7 +356,13 @@ public class NodeSelectionManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        if (shouldLoadNewScene)
+        if (shouldLoadNewScene && BattleSession.IsCombatRoom(nextRoomType))
+        {
+            // โหนดต่อสู้: ส่งผ่าน BattleSession เพื่อให้ฉากต่อสู้รู้ประเภทศัตรู และกลับมาซีนนี้เมื่อจบ
+            string returnScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            BattleSession.StartBattle(BattleSession.EncounterFor(nextRoomType), nextScene, returnScene);
+        }
+        else if (shouldLoadNewScene)
         {
             Debug.Log($"🚪 กำลังโหลดเข้าสู่ซีน: {nextScene} (ประเภท: {nextRoomType})");
             UnityEngine.SceneManagement.SceneManager.LoadScene(nextScene);

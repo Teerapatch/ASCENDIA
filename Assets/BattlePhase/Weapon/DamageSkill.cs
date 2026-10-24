@@ -10,7 +10,7 @@ public class DamageSkill : WeaponSkill
     public override void ExecuteSkill(PlayerCombatController player, EnemyController target, int qteSuccesses)
     {
         float totalMultiplier = baseDamageMultiplier + (bonusMultiplierPerQTE * qteSuccesses);
-        int finalDamage = Mathf.RoundToInt(player.ActiveWeapon.baseDamage * totalMultiplier);
+        int finalDamage = Mathf.RoundToInt(player.ActiveWeapon.GetCurrentDamage() * totalMultiplier);
 
         Debug.Log($"{skillName} ทำงาน! สร้างความเสียหาย {finalDamage} แก่ {target.enemyName}");
 

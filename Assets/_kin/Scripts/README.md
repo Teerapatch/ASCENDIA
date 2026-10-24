@@ -15,7 +15,7 @@
   * ✅ **ตัวที่ใช้จริง:** `Camp/WeaponCarousel.cs` (มีแอนิเมชัน, เช็กสถานะ `isUnlocked`, และแสดงป้าย `P1`–`P4`)[cite: 1]
   * ❌ **ตัวเก่า (ไม่ต้องใช้):** `Camp/LoadoutManager.cs` (เป็นตัวต้นแบบ ไม่มีระบบกรองอาวุธที่ล็อกอยู่)[cite: 1]
 * **คลาสข้อมูลอาวุธ (`WeaponData`):**
-  * ✅ **ตัวที่ใช้จริง:** `Camp/Data/WeaponData.cs`[cite: 1]
+  * ✅ **ตัวที่ใช้จริง:** `Camp/Data/WeaponData.cs` — เป็นคลาสเดียวที่ใช้ร่วมกันทั้ง Camp และ BattlePhase (มี `ElementType` / `ElementTypeUtil` อยู่ในไฟล์เดียวกัน) ห้ามสร้าง `WeaponData` ซ้ำในโฟลเดอร์อื่น
   * ❌ **ตัวเก่า (ไม่ต้องใช้):** `Camp/WeaponData.cs` (โค้ดข้างในถูก Comment ปิดไว้ทั้งหมด ลบไฟล์นี้ทิ้งได้เลย)[cite: 1]
 
 ---
@@ -50,6 +50,7 @@
   4. **วิธีเชื่อมระบบ:**
      * **ถ้าแยก Scene (เช่น มี Scene สำหรับ Battle หรือ Camp โดยเฉพาะ):** ให้ไปที่ Prefab ของโหนดใน `NodeSpawner` แล้วพิมพ์ชื่อ Scene ลงในช่อง `sceneToLoad` ของสคริปต์ `PathNode` ระบบจะปลดล็อกเมาส์ (`Cursor.lockState = CursorLockMode.None`) แล้วสั่ง `SceneManager.LoadScene(nextScene)` ทันที[cite: 1]
      * **ถ้าไม่ได้แยก Scene (เล่นใน Scene เดิมแต่เปลี่ยนห้อง):** ให้ปล่อยช่อง `sceneToLoad` ว่างไว้ ระบบจะเรียก `RoomManager.Instance.LoadNewRoom()` เพื่อเสก Prefab ห้องจาก `climbRoomPrefabs` หรือ `battleRoomPrefabs` แทน[cite: 1]
+     * **โหนดต่อสู้ (`Battle` / `MiniBoss` / `Boss`):** `NodeSelectionManager` จะเรียก `BattleSession.StartBattle(EncounterType, sceneToLoad, ซีนปัจจุบัน)` แทน `LoadScene` ตรงๆ — ฉาก `TurnBase_Phase` จะใช้อาวุธจาก `playerData.activeLoadout`, เลือกชุดศัตรูจาก `CombatManager.encounterPresets` ตาม `EncounterType`, และกลับมาซีนเดิมเองเมื่อจบ (แพ้ = เสีย Piton 1 อัน) ดูรายละเอียดใน `Assets/BattlePhase/BattleSession.cs`
 
 ### จุดที่ 2: การดึงข้อมูลอาวุธและค่าสถานะไปใช้ในระบบต่อสู้ (Battle System)
 * **ไฟล์ที่เกี่ยวข้อง:** `Core/PlayerData.cs` และ `Camp/Data/WeaponData.cs`[cite: 1]
@@ -60,7 +61,7 @@
 * **⚠️ สำคัญมากเวลาดึงค่าพลังโจมตีและความเร็วของอาวุธ:**
   * **ห้ามดึง** `weaponData.attackDamage` หรือ `weaponData.speed` ไปใช้ตรงๆ เพราะนั่นคือค่าเริ่มต้นตอน Lv.1[cite: 1]
   * **ให้เรียกใช้ฟังก์ชัน** `weaponData.GetCurrentDamage()` และ `weaponData.GetCurrentSpeed()` เสมอ เพื่อให้ค่าที่ตีบวกมาจากโรงตีเหล็ก (`ForgeManager`) มีผลในฉากต่อสู้[cite: 1]
-  * ค่าอื่นๆ ที่ดึงจาก `WeaponData` ได้เลย: `weaponType` (`Dagger`, `LongSword`, `Bow`, `Spell`), `postureMultiplier`, `freeAimMultiplier`, และ `availableSkills` (`List<WeaponSkill>`)[cite: 1]
+  * ค่าอื่นๆ ที่ดึงจาก `WeaponData` ได้เลย: `weaponType` (`Gun`, `Dagger`, `LongSword`, `Spell`, `Bow` — ค่า int ถูก serialize ห้ามสลับลำดับ), `postureDamageMultiplier`, `staggerDamageMultiplier`, `freeAimMultiplier`, และ `availableSkills` (`List<WeaponSkill>`)[cite: 1]
 
 ### จุดที่ 3: การให้รางวัลหลังจบการต่อสู้ (ดรอปแร่ / ชิ้นส่วนมอนสเตอร์)
 * **ไฟล์ที่เกี่ยวข้อง:** `Inventory/InventoryManager.cs` และ `Core/PlayerData.cs`[cite: 1]

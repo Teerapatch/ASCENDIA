@@ -1,15 +1,25 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
 public enum CombatState { Setup, CalculateTurn, PlayerTurn, EnemyTurn, ParryPhase, GameOver, Victory }
-public enum EncounterType { Standard, Standard_Fly, Boss, Ambush }
+public enum EncounterType { Standard, MiniBoss, Boss }
 
 public class CombatManager : MonoBehaviour
 {
     public static CombatManager Instance;
     public CombatState currentState;
     public bool isTransitioningWave = false;
+
+    // สูตร Action Value: ยิ่งเร็ว AV ยิ่งน้อย ได้เล่นก่อน
+    private const float ActionValueBase = 10000f;
+    private const int TurnsToPredict = 6;
+
+    public bool IsBattleOver => currentState == CombatState.GameOver || currentState == CombatState.Victory;
+
+    /// <summary>ยิงเมื่อการต่อสู้จบ (ก่อนกลับซีนเดิม) ให้ระบบอื่นมาฟังได้ เช่น UI สรุปผล / แจกของ</summary>
+    public event System.Action<BattleOutcome> OnBattleEnded;
 
     [System.Serializable]
     public class WaveData
@@ -18,7 +28,15 @@ public class CombatManager : MonoBehaviour
         public List<GameObject> enemiesInWave;
     }
 
-    [Header("Enemy Spawning")]
+    [System.Serializable]
+    public class EncounterPreset
+    {
+        public EncounterType encounterType = EncounterType.Standard;
+        [Tooltip("Wave แรกคือศัตรูที่เกิดตอนเริ่ม ที่เหลือจะเกิดต่อเมื่อเคลียร์ Wave ก่อนหน้า")]
+        public List<WaveData> waves = new List<WaveData>();
+    }
+
+    [Header("Enemy Spawning (Default / Standalone)")]
     public List<GameObject> enemyPrefabsToSpawn;
     public List<Transform> enemySpawnPoints;
 
@@ -26,12 +44,19 @@ public class CombatManager : MonoBehaviour
     public List<WaveData> enemyWaves = new List<WaveData>();
     private int currentWaveIndex = 0;
 
+    [Header("Encounter Presets (ใช้เมื่อถูกเรียกผ่าน BattleSession)")]
+    [Tooltip("ถ้าไม่มี Preset ตรงกับ EncounterType ที่ถูกเรียก จะใช้ enemyPrefabsToSpawn / enemyWaves ด้านบนแทน")]
+    public List<EncounterPreset> encounterPresets = new List<EncounterPreset>();
+
+    [Header("Battle End")]
+    [Tooltip("เวลาค้างหน้าจอผลลัพธ์ก่อนกลับซีนเดิม (วินาทีจริง ไม่ขึ้นกับ timeScale)")]
+    public float returnDelay = 2f;
+
     [Header("Combatants (Player & Enemies)")]
     public PlayerCombatController player;
     public List<EnemyController> enemies;
     public TurnOrderUI turnOrderUI;
 
-    // 1. เพิ่ม Class สำหรับเก็บผลลัพธ์การคาดเดาเทิร์น
     public class PredictedTurn
     {
         public string UniqueID;
@@ -40,7 +65,7 @@ public class CombatManager : MonoBehaviour
         public float SimulatedAV;
     }
 
-    // 2. คลาสชั่วคราวสำหรับใช้ทดลองคำนวณในฟังก์ชัน
+    // คลาสชั่วคราวสำหรับใช้ทดลองคำนวณในฟังก์ชัน
     private class SimNode
     {
         public string ActorID;
@@ -50,7 +75,6 @@ public class CombatManager : MonoBehaviour
         public float CurrentAV;
     }
 
-    // คลาสย่อยสำหรับเก็บคิวเทิร์น
     public class TurnNode
     {
         public string ActorID;
@@ -64,7 +88,7 @@ public class CombatManager : MonoBehaviour
 
     private List<TurnNode> turnQueue = new List<TurnNode>();
 
-    private void Awake() 
+    private void Awake()
     {
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
@@ -73,163 +97,21 @@ public class CombatManager : MonoBehaviour
 
     private void Start()
     {
-        //InitializeCombat();
         currentWaveIndex = 0;
-        StartEncounter(enemyPrefabsToSpawn);
-    }
 
-    public void CheckBattleEnd()
-    {
-        // 1. ถ้าผู้เล่นตาย = เกมโอเวอร์ (เงื่อนไขเดิมของคุณ)
-        if (player.inventoryWeapons.TrueForAll(w => w.currentDurability <= 0))
+        EncounterPreset preset = BattleSession.HasRequest
+            ? encounterPresets.Find(p => p.encounterType == BattleSession.CurrentEncounter && p.waves.Count > 0)
+            : null;
+
+        if (preset != null)
         {
-            currentState = CombatState.GameOver;
-            Debug.Log("<color=red>GAME OVER! All weapons broken.</color>");
-
-            // PREPARE TO DELETE IT
-            if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowGameOver();
-
-            return;
+            enemyWaves = preset.waves.Skip(1).ToList();
+            StartEncounter(preset.waves[0].enemiesInWave);
         }
-
-        // 2. ถ้าศัตรูตายหมดฉาก
-        if (enemies.Count == 0)
+        else
         {
-            // --- [เพิ่มใหม่] เช็กว่ายังมี Wave เหลือไหม? ---
-            if (currentWaveIndex < enemyWaves.Count)
-            {
-                isTransitioningWave = true;
-                Debug.Log($"<color=yellow>Wave {currentWaveIndex + 1} Cleared! Spawning Next Wave...</color>");
-
-                // สั่งให้มี UI ประกาศสั้นๆ (ถ้ามี TurnAnnouncementUI)
-                if (TurnAnnouncementUI.Instance != null)
-                {
-                    TurnAnnouncementUI.Instance.AnnounceTurn($"<color=#FFDD55>{enemyWaves[currentWaveIndex].waveName}</color>\nApproaching!", () =>
-                    {
-                        SpawnNextWave();
-                    });
-                }
-                else
-                {
-                    SpawnNextWave();
-                }
-            }
-            else
-            {
-                // ถ้าไม่มี Wave แล้ว ถือว่าจบฉากต่อสู้จริงๆ (Victory!)
-                currentState = CombatState.GameOver;
-                Debug.Log("<color=green>BATTLE WON! All Waves Cleared.</color>");
-
-                // ... (ใส่โค้ดแจก EXP / โหลดกลับฉากแผนที่ ตรงนี้) ...
-                if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowVictory();
-            }
+            StartEncounter(enemyPrefabsToSpawn);
         }
-    }
-    private void SpawnNextWave()
-    {
-        // 1. ดึงข้อมูลศัตรูชุดใหม่มา
-        List<GameObject> nextEnemies = enemyWaves[currentWaveIndex].enemiesInWave;
-        currentWaveIndex++;
-
-        // 2. เสกศัตรูลงบนจุดเกิด (ใช้ลอจิกเดียวกับ StartEncounter)
-        int spawnCount = Mathf.Min(nextEnemies.Count, enemySpawnPoints.Count);
-        for (int i = 0; i < spawnCount; i++)
-        {
-            GameObject enemyObj = Instantiate(nextEnemies[i], enemySpawnPoints[i].position, enemySpawnPoints[i].rotation);
-            EnemyController controller = enemyObj.GetComponent<EnemyController>();
-            if (controller != null) enemies.Add(controller);
-        }
-
-        // 3. เริ่มต้นวงจร Turn Order ใหม่อีกครั้ง (รวมผู้เล่นและศัตรูใหม่เข้าด้วยกัน)
-        RecalculateTurnOrderForNewWave();
-    }
-
-    private void RecalculateTurnOrderForNewWave()
-    {
-        // 1. ล้างคิวการต่อสู้เก่าทิ้งทั้งหมด (ป้องกันบั๊กตัวละครเก่าตกค้าง)
-        turnQueue.Clear();
-
-        // 2. ดึงอาวุธผู้เล่นที่ยัง "ไม่พัง" กลับเข้าคิว
-        foreach (var weapon in player.inventoryWeapons)
-        {
-            if (weapon.currentDurability > 0)
-            {
-                TurnNode playerNode = new TurnNode();
-
-                playerNode.ActorID = "W_" + weapon.GetInstanceID();
-                playerNode.Speed = weapon.speed;
-
-                playerNode.IsEnemy = false;
-                playerNode.WeaponRef = weapon;
-                playerNode.Name = weapon.weaponName;
-
-                // คำนวณ AV (Action Value) เริ่มต้น 
-                // สมมติสูตร: 10000 / ความเร็ว
-                playerNode.CurrentAV = 10000f / weapon.speed;
-
-                turnQueue.Add(playerNode);
-            }
-        }
-
-        // 3. ดึงศัตรูชุดใหม่ (Wave ปัจจุบัน) เข้าคิว
-        foreach (var enemy in enemies)
-        {
-            TurnNode enemyNode = new TurnNode();
-
-            enemyNode.ActorID = "E_" + enemy.GetInstanceID();
-            enemyNode.Speed = enemy.baseSpeed;
-
-            enemyNode.IsEnemy = true;
-            enemyNode.EnemyRef = enemy;
-            enemyNode.Name = enemy.enemyName;
-
-            // คำนวณ AV เริ่มต้นของศัตรู
-            enemyNode.CurrentAV = 10000f / enemy.baseSpeed;
-
-            turnQueue.Add(enemyNode);
-        }
-
-        // 4. เรียงลำดับคิวจาก AV น้อยไปมาก (ใคร AV น้อยสุดได้ตีก่อน)
-        turnQueue.Sort((a, b) => a.CurrentAV.CompareTo(b.CurrentAV));
-
-        // 5. สร้างลิสต์จำลองเพื่อส่งให้ TurnOrderUI ของคุณ
-        UpdateTurnOrderUI();
-
-        // 6. บังคับเริ่มเทิร์นแรกของ Wave นี้ทันที!
-        isTransitioningWave = false;
-        NextTurn();
-    }
-    public void UpdateTurnOrderUI()
-    {
-        if (turnOrderUI == null) return;
-
-        List<PredictedTurn> predictions = new List<PredictedTurn>();
-
-        for (int i = 0; i < turnQueue.Count; i++)
-        {
-            PredictedTurn pt = new PredictedTurn();
-            pt.Name = turnQueue[i].Name;
-            pt.IsEnemy = turnQueue[i].IsEnemy;
-
-            // --- [สำคัญ] วิธีตั้ง UniqueID ให้ไม่ซ้ำกันแม้จะเป็นศัตรูประเภทเดียวกัน ---
-            if (turnQueue[i].IsEnemy)
-            {
-                // ใช้ GetInstanceID() ซึ่งจะการันตีว่าศัตรูที่เกิดใหม่จะมี ID ไม่ซ้ำกับตัวที่ตายไปแล้วแน่นอน
-                pt.UniqueID = "Enemy_" + turnQueue[i].EnemyRef.gameObject.GetInstanceID().ToString();
-                // pt.Icon = turnQueue[i].EnemyRef.enemyIcon; // สมมติว่ามีรูปศัตรู
-            }
-            else
-            {
-                // อาวุธผู้เล่น ใช้ชื่ออาวุธได้เลย เพราะมีชิ้นเดียวในกระเป๋า
-                pt.UniqueID = "Player_" + turnQueue[i].WeaponRef.weaponName;
-                // pt.Icon = turnQueue[i].WeaponRef.weaponIcon;
-            }
-
-            predictions.Add(pt);
-        }
-
-        // เรียกใช้ฟังก์ชัน UpdateUI ที่คุณเขียนมา
-        turnOrderUI.UpdateUI(predictions);
     }
 
     // ==========================================
@@ -237,251 +119,47 @@ public class CombatManager : MonoBehaviour
     // ==========================================
     public void StartEncounter(List<GameObject> enemiesToSpawn)
     {
-        // เคลียร์ลิสต์เก่าเผื่อมี
         enemies.Clear();
-
-        int spawnCount = Mathf.Min(enemiesToSpawn.Count, enemySpawnPoints.Count);
-
-        for (int i = 0; i < spawnCount; i++)
-        {
-            // 1. เสกศัตรู (Instantiate) ลงบนจุดเกิด
-            GameObject enemyObj = Instantiate(enemiesToSpawn[i], enemySpawnPoints[i].position, enemySpawnPoints[i].rotation);
-
-            // 2. ดึงสคริปต์ Controller มาเก็บไว้ในลิสต์หลัก
-            EnemyController controller = enemyObj.GetComponent<EnemyController>();
-            if (controller != null)
-            {
-                enemies.Add(controller);
-            }
-            else
-            {
-                Debug.LogError($"Prefab {enemyObj.name} ไม่มีสคริปต์ EnemyController!");
-            }
-        }
+        SpawnWave(enemiesToSpawn);
 
         Debug.Log($"<color=green>Encounter Started! Spawned {enemies.Count} enemies.</color>");
 
-        // 3. เริ่มการคำนวณเทิร์น (โค้ดเดิมของคุณ)
-        InitializeCombat();
+        BuildTurnQueue();
     }
 
-    public void EndCurrentTurn()
+    private void SpawnWave(List<GameObject> prefabs)
     {
-        if (currentState == CombatState.GameOver) return;
-
-        // --- [แก้ไขเล็กน้อย] เชฟกันเหนียว เช็คให้ชัวร์ว่าคิวยังมีข้อมูลก่อนเซ็ตค่า ---
-        if (turnQueue.Count > 0)
+        int spawnCount = Mathf.Min(prefabs.Count, enemySpawnPoints.Count);
+        for (int i = 0; i < spawnCount; i++)
         {
-            // 5. รีเซ็ต AV ของคนที่เพิ่งเล่นจบ กลับไปต่อท้ายคิว
-            turnQueue[0].CurrentAV = 10000f / turnQueue[0].Speed;
-        }
-
-        currentState = CombatState.CalculateTurn;
-        NextTurn();
-    }
-
-    public void RemoveEnemy(EnemyController deadEnemy)
-    {
-        enemies.Remove(deadEnemy);
-        turnQueue.RemoveAll(node => node.IsEnemy && node.EnemyRef == deadEnemy);
-
-        if (turnOrderUI != null)
-        {
-            List<PredictedTurn> predictions = PredictNextTurns(6);
-            turnOrderUI.UpdateUI(predictions);
-        }
-
-        //if (enemies.Count == 0)
-        //{
-        //    currentState = CombatState.GameOver;
-        //    Debug.Log("VICTORY! All enemies defeated.");
-        //}
-    }
-
-    public void RemoveWeapon(WeaponData brokenWeapon)
-    {
-        Debug.Log($"<color=red>Timeline: ถอด {brokenWeapon.weaponName} ออกจากคิว!</color>");
-
-        // 1. ลบอาวุธชิ้นนี้ออกจากคิวปกติ
-        turnQueue.RemoveAll(node => !node.IsEnemy && node.WeaponRef == brokenWeapon);
-
-        // 2. สั่งคาดเดาเทิร์นใหม่ และอัปเดต UI ทันที
-        if (turnOrderUI != null)
-        {
-            List<PredictedTurn> predictions = PredictNextTurns(6);
-            turnOrderUI.UpdateUI(predictions);
-        }
-
-        // 3. เช็ค Game Over (ถ้าคิวไม่มีอาวุธของผู้เล่นเหลืออยู่เลย = แพ้)
-        bool hasWeaponsLeft = turnQueue.Any(node => !node.IsEnemy);
-        if (!hasWeaponsLeft)
-        {
-            currentState = CombatState.GameOver;
-            Debug.Log("DEFEAT! All weapons broken. Game Over.");
-            if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowGameOver();
-        }
-        else
-        {
-            // --- [เพิ่มใหม่] ถ้าอาวุธที่พังคือชิ้นที่ผู้เล่นกำลังถืออยู่ ให้บังคับสลับอาวุธ ---
-            if (player != null && player.ActiveWeapon == brokenWeapon)
-            {
-                player.Command_SwitchWeapon();
-            }
+            SpawnEnemy(prefabs[i], enemySpawnPoints[i]);
         }
     }
 
-    void InitializeCombat()
+    private EnemyController SpawnEnemy(GameObject prefab, Transform spawnPoint)
     {
-        foreach (var weapon in player.inventoryWeapons)
+        GameObject enemyObj = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
+        EnemyController controller = enemyObj.GetComponent<EnemyController>();
+
+        if (controller == null)
         {
-            if (weapon.currentDurability > 0)
-            {
-                turnQueue.Add(new TurnNode
-                {
-                    ActorID = "W_" + weapon.GetInstanceID(),
-                    Name = weapon.weaponName,
-                    Speed = weapon.speed,
-                    IsEnemy = false,
-                    CurrentAV = 10000f / weapon.speed,
-                    WeaponRef = weapon
-                });
-            }
+            Debug.LogError($"Prefab {enemyObj.name} ไม่มีสคริปต์ EnemyController!");
+            return null;
         }
 
-        foreach (var enemy in enemies)
-        {
-            turnQueue.Add(new TurnNode
-            {
-                ActorID = "E_" + enemy.GetInstanceID(),
-                Name = enemy.enemyName,
-                Speed = enemy.baseSpeed,
-                IsEnemy = true,
-                CurrentAV = 10000f / enemy.baseSpeed,
-                EnemyRef = enemy
-            });
-        }
-
-        currentState = CombatState.CalculateTurn;
-        NextTurn();
+        enemies.Add(controller);
+        return controller;
     }
 
-    public void NextTurn()
+    private void SpawnNextWave()
     {
-        if (isTransitioningWave || currentState == CombatState.GameOver || currentState == CombatState.Victory)
-        {
-            return;
-        }
+        List<GameObject> nextEnemies = enemyWaves[currentWaveIndex].enemiesInWave;
+        currentWaveIndex++;
 
-        var brokenWeapons = turnQueue
-            .Where(node => !node.IsEnemy && node.WeaponRef != null && node.WeaponRef.currentDurability <= 0)
-            .Select(node => node.WeaponRef)
-            .ToList(); // ToList เพื่อก็อปปี้ออกมาก่อนทำการเตะออก
+        SpawnWave(nextEnemies);
 
-        foreach (var weapon in brokenWeapons)
-        {
-            RemoveWeapon(weapon);
-        }
-
-        // ถ้าเตะอาวุธออกหมดจน Game Over แล้ว ให้หยุดการทำงานทันที
-        if (currentState == CombatState.GameOver) return;
-        // =========================================================
-
-        turnQueue = turnQueue.OrderBy(x => x.CurrentAV).ToList();
-
-        float avToSubtract = turnQueue[0].CurrentAV;
-        foreach (var node in turnQueue) { node.CurrentAV -= avToSubtract; }
-
-        if (turnOrderUI != null)
-        {
-            List<PredictedTurn> predictions = PredictNextTurns(6);
-            turnOrderUI.UpdateUI(predictions);
-        }
-
-        if (turnQueue == null || turnQueue.Count == 0) return;
-        TurnNode activeTurn = turnQueue[0];
-
-        if (!activeTurn.IsEnemy)
-        {
-            currentState = CombatState.PlayerTurn;
-            player.StartTurn(activeTurn.WeaponRef);
-        }
-        else
-        {
-            currentState = CombatState.EnemyTurn;
-
-            if (WeaponUIManager.Instance != null)
-            {
-                WeaponUIManager.Instance.UpdateWeaponUI(player.inventoryWeapons, player.ActiveWeapon);
-            }
-
-            if (TurnAnnouncementUI.Instance != null)
-            {
-                // ใช้สีแดงหรือสีส้มให้ดูอันตราย
-                string warningMsg = $"<color=#FF5555>{activeTurn.Name}</color>\nIs Attacking!";
-
-                TurnAnnouncementUI.Instance.AnnounceTurn(warningMsg, () =>
-                {
-                    // โค้ดส่วนนี้จะทำงาน "หลังจาก" ป้ายประกาศเฟดหายไปแล้วเท่านั้น
-                    activeTurn.EnemyRef.StartTurn();
-                });
-            }
-            else
-            {
-                activeTurn.EnemyRef.StartTurn();
-            }
-        }
-    }
-
-    private List<PredictedTurn> PredictNextTurns(int amountToPredict)
-    {
-        List<PredictedTurn> results = new List<PredictedTurn>();
-        List<SimNode> simQueue = new List<SimNode>();
-
-        foreach (var node in turnQueue)
-        {
-            simQueue.Add(new SimNode
-            {
-                ActorID = node.ActorID,
-                Name = node.Name,
-                IsEnemy = node.IsEnemy,
-                Speed = node.Speed,
-                CurrentAV = node.CurrentAV
-            });
-        }
-
-        float totalTimePassed = 0f;
-
-        Dictionary<string, int> occurrenceCounts = new Dictionary<string, int>();
-
-        for (int i = 0; i < amountToPredict; i++)
-        {
-            simQueue = simQueue.OrderBy(x => x.CurrentAV).ToList();
-            SimNode nextActor = simQueue[0];
-
-            float timePassed = nextActor.CurrentAV;
-            totalTimePassed += timePassed;
-
-            if (!occurrenceCounts.ContainsKey(nextActor.ActorID)) occurrenceCounts[nextActor.ActorID] = 0;
-            occurrenceCounts[nextActor.ActorID]++;
-            string uniqueTurnID = nextActor.ActorID + "_" + occurrenceCounts[nextActor.ActorID];
-
-            results.Add(new PredictedTurn
-            {
-                UniqueID = uniqueTurnID,
-                Name = nextActor.Name,
-                IsEnemy = nextActor.IsEnemy,
-                SimulatedAV = totalTimePassed
-            });
-
-            foreach (var node in simQueue)
-            {
-                node.CurrentAV -= timePassed;
-            }
-
-            nextActor.CurrentAV = 10000f / nextActor.Speed;
-        }
-
-        return results;
+        isTransitioningWave = false;
+        BuildTurnQueue();
     }
 
     /// <summary>
@@ -495,47 +173,20 @@ public class CombatManager : MonoBehaviour
 
         foreach (var minionPrefab in minionPrefabs)
         {
-            // หาจุดเกิดที่ว่างอยู่ (ใช้ enemySpawnPoints ที่เหลือ หรือจุดใกล้เคียง)
             Transform spawnPoint = GetAvailableSpawnPoint();
-            if (spawnPoint != null)
-            {
-                GameObject minionObj = Instantiate(minionPrefab, spawnPoint.position, spawnPoint.rotation);
-                EnemyController minionController = minionObj.GetComponent<EnemyController>();
+            if (spawnPoint == null) continue;
 
-                if (minionController != null)
-                {
-                    // 1. เพิ่มเข้าลิสต์ศัตรูหลักในฉาก
-                    enemies.Add(minionController);
+            EnemyController minion = SpawnEnemy(minionPrefab, spawnPoint);
+            if (minion == null) continue;
 
-                    // 2. สร้าง TurnNode ใหม่ให้กับลูกน้องที่เพิ่งเกิด
-                    TurnNode minionNode = new TurnNode();
-                    minionNode.ActorID = "E_" + minionController.GetInstanceID();
-                    minionNode.Name = minionController.enemyName;
-                    minionNode.Speed = minionController.baseSpeed;
-                    minionNode.IsEnemy = true;
-                    minionNode.EnemyRef = minionController;
-
-                    // ให้ลูกน้องมีค่า AV เริ่มต้นเท่ากับคนอื่นๆ เพื่อให้แทรกเข้าคิวได้สมูท
-                    minionNode.CurrentAV = 10000f / minionController.baseSpeed;
-
-                    // 3. ยัดลงไปในคิวเทิร์น (Turn Queue)
-                    turnQueue.Add(minionNode);
-                    spawnedCount++;
-                }
-            }
+            turnQueue.Add(CreateEnemyNode(minion));
+            spawnedCount++;
         }
 
         Debug.Log($"<color=magenta>✨ Successfully summoned {spawnedCount} minions into the battle!</color>");
 
-        // 4. จัดเรียงลำดับคิวใหม่ทั้งหมดตาม AV (Order by AV)
         turnQueue = turnQueue.OrderBy(x => x.CurrentAV).ToList();
-
-        // 5. อัปเดต Turn Order UI ทันทีเพื่อให้ผู้เล่นเห็นลูกน้องโผล่บน Timeline
-        if (turnOrderUI != null)
-        {
-            List<PredictedTurn> predictions = PredictNextTurns(6);
-            turnOrderUI.UpdateUI(predictions);
-        }
+        RefreshTurnOrderUI();
     }
 
     /// <summary>
@@ -545,22 +196,283 @@ public class CombatManager : MonoBehaviour
     {
         if (enemySpawnPoints == null || enemySpawnPoints.Count == 0) return null;
 
-        // ค้นหาจุดเกิดที่ไม่มีศัตรูยืนทับอยู่ (เช็กคร่าวๆ จากตำแหน่ง)
         foreach (var sp in enemySpawnPoints)
         {
-            bool isOccupied = false;
-            foreach (var enemy in enemies)
-            {
-                if (enemy != null && Vector3.Distance(enemy.transform.position, sp.position) < 1.0f)
-                {
-                    isOccupied = true;
-                    break;
-                }
-            }
+            bool isOccupied = enemies.Any(enemy => enemy != null && Vector3.Distance(enemy.transform.position, sp.position) < 1.0f);
             if (!isOccupied) return sp;
         }
 
-        // ถ้าเต็มหมดแล้ว ให้คืนค่าจุดแรกสุดสำรองไปก่อน
         return enemySpawnPoints[Random.Range(0, enemySpawnPoints.Count)];
+    }
+
+    // ==========================================
+    // Turn Queue
+    // ==========================================
+    private static float InitialAV(float speed) => ActionValueBase / Mathf.Max(speed, 1f);
+
+    private TurnNode CreateWeaponNode(WeaponData weapon)
+    {
+        float speed = weapon.GetCurrentSpeed();
+        return new TurnNode
+        {
+            ActorID = "W_" + weapon.GetInstanceID(),
+            Name = weapon.weaponName,
+            Speed = speed,
+            IsEnemy = false,
+            CurrentAV = InitialAV(speed),
+            WeaponRef = weapon
+        };
+    }
+
+    private TurnNode CreateEnemyNode(EnemyController enemy)
+    {
+        return new TurnNode
+        {
+            ActorID = "E_" + enemy.GetInstanceID(),
+            Name = enemy.enemyName,
+            Speed = enemy.baseSpeed,
+            IsEnemy = true,
+            CurrentAV = InitialAV(enemy.baseSpeed),
+            EnemyRef = enemy
+        };
+    }
+
+    // ล้างคิวแล้วสร้างใหม่จากอาวุธที่ยังไม่พัง + ศัตรูทั้งหมดในฉาก (ใช้ตอนเริ่มและตอนขึ้น Wave ใหม่)
+    private void BuildTurnQueue()
+    {
+        turnQueue.Clear();
+
+        foreach (var weapon in player.inventoryWeapons)
+        {
+            if (weapon.currentDurability > 0) turnQueue.Add(CreateWeaponNode(weapon));
+        }
+
+        foreach (var enemy in enemies)
+        {
+            turnQueue.Add(CreateEnemyNode(enemy));
+        }
+
+        currentState = CombatState.CalculateTurn;
+        NextTurn();
+    }
+
+    public void EndCurrentTurn()
+    {
+        if (IsBattleOver) return;
+
+        if (turnQueue.Count > 0)
+        {
+            // รีเซ็ต AV ของคนที่เพิ่งเล่นจบ กลับไปต่อท้ายคิว
+            turnQueue[0].CurrentAV = InitialAV(turnQueue[0].Speed);
+        }
+
+        currentState = CombatState.CalculateTurn;
+        NextTurn();
+    }
+
+    public void NextTurn()
+    {
+        if (isTransitioningWave || IsBattleOver) return;
+
+        var brokenWeapons = turnQueue
+            .Where(node => !node.IsEnemy && node.WeaponRef != null && node.WeaponRef.currentDurability <= 0)
+            .Select(node => node.WeaponRef)
+            .ToList();
+
+        foreach (var weapon in brokenWeapons)
+        {
+            RemoveWeapon(weapon);
+        }
+
+        if (IsBattleOver || turnQueue.Count == 0) return;
+
+        turnQueue = turnQueue.OrderBy(x => x.CurrentAV).ToList();
+
+        float avToSubtract = turnQueue[0].CurrentAV;
+        foreach (var node in turnQueue) { node.CurrentAV -= avToSubtract; }
+
+        RefreshTurnOrderUI();
+
+        TurnNode activeTurn = turnQueue[0];
+
+        if (!activeTurn.IsEnemy)
+        {
+            currentState = CombatState.PlayerTurn;
+            player.StartTurn(activeTurn.WeaponRef);
+            return;
+        }
+
+        currentState = CombatState.EnemyTurn;
+
+        if (WeaponUIManager.Instance != null)
+        {
+            WeaponUIManager.Instance.UpdateWeaponUI(player.inventoryWeapons, player.ActiveWeapon);
+        }
+
+        string warningMsg = $"<color=#FF5555>{activeTurn.Name}</color>\nIs Attacking!";
+        Announce(warningMsg, () => activeTurn.EnemyRef.StartTurn());
+    }
+
+    public void RemoveEnemy(EnemyController deadEnemy)
+    {
+        enemies.Remove(deadEnemy);
+        turnQueue.RemoveAll(node => node.IsEnemy && node.EnemyRef == deadEnemy);
+        RefreshTurnOrderUI();
+    }
+
+    public void RemoveWeapon(WeaponData brokenWeapon)
+    {
+        Debug.Log($"<color=red>Timeline: ถอด {brokenWeapon.weaponName} ออกจากคิว!</color>");
+
+        turnQueue.RemoveAll(node => !node.IsEnemy && node.WeaponRef == brokenWeapon);
+        RefreshTurnOrderUI();
+
+        if (!HasUsableWeapon())
+        {
+            EndBattle(BattleOutcome.Defeat);
+            return;
+        }
+
+        // ถ้าอาวุธที่พังคือชิ้นที่ผู้เล่นกำลังถืออยู่ ให้บังคับสลับอาวุธ
+        if (player != null && player.ActiveWeapon == brokenWeapon)
+        {
+            player.Command_SwitchWeapon();
+        }
+    }
+
+    private bool HasUsableWeapon()
+    {
+        return player.inventoryWeapons.Any(w => w.currentDurability > 0);
+    }
+
+    // ==========================================
+    // Battle End
+    // ==========================================
+    public void CheckBattleEnd()
+    {
+        if (IsBattleOver) return;
+
+        if (!HasUsableWeapon())
+        {
+            EndBattle(BattleOutcome.Defeat);
+            return;
+        }
+
+        if (enemies.Count > 0) return;
+
+        if (currentWaveIndex < enemyWaves.Count)
+        {
+            isTransitioningWave = true;
+            Debug.Log($"<color=yellow>Wave {currentWaveIndex + 1} Cleared! Spawning Next Wave...</color>");
+
+            Announce($"<color=#FFDD55>{enemyWaves[currentWaveIndex].waveName}</color>\nApproaching!", SpawnNextWave);
+        }
+        else
+        {
+            EndBattle(BattleOutcome.Victory);
+        }
+    }
+
+    private void EndBattle(BattleOutcome outcome)
+    {
+        if (IsBattleOver) return;
+
+        currentState = outcome == BattleOutcome.Victory ? CombatState.Victory : CombatState.GameOver;
+
+        if (outcome == BattleOutcome.Victory)
+        {
+            Debug.Log("<color=green>BATTLE WON! All Waves Cleared.</color>");
+            if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowVictory();
+        }
+        else
+        {
+            Debug.Log("<color=red>GAME OVER! All weapons broken.</color>");
+            if (TempGameFlowUI.Instance != null) TempGameFlowUI.Instance.ShowGameOver();
+        }
+
+        OnBattleEnded?.Invoke(outcome);
+
+        if (BattleSession.HasRequest)
+        {
+            StartCoroutine(ReturnAfterDelay(outcome));
+        }
+        else
+        {
+            BattleSession.Finish(outcome);
+        }
+    }
+
+    private IEnumerator ReturnAfterDelay(BattleOutcome outcome)
+    {
+        yield return new WaitForSecondsRealtime(returnDelay);
+        BattleSession.Finish(outcome);
+    }
+
+    // ==========================================
+    // UI Helpers
+    // ==========================================
+    private void Announce(string message, System.Action onComplete)
+    {
+        if (TurnAnnouncementUI.Instance != null)
+        {
+            TurnAnnouncementUI.Instance.AnnounceTurn(message, onComplete);
+        }
+        else
+        {
+            onComplete?.Invoke();
+        }
+    }
+
+    public void RefreshTurnOrderUI()
+    {
+        if (turnOrderUI == null) return;
+        turnOrderUI.UpdateUI(PredictNextTurns(TurnsToPredict));
+    }
+
+    private List<PredictedTurn> PredictNextTurns(int amountToPredict)
+    {
+        List<PredictedTurn> results = new List<PredictedTurn>();
+        if (turnQueue.Count == 0) return results;
+
+        List<SimNode> simQueue = turnQueue.Select(node => new SimNode
+        {
+            ActorID = node.ActorID,
+            Name = node.Name,
+            IsEnemy = node.IsEnemy,
+            Speed = node.Speed,
+            CurrentAV = node.CurrentAV
+        }).ToList();
+
+        float totalTimePassed = 0f;
+        Dictionary<string, int> occurrenceCounts = new Dictionary<string, int>();
+
+        for (int i = 0; i < amountToPredict; i++)
+        {
+            simQueue = simQueue.OrderBy(x => x.CurrentAV).ToList();
+            SimNode nextActor = simQueue[0];
+
+            float timePassed = nextActor.CurrentAV;
+            totalTimePassed += timePassed;
+
+            occurrenceCounts.TryGetValue(nextActor.ActorID, out int count);
+            occurrenceCounts[nextActor.ActorID] = ++count;
+
+            results.Add(new PredictedTurn
+            {
+                UniqueID = nextActor.ActorID + "_" + count,
+                Name = nextActor.Name,
+                IsEnemy = nextActor.IsEnemy,
+                SimulatedAV = totalTimePassed
+            });
+
+            foreach (var node in simQueue)
+            {
+                node.CurrentAV -= timePassed;
+            }
+
+            nextActor.CurrentAV = InitialAV(nextActor.Speed);
+        }
+
+        return results;
     }
 }

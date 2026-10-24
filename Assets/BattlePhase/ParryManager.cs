@@ -47,6 +47,9 @@ public class ParryManager : MonoBehaviour
         // ลูปตามจำนวนการฟัน (Strikes) ในชุดคอมโบ
         for (int i = 0; i < pattern.strikes.Count; i++)
         {
+            // อาวุธพังหมดกลางคอมโบ = จบการต่อสู้แล้ว ไม่ต้องฟันต่อ
+            if (CombatManager.Instance.IsBattleOver) yield break;
+
             ParryStrike strike = pattern.strikes[i];
 
             // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ)
@@ -197,13 +200,8 @@ public class ParryManager : MonoBehaviour
             // แปะดีบัฟเพิ่มความเสียหายที่ศัตรูได้รับ (สมมติมีฟังก์ชัน ApplyVulnerabilityDebuff บน EnemyController)
             // attackingEnemy.ApplyVulnerabilityDebuff(1.25f, 2); // รับดาเมจเพิ่ม 25% เป็นเวลา 2 เทิร์น
 
-            // สุ่มหรือกำหนดธาตุใส่ Slot เวท
-
-            ElementType[] allElements = { ElementType.Fire, ElementType.Water, ElementType.Wind, ElementType.Earth };
-            ElementType randomElement = allElements[Random.Range(0, allElements.Length)];
-
-            // ส่งธาตุที่สุ่มได้เข้าไปเก็บใน Slot ของผู้เล่น
-            PlayerCombatController.Instance.AddElement(randomElement);
+            // สุ่มธาตุแล้วส่งเข้าไปเก็บใน Slot ของผู้เล่น
+            PlayerCombatController.Instance.AddElement(ElementTypeUtil.Random());
 
             Debug.Log("<color=cyan>Applied Vulnerability Debuff, Gained Elemental Slot</color>");
         }

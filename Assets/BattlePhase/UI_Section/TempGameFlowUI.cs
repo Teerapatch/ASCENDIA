@@ -14,12 +14,19 @@ public class TempGameFlowUI : MonoBehaviour
     {
         Instance = this;
 
-        // เริ่มเกมมา บังคับเปิดหน้า Start และปิดหน้าอื่นๆ
-        startPanel.SetActive(true);
         gameOverPanel.SetActive(false);
         victoryPanel.SetActive(false);
 
-        // --- หยุดเวลา (Pause) ไว้ก่อน จนกว่าจะกดเริ่ม ---
+        // ถูกเรียกมาจากฉากอื่นผ่าน BattleSession -> เข้าสู้ทันที ไม่ต้องรอกด Start
+        if (BattleSession.HasRequest)
+        {
+            startPanel.SetActive(false);
+            Time.timeScale = 1f;
+            return;
+        }
+
+        // เปิดฉากนี้ตรงๆ (Standalone) บังคับเปิดหน้า Start แล้วหยุดเวลาไว้ก่อน จนกว่าจะกดเริ่ม
+        startPanel.SetActive(true);
         Time.timeScale = 0f;
     }
 

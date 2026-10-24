@@ -14,7 +14,7 @@ public class MightyCleaveSkill : WeaponSkill
     {
         if (player == null || player.ActiveWeapon == null || CombatManager.Instance == null) return;
 
-        float baseDmg = player.ActiveWeapon.baseDamage;
+        float baseDmg = player.ActiveWeapon.GetCurrentDamage();
         int finalDamage = Mathf.RoundToInt(baseDmg * damageMultiplier);
         int finalPosture = Mathf.RoundToInt(baseDmg * 0.5f * player.ActiveWeapon.postureDamageMultiplier * postureDamageMultiplier);
 

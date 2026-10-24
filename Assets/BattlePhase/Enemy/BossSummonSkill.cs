@@ -40,30 +40,28 @@ public class BossSummonBehavior : MonoBehaviour
             hasSummoned = true;
             Debug.Log($"<color=red>👑 BOSS SUMMON TRIGGERED! Health is at {currentHpPercent * 100}%</color>");
 
-            // 1. แสดงป้ายประกาศ (ถ้ามีระบบ TurnAnnouncementUI)
+            // 1. แสดงป้ายประกาศ (ถ้ามีระบบ TurnAnnouncementUI) แล้วค่อยเสก + จบเทิร์น
             if (TurnAnnouncementUI.Instance != null)
             {
-                TurnAnnouncementUI.Instance.AnnounceTurn($"<color=#FF4444>{enemyController.enemyName}</color>\n{summonMessage}", () =>
-                {
-                    // 2. สั่งให้ CombatManager เสกลูกน้องและอัปเดต Timeline
-                    if (CombatManager.Instance != null)
-                    {
-                        CombatManager.Instance.SpawnMinions(minionsToSummon);
-                    }
-                });
+                TurnAnnouncementUI.Instance.AnnounceTurn($"<color=#FF4444>{enemyController.enemyName}</color>\n{summonMessage}", SummonAndEndTurn);
             }
             else
             {
-                // กรณีไม่มีป้ายประกาศ ให้เสกและจบเทิร์นทันที
-                if (CombatManager.Instance != null)
-                {
-                    CombatManager.Instance.SpawnMinions(minionsToSummon);
-                }
+                SummonAndEndTurn();
             }
 
             return true; // บอกว่าเทิร์นนี้ใช้เป็นการเรียกพรรคพวกแล้ว
         }
 
         return false; // เลือดยังไม่ถึงเกณฑ์ ให้สู้ต่อตามปกติ
+    }
+
+    // 2. สั่งให้ CombatManager เสกลูกน้อง อัปเดต Timeline แล้วจบเทิร์นของบอส
+    private void SummonAndEndTurn()
+    {
+        if (CombatManager.Instance == null) return;
+
+        CombatManager.Instance.SpawnMinions(minionsToSummon);
+        CombatManager.Instance.EndCurrentTurn();
     }
 }
