@@ -71,7 +71,11 @@ public class NodeSelectionManager : MonoBehaviour
         }
 
         if (mapUIPanel != null) mapUIPanel.SetActive(false);
+    }
 
+    // ใช้ OnEnable แทน Start เพราะในโหมด Additive ฉากนี้ไม่ได้ถูกโหลดใหม่ แค่ถูกปิดแล้วเปิดกลับ
+    private void OnEnable()
+    {
         if (BattleSession.TryConsumeResult(out BattleResult battleResult))
         {
             StartCoroutine(ResumeAfterBattle(battleResult));
@@ -427,14 +431,24 @@ public class NodeSelectionManager : MonoBehaviour
         }
     }
 
-    // ถูกเรียกเมื่อโหลดกลับมาจากฉากต่อสู้ (ฉากนี้ถูกโหลดใหม่ทั้งหมด ข้อมูลที่เหลือรอดมีแค่ใน PlayerData)
+    // ถูกเรียกเมื่อกลับมาจากฉากต่อสู้
+    //  - โหมด Single: ฉากนี้ถูกโหลดใหม่ทั้งหมด RoomManager.Start() สร้างห้องของชั้นนี้ให้แล้ว
+    //  - โหมด Additive: ฉากนี้แค่ถูกปิดไว้ ต้องสร้างห้องของชั้นถัดไปเอง (เหมือนเลือกโหนด Normal)
     private IEnumerator ResumeAfterBattle(BattleResult result)
     {
         // รอ 1 เฟรมให้ Start() ของกล้อง/ผู้เล่น/RoomManager ทำงานเสร็จก่อน แล้วค่อยตั้งสถานะทับ
         yield return null;
 
+        if (result.callerSceneKept && RoomManager.Instance != null && stateManager != null)
+        {
+            RoomManager.Instance.LoadNewRoom(PathNode.RoomType.Normal, stateManager.transform);
+        }
+
         ApplyBattleResult(result);
         ApplyFloorStartState();
+
+        // ก่อนเข้าฉากต่อสู้จอถูก Fade เป็นสีดำไว้ (โหมด Additive ยังค้างอยู่) ค่อยๆ เปิดกลับ
+        yield return StartCoroutine(FadeScreen(0f, 1f));
     }
 
     private void ApplyBattleResult(BattleResult result)

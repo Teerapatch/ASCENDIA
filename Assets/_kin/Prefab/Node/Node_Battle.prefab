@@ -310,6 +310,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PathNode
   roomType: 1
   sceneToLoad: TurnBase_Phase
+  encounterPool:
+  - {fileID: 11400000, guid: 92f173275d9b470ebeff9c12163db2c1, type: 2}
+  - {fileID: 11400000, guid: 9a02c0579db442bd8e25e74012518d97, type: 2}
   oreRewardItem: {fileID: 0}
   oreAmount: 20
   staminaRestore: 50
