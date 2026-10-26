@@ -377,7 +377,8 @@ public class NodeSelectionManager : MonoBehaviour
             {
                 encounter = encounter,
                 weapons = GameManager.Instance != null ? GameManager.Instance.playerData.GetEquippedWeapons() : null,
-                battleSceneName = battleScene
+                battleSceneName = battleScene,
+                defeatPenaltyText = "-1 Piton" // ต้องตรงกับกติกาใน ApplyBattleResult
             });
         }
         else if (nextRoomType == PathNode.RoomType.Camp && !string.IsNullOrEmpty(nextScene))
@@ -455,13 +456,14 @@ public class NodeSelectionManager : MonoBehaviour
     {
         if (result.outcome == BattleOutcome.Victory)
         {
-            EncounterData enc = result.encounter;
-            if (enc != null && enc.rewardItem != null && enc.rewardAmount > 0 && InventoryManager.Instance != null)
+            if (result.encounter == null || InventoryManager.Instance == null) return;
+
+            foreach (ItemReward reward in result.encounter.GetValidRewards())
             {
-                bool added = InventoryManager.Instance.AddItem(enc.rewardItem, enc.rewardAmount);
+                bool added = InventoryManager.Instance.AddItem(reward.item, reward.amount);
                 Debug.Log(added
-                    ? $"🏆 ชนะการต่อสู้! ได้ {enc.rewardItem.itemName} x{enc.rewardAmount}"
-                    : "⚠️ ชนะการต่อสู้ แต่กระเป๋าเต็มหรือหนักเกินไป เก็บของรางวัลไม่ได้!");
+                    ? $"🏆 ชนะการต่อสู้! ได้ {reward.item.itemName} x{reward.amount}"
+                    : $"⚠️ ชนะการต่อสู้ แต่กระเป๋าเต็มหรือหนักเกินไป เก็บ {reward.item.itemName} x{reward.amount} ไม่ได้!");
             }
             return;
         }

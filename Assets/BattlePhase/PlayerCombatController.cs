@@ -490,7 +490,10 @@ public class PlayerCombatController : MonoBehaviour
     {
         isAiming = false;
         if (crosshairUI != null) crosshairUI.SetActive(false);
-        if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
+
+        // ยิงตัวสุดท้ายตายแล้ว ไม่ต้องเปิดเมนูกลับมา (ช่วงหน่วงก่อนโชว์หน้าสรุปผล)
+        bool battleOver = CombatManager.Instance != null && CombatManager.Instance.IsBattleOver;
+        if (!battleOver && PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
 
         if (ActiveWeapon != null && ActiveWeapon.weaponType == WeaponType.Spell)
         {

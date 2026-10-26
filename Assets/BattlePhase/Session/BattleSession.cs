@@ -10,6 +10,7 @@ public class BattleRequest
     public List<WeaponData> weapons;     // null/ว่าง = ใช้ baseInventoryWeapons ของ PlayerCombatController
     public string battleSceneName = BattleSession.DefaultBattleScene;
     public string returnSceneName;       // ว่าง = กลับไปฉากที่เรียก Begin() (ใช้เฉพาะโหมด Single)
+    public string defeatPenaltyText;     // ข้อความบทลงโทษตอนแพ้ที่โชว์บนหน้าสรุปผล (ฉากที่เรียกเป็นคนกำหนดกติกา)
 }
 
 public class BattleResult

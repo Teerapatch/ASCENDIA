@@ -79,12 +79,19 @@ public class PlaytestLoopDirector : MonoBehaviour
         Debug.Log($"<color=cyan>[Playtest] เริ่ม Loop: {data.maxFloorBeforeCamp} ชั้นก่อนถึง Camp</color>");
     }
 
-    private void HandleBattleEnded(BattleOutcome outcome)
+    private void HandleBattleEnded(BattleSummary summary)
     {
-        if (outcome == BattleOutcome.Victory) battlesWon++;
-        else battlesLost++;
-
-        lastEvent = outcome == BattleOutcome.Victory ? "ชนะการต่อสู้" : "แพ้การต่อสู้ (-1 Piton)";
+        if (summary.outcome == BattleOutcome.Victory)
+        {
+            battlesWon++;
+            List<string> gained = summary.rewards.ConvertAll(r => $"{r.item.itemName} x{r.amount}");
+            lastEvent = gained.Count > 0 ? "Won: " + string.Join(", ", gained) : "Won (no rewards)";
+        }
+        else
+        {
+            battlesLost++;
+            lastEvent = "Lost (-1 Piton)";
+        }
     }
 
     private static PlayerData GetPlayerData()
@@ -104,7 +111,8 @@ public class PlaytestLoopDirector : MonoBehaviour
         BattleSession.Begin(new BattleRequest
         {
             encounter = debugEncounter,
-            weapons = data != null ? data.GetEquippedWeapons() : null
+            weapons = data != null ? data.GetEquippedWeapons() : null,
+            defeatPenaltyText = "-1 Piton"
         });
     }
 

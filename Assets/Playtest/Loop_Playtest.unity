@@ -165,7 +165,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlaytestLoopDirector
   climbSceneName: ClimbScene
   floorsBeforeCamp: 4
-  startingLoadout: []
+  startingLoadout:
+  - {fileID: 11400000, guid: b157a3436ed34094da748b980763a7e0, type: 2}
+  - {fileID: 11400000, guid: c5e169c3b683e4e45b20d307a95a2f82, type: 2}
   showHud: 1
   debugEncounter: {fileID: 11400000, guid: 9a02c0579db442bd8e25e74012518d97, type: 2}
 --- !u!1660057539 &9223372036854775807

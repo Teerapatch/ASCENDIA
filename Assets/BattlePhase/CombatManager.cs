@@ -8,8 +8,8 @@ public class CombatManager : MonoBehaviour
 {
     public static CombatManager Instance;
 
-    // แจ้งเตือนทุกระบบที่สนใจ (UI จบเกม, BattleSession) ว่าการต่อสู้จบแล้ว
-    public static event System.Action<BattleOutcome> OnBattleEnded;
+    // แจ้งเตือนทุกระบบที่สนใจ (หน้าสรุปผล, Playtest HUD) ว่าการต่อสู้จบแล้ว พร้อมสรุปผล
+    public static event System.Action<BattleSummary> OnBattleEnded;
 
     // AV (Action Value) = ActionGauge / Speed  ใคร AV น้อยสุดได้เล่นก่อน
     private const float ActionGauge = 10000f;
@@ -24,6 +24,10 @@ public class CombatManager : MonoBehaviour
     public int TurnNumber { get; private set; }
 
     public EncounterData CurrentEncounter { get; private set; }
+
+    // สถิติสำหรับหน้าสรุปผล
+    public int EnemiesDefeated { get; private set; }
+    public BattleSummary LastSummary { get; private set; }
 
     [Header("Enemy Spawning (ใช้เมื่อเปิดฉากนี้ตรงๆ ไม่ได้ถูกเรียกผ่าน BattleSession)")]
     public List<GameObject> enemyPrefabsToSpawn;
@@ -162,7 +166,27 @@ public class CombatManager : MonoBehaviour
 
         if (SpellOrbManager.Instance != null) SpellOrbManager.Instance.ClearOrbs();
 
-        OnBattleEnded?.Invoke(outcome);
+        LastSummary = BuildSummary(outcome);
+        OnBattleEnded?.Invoke(LastSummary);
+    }
+
+    private BattleSummary BuildSummary(BattleOutcome outcome)
+    {
+        bool won = outcome == BattleOutcome.Victory;
+
+        return new BattleSummary
+        {
+            outcome = outcome,
+            encounter = CurrentEncounter,
+            rewards = won && CurrentEncounter != null ? CurrentEncounter.GetValidRewards() : new List<ItemReward>(),
+            enemiesDefeated = EnemiesDefeated,
+            // currentWaveIndex = จำนวน Wave ที่เสกไปแล้ว ถ้าแพ้ Wave ที่กำลังสู้อยู่ยังไม่นับว่าเคลียร์
+            wavesCleared = won ? activeWaves.Count : Mathf.Max(0, currentWaveIndex - 1),
+            totalWaves = activeWaves.Count,
+            turnsTaken = TurnNumber,
+            weaponsBroken = player.inventoryWeapons.Count(w => w.currentDurability <= 0),
+            totalWeapons = player.inventoryWeapons.Count
+        };
     }
 
     private void SpawnNextWave()
@@ -334,7 +358,7 @@ public class CombatManager : MonoBehaviour
 
     public void RemoveEnemy(EnemyController deadEnemy)
     {
-        enemies.Remove(deadEnemy);
+        if (enemies.Remove(deadEnemy)) EnemiesDefeated++;
         turnQueue.RemoveAll(node => node.IsEnemy && node.EnemyRef == deadEnemy);
         RefreshTurnOrderUI();
     }
