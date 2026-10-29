@@ -5,7 +5,8 @@ using UnityEngine.InputSystem; // 🌟 1. เรียกใช้งาน Name
 public class PlayerWalkController : MonoBehaviour
 {
     [Header("Settings")]
-    public float walkSpeed = 5f;
+    public float walkSpeed = 1.4f;
+    public float runSpeed = 3.5f;
     public float wallDetectDistance = 0.8f;
 
     [Header("Input Configuration")]
@@ -43,11 +44,12 @@ public class PlayerWalkController : MonoBehaviour
     {
         // 🌟 4. อ่านค่าแบบ Vector2 (รองรับทั้งปุ่ม WASD, ลูกศร และก้าน Analog ของจอยสติ๊กพร้อมกัน)
         Vector2 inputVal = moveAction != null ? moveAction.action.ReadValue<Vector2>() : Vector2.zero;
-        Vector3 movement = new Vector3(inputVal.x, 0, inputVal.y).normalized;
+        Vector3 movement = Vector3.ClampMagnitude(new Vector3(inputVal.x, 0, inputVal.y), 1f);
 
         if (movement.magnitude > 0.1f)
         {
-            transform.Translate(movement * walkSpeed * Time.deltaTime, Space.World);
+            bool running = Keyboard.current != null && (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed);
+            transform.Translate(movement * (running ? runSpeed : walkSpeed) * Time.deltaTime, Space.World);
             transform.forward = Vector3.Slerp(transform.forward, movement, Time.deltaTime * 10f);
         }
 

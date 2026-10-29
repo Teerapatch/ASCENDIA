@@ -1,0 +1,1 @@
+Installed on active ClimbScene. Scene remains unsaved to preserve existing user edits. Speed thresholds: 0, 1.4, 3.5. Walk/run use Idle placeholders.
