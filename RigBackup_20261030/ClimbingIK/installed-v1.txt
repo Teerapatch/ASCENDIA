@@ -1,0 +1,2 @@
+Climbing clip=Climbing Up Wall, Humanoid=True, IK Pass enabled; original locomotion retained.
+Climbing IK attached. Vertical speed=.65, horizontal=.45. Save scene. Prototype: no ledge mantle or automatic dismount.

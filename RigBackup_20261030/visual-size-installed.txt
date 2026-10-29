@@ -1,0 +1,1 @@
+Installed PlayerVisualSize on Player. Scale remains 1. Scene must be saved.

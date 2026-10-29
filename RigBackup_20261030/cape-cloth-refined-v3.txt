@@ -1,0 +1,1 @@
+particles=216, pinned=51, free=165, upper freedom=0.782, capsules=8, sphere pairs=2

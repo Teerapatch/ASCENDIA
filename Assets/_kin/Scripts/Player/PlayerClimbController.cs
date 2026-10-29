@@ -17,6 +17,7 @@ public class PlayerClimbController : MonoBehaviour
     public Transform environmentContainer; 
 
     private PlayerStateManager stateManager;
+    private ClimbingContactIK contactIK;
     
     // 🌟 ตัวแปรเก็บค่าตัวคูณความเร็วแบบเรียลไทม์
     private float currentSpeedMultiplier = 1f;
@@ -24,6 +25,7 @@ public class PlayerClimbController : MonoBehaviour
     private void Awake()
     {
         stateManager = GetComponent<PlayerStateManager>();
+        contactIK = GetComponentInChildren<ClimbingContactIK>();
     }
 
     private void Update()
@@ -36,6 +38,7 @@ public class PlayerClimbController : MonoBehaviour
 
         if (stateManager.currentState != PlayerStateManager.State.Climbing) return;
 
+        if (contactIK != null && !contactIK.HasWall) return;
         HandleClimbing();
     }
 
