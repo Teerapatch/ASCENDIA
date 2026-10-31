@@ -112,6 +112,7 @@ public class PlaytestLoopDirector : MonoBehaviour
         {
             encounter = debugEncounter,
             weapons = data != null ? data.GetEquippedWeapons() : null,
+            equippedSkills = data != null ? data.GetEquippedSkillMap() : null,
             defeatPenaltyText = "-1 Piton"
         });
     }

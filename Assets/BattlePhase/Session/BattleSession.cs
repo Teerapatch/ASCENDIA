@@ -11,6 +11,9 @@ public class BattleRequest
     public string battleSceneName = BattleSession.DefaultBattleScene;
     public string returnSceneName;       // ว่าง = กลับไปฉากที่เรียก Begin() (ใช้เฉพาะโหมด Single)
     public string defeatPenaltyText;     // ข้อความบทลงโทษตอนแพ้ที่โชว์บนหน้าสรุปผล (ฉากที่เรียกเป็นคนกำหนดกติกา)
+
+    // สกิลที่เลือกพกของอาวุธแต่ละชิ้น (key = ไฟล์อาวุธต้นฉบับ) null/ไม่มี key = ใช้ 3 สกิลแรกของอาวุธ
+    public Dictionary<WeaponData, List<WeaponSkill>> equippedSkills;
 }
 
 public class BattleResult

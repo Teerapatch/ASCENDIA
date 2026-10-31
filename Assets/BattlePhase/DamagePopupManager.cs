@@ -24,4 +24,12 @@ public class DamagePopupManager : MonoBehaviour
 
         popup.Setup(damageAmount, isCritical, color);
     }
+
+    public void CreateTextPopup(Vector3 position, string text, Color color)
+    {
+        if (damagePopupPrefab == null) return;
+
+        GameObject popupObj = Instantiate(damagePopupPrefab, position, Quaternion.identity);
+        popupObj.GetComponent<DamagePopup>().SetupText(text, false, color);
+    }
 }

@@ -57,6 +57,19 @@ public class ParryManager : MonoBehaviour
             // ผู้โจมตีตายจากการสวนกลับ หรือการต่อสู้จบไปแล้ว -> หยุดคอมโบที่เหลือ
             if (!IsSequenceStillValid(turnNumber)) break;
 
+            // Evasion (Vanish Blade): หลบฮิตนี้อัตโนมัติ นับเป็น Parry สำเร็จ
+            PlayerCombatController evader = PlayerCombatController.Instance;
+            if (evader != null && evader.Statuses.ConsumeCharge(CombatStatusType.Evasion))
+            {
+                Debug.Log("<color=cyan>EVASION! หลบการโจมตีอัตโนมัติ (นับเป็น Parry)</color>");
+                evader.ShowPopup("EVADE", Color.cyan);
+                evader.UpdateAPUI();
+
+                currentPostureDamage = Mathf.RoundToInt(strike.postureDamageIfParried);
+                OnParrySuccess(attackingEnemy.transform.position, evader.transform.position);
+                continue;
+            }
+
             // 2. ตั้งค่าการป้องกันสำหรับฮิตนี้
             requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
             incomingDamage = Mathf.RoundToInt(strike.damageIfHit);

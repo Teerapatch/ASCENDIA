@@ -13,7 +13,13 @@ public class DamagePopup : MonoBehaviour
 
     public void Setup(int damageAmount, bool isCritical, Color color)
     {
-        textMesh.text = damageAmount.ToString();
+        SetupText(damageAmount.ToString(), isCritical, color);
+    }
+
+    // ข้อความลอย (เช่น "EXPOSED", "+2 AP", "EVADE")
+    public void SetupText(string text, bool isCritical, Color color)
+    {
+        textMesh.text = text;
         textColor = color;
         textMesh.color = textColor;
         disappearTimer = 1f; // ตัวเลขจะอยู่บนจอนาน 1 วินาที

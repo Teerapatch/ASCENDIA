@@ -67,7 +67,35 @@ public class EnemyUI : MonoBehaviour
             {
                 img.sprite = status.icon;
             }
+
+            // สถานะจากสกิลไม่มีรูป ใช้กล่องสีเข้ม + ตัวย่อ (เช่น EXP2 / SHT / SLW1)
+            if (!string.IsNullOrEmpty(status.label))
+            {
+                if (img != null && status.icon == null) img.color = new Color(0.15f, 0.05f, 0.25f, 0.85f);
+                AddStatusLabel(iconObj.transform, status.label);
+            }
         }
+    }
+
+    private static void AddStatusLabel(Transform iconTransform, string label)
+    {
+        GameObject labelObj = new GameObject("Label", typeof(RectTransform));
+        labelObj.transform.SetParent(iconTransform, false);
+
+        RectTransform rect = (RectTransform)labelObj.transform;
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+
+        TMPro.TextMeshProUGUI text = labelObj.AddComponent<TMPro.TextMeshProUGUI>();
+        text.text = label;
+        text.enableAutoSizing = true;
+        text.fontSizeMin = 1f;
+        text.fontSizeMax = 40f;
+        text.alignment = TMPro.TextAlignmentOptions.Center;
+        text.color = Color.white;
+        text.raycastTarget = false;
     }
 
     private void LateUpdate()

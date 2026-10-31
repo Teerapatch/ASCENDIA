@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 // ค่าตัวเลขของ enum ถูกเซฟลงในไฟล์ .asset ห้ามสลับลำดับหรือแทรกกลาง (เพิ่มต่อท้ายได้)
 public enum WeaponType
@@ -36,8 +37,22 @@ public class WeaponData : ScriptableObject
     [Header("Spell Specific Settings")]
     public int maxElementSlots = 5;
 
+    public const int MaxEquippedSkills = 3;
+
     [Header("Weapon Skills")]
-    public List<WeaponSkill> availableSkills;
+    [Tooltip("สกิลทั้งหมดของอาวุธนี้ (6 สกิล) ผู้เล่นเลือกพกเข้าฉากต่อสู้ได้สูงสุด 3 สกิลที่หน้า Skills ใน Camp")]
+    [FormerlySerializedAs("availableSkills")]
+    public List<WeaponSkill> skillPool = new List<WeaponSkill>();
+
+    // สกิลที่ใช้ได้จริงในฉากต่อสู้ (ตั้งค่าตอน CreateBattleInstance ไม่ถูกเซฟลงไฟล์)
+    [System.NonSerialized] public List<WeaponSkill> availableSkills = new List<WeaponSkill>();
+
+    // ค่าเริ่มต้นถ้าผู้เล่นยังไม่เคยเลือก = 3 สกิลแรกใน Pool
+    public List<WeaponSkill> GetDefaultSkills()
+    {
+        List<WeaponSkill> valid = skillPool.FindAll(s => s != null);
+        return valid.GetRange(0, Mathf.Min(MaxEquippedSkills, valid.Count));
+    }
 
     [Header("Crafting Base Cost (ราคาตั้งต้น)")]
     public int gemStoneCost;
@@ -86,9 +101,10 @@ public class WeaponData : ScriptableObject
     /// สร้างตัวก๊อปปี้สำหรับใช้ในฉากต่อสู้ (ค่าที่เปลี่ยนระหว่างสู้จะไม่ไปแก้ไฟล์ .asset จริง)
     /// สเตตัสจากเลเวลของ Forge จะถูกอบลงใน baseDamage / speed ของตัวก๊อปปี้เลย
     /// </summary>
-    public WeaponData CreateBattleInstance()
+    public WeaponData CreateBattleInstance(List<WeaponSkill> equippedSkills = null)
     {
         WeaponData instance = Instantiate(this);
+        instance.availableSkills = new List<WeaponSkill>(equippedSkills ?? GetDefaultSkills());
         instance.name = name;
         instance.baseDamage = GetCurrentDamage();
         instance.speed = Mathf.Max(1f, GetCurrentSpeed());

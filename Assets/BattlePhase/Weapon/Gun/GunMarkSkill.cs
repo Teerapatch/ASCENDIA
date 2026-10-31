@@ -16,8 +16,7 @@ public class GunMarkSkill : WeaponSkill
             Debug.Log("QTE Success on Target Lock!");
         }
 
-        int finalDamage = Mathf.RoundToInt(currentDamage);
-        target.TakeDamage(finalDamage);
+        player.DealDamage(target, currentDamage);
 
         // --- Mark ใส่เป้าหมาย ---
         target.ApplyGunMark();

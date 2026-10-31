@@ -45,6 +45,10 @@ public class CombatManager : MonoBehaviour
     public List<EnemyController> enemies;
     public TurnOrderUI turnOrderUI;
 
+    [Header("Debug")]
+    [Tooltip("โชว์ปุ่ม Win Battle (และปุ่มลัด F9) เฉพาะใน Editor / Development Build เพื่อเทสให้ไวขึ้น")]
+    public bool enableDebugWinButton = true;
+
     // 1. เพิ่ม Class สำหรับเก็บผลลัพธ์การคาดเดาเทิร์น
     public class PredictedTurn
     {
@@ -69,11 +73,14 @@ public class CombatManager : MonoBehaviour
     {
         public string ActorID;
         public string Name;
-        public float Speed;
+        public float BaseSpeed;
         public float CurrentAV;
         public bool IsEnemy;
         public EnemyController EnemyRef;
         public WeaponData WeaponRef;
+
+        // ศัตรูใช้ความเร็วจริงหลังคิด Slow ทุกครั้งที่คำนวณ AV
+        public float Speed => IsEnemy && EnemyRef != null ? EnemyRef.CurrentSpeed : BaseSpeed;
     }
 
     private List<TurnNode> turnQueue = new List<TurnNode>();
@@ -83,6 +90,11 @@ public class CombatManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
         Instance = this;
+
+        if (enableDebugWinButton && Debug.isDebugBuild && GetComponent<BattleDebugTools>() == null)
+        {
+            gameObject.AddComponent<BattleDebugTools>();
+        }
     }
 
     private void Start()
@@ -189,8 +201,31 @@ public class CombatManager : MonoBehaviour
         };
     }
 
+    /// <summary>
+    /// [Debug] ชนะทันที: ข้าม Wave ที่เหลือ แล้วฆ่าศัตรูทุกตัวผ่านเส้นทางปกติ
+    /// จึงได้หน้าสรุปผล/ของรางวัล/การกลับฉากปีน เหมือนชนะจริงทุกอย่าง
+    /// </summary>
+    public void DebugForceVictory()
+    {
+        if (IsBattleOver) return;
+
+        currentWaveIndex = activeWaves.Count;
+        isTransitioningWave = false;
+
+        foreach (EnemyController enemy in new List<EnemyController>(enemies))
+        {
+            if (enemy != null) enemy.Kill();
+        }
+
+        // กรณีไม่มีศัตรูเหลือให้ฆ่า (เช่น กดระหว่างรอ Wave ใหม่)
+        if (!IsBattleOver) EndBattle(BattleOutcome.Victory);
+    }
+
     private void SpawnNextWave()
     {
+        // ถูกเรียกหลังป้ายประกาศ Wave หายไป ระหว่างนั้นการต่อสู้อาจจบแล้ว (เช่น กด Debug Win)
+        if (IsBattleOver) return;
+
         EnemyWave nextWave = activeWaves[currentWaveIndex];
         currentWaveIndex++;
 
@@ -297,7 +332,7 @@ public class CombatManager : MonoBehaviour
         {
             ActorID = "W_" + weapon.GetInstanceID(),
             Name = weapon.weaponName,
-            Speed = weapon.speed,
+            BaseSpeed = weapon.speed,
             IsEnemy = false,
             CurrentAV = InitialAV(weapon.speed),
             WeaponRef = weapon
@@ -310,9 +345,9 @@ public class CombatManager : MonoBehaviour
         {
             ActorID = "E_" + enemy.GetInstanceID(),
             Name = enemy.enemyName,
-            Speed = enemy.baseSpeed,
+            BaseSpeed = enemy.baseSpeed,
             IsEnemy = true,
-            CurrentAV = InitialAV(enemy.baseSpeed),
+            CurrentAV = InitialAV(enemy.CurrentSpeed),
             EnemyRef = enemy
         };
     }
@@ -337,7 +372,7 @@ public class CombatManager : MonoBehaviour
         NextTurn();
     }
 
-    private void RefreshTurnOrderUI()
+    public void RefreshTurnOrderUI()
     {
         if (turnOrderUI != null) turnOrderUI.UpdateUI(PredictNextTurns(PredictedTurnCount));
     }
@@ -348,12 +383,28 @@ public class CombatManager : MonoBehaviour
 
         if (turnQueue.Count > 0)
         {
+            TickStatusesOfActor(turnQueue[0]);
+
             // รีเซ็ต AV ของคนที่เพิ่งเล่นจบ กลับไปต่อท้ายคิว
             turnQueue[0].CurrentAV = InitialAV(turnQueue[0].Speed);
         }
 
         currentState = CombatState.CalculateTurn;
         NextTurn();
+    }
+
+    // นับเทิร์นของบัฟ/ดีบัฟ ตอนตัวที่เพิ่งเล่นจบเทิร์นของตัวเอง (ศัตรู = ดีบัฟของตัวนั้น, ผู้เล่น = บัฟของผู้เล่น)
+    private void TickStatusesOfActor(TurnNode actor)
+    {
+        if (actor.IsEnemy)
+        {
+            if (actor.EnemyRef != null) actor.EnemyRef.Statuses.TickTurn();
+        }
+        else if (player != null)
+        {
+            player.Statuses.TickTurn();
+            player.UpdateAPUI();
+        }
     }
 
     public void RemoveEnemy(EnemyController deadEnemy)

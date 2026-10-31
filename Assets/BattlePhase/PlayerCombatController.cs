@@ -46,6 +46,9 @@ public class PlayerCombatController : MonoBehaviour
 
     private WeaponSkill selectedSkill;
 
+    // บัฟของผู้เล่น (Evasion, Berserk, AttackUp) ใช้ร่วมกันทุกอาวุธ นับเทิร์นตอนจบเทิร์นของผู้เล่น
+    public readonly CombatStatusSet Statuses = new CombatStatusSet();
+
     private void Awake()
     {
         Instance = this;
@@ -53,7 +56,7 @@ public class PlayerCombatController : MonoBehaviour
         foreach (var sourceWeapon in GetStartingWeapons())
         {
             // ใช้ตัวก๊อปปี้เสมอ จะได้ไม่ไปแก้ค่าในไฟล์ .asset จริง (Durability เต็มทุกครั้งที่เข้าฉาก)
-            inventoryWeapons.Add(sourceWeapon.CreateBattleInstance());
+            inventoryWeapons.Add(sourceWeapon.CreateBattleInstance(GetEquippedSkills(sourceWeapon)));
         }
 
         // เซ็ตอาวุธชิ้นแรกเป็นอาวุธเริ่มต้น
@@ -61,6 +64,17 @@ public class PlayerCombatController : MonoBehaviour
         {
             ActiveWeapon = inventoryWeapons[0];
         }
+    }
+
+    // สกิลที่ผู้เล่นเลือกไว้ใน Camp (ส่งมากับ BattleRequest) ถ้าไม่มีใช้ 3 สกิลแรกของอาวุธ
+    private List<WeaponSkill> GetEquippedSkills(WeaponData sourceWeapon)
+    {
+        BattleRequest request = BattleSession.Current;
+        if (request != null && request.equippedSkills != null && request.equippedSkills.TryGetValue(sourceWeapon, out List<WeaponSkill> skills))
+        {
+            return skills;
+        }
+        return sourceWeapon.GetDefaultSkills();
     }
 
     private List<WeaponData> GetStartingWeapons()
@@ -168,6 +182,13 @@ public class PlayerCombatController : MonoBehaviour
         if (actionState != PlayerActionState.ChoosingSkill) return;
 
         WeaponSkill skillToCast = ActiveWeapon.availableSkills[skillIndex];
+
+        if (!skillToCast.CanExecute(this, out string reason))
+        {
+            Debug.Log($"<color=red>ใช้ {skillToCast.skillName} ไม่ได้: {reason}</color>");
+            ShowPopup(reason, new Color(1f, 0.45f, 0.45f));
+            return;
+        }
 
         if (currentAP >= skillToCast.apCost)
         {
@@ -335,8 +356,7 @@ public class PlayerCombatController : MonoBehaviour
                 }
             }
 
-            targetEnemy.TakeDamage(finalDamage);
-            targetEnemy.TakePostureDamage(postureDamage);
+            DealDamage(targetEnemy, finalDamage, postureDamage);
 
             RestoreAP(1);
             FinishTurnAction();
@@ -594,8 +614,7 @@ public class PlayerCombatController : MonoBehaviour
                     CameraShakeManager.TryShake(1.5f);
                 }
 
-                enemy.TakeDamage(finalDamage);
-                enemy.TakePostureDamage(postureDamage);
+                DealDamage(enemy, finalDamage, postureDamage);
                 currentAP -= 1;
                 ExitAimMode();
             }
@@ -671,7 +690,57 @@ public class PlayerCombatController : MonoBehaviour
         }
     }
 
-    void UpdateAPUI() { if (textAP != null) textAP.text = $"{currentAP}/{maxAP}"; }
+    public void UpdateAPUI()
+    {
+        if (textAP == null) return;
+
+        // บัฟที่ติดอยู่ แสดงใต้ตัวเลข AP (เช่น BSK2  EVA)
+        string buffs = "";
+        foreach (CombatStatus status in Statuses.All) buffs += status.ShortLabel + "  ";
+        textAP.text = buffs.Length > 0
+            ? $"{currentAP}/{maxAP}\n<size=45%><color=#FFD27A>{buffs.TrimEnd()}</color></size>"
+            : $"{currentAP}/{maxAP}";
+    }
+
+    // ==========================================
+    // Damage Pipeline: ดาเมจทุกอย่างจากผู้เล่น (ตีปกติ / Free-Aim / สกิล / สวนกลับ) ควรผ่านตรงนี้
+    // เพื่อให้บัฟของผู้เล่น (Berserk / AttackUp) และดีบัฟของศัตรู (Expose Weakness) คิดครบทุกที่
+    // ==========================================
+    public int DealDamage(EnemyController target, float damage, float postureDamage = 0f, WeaponType? sourceType = null)
+    {
+        if (target == null || target.IsDead) return 0;
+
+        WeaponType type = sourceType ?? (ActiveWeapon != null ? ActiveWeapon.weaponType : WeaponType.Dagger);
+        int finalDamage = 0;
+
+        if (damage > 0f)
+        {
+            finalDamage = Mathf.RoundToInt(damage * GetOutgoingDamageMultiplier() * target.GetIncomingDamageMultiplier(type));
+            target.TakeDamage(finalDamage);
+        }
+
+        if (postureDamage > 0f) target.TakePostureDamage(Mathf.RoundToInt(postureDamage));
+        return finalDamage;
+    }
+
+    public float GetOutgoingDamageMultiplier()
+    {
+        return 1f + Statuses.GetValue(CombatStatusType.Berserk) + Statuses.GetValue(CombatStatusType.AttackUp);
+    }
+
+    // บัฟที่ใส่ให้ตัวเองระหว่างเทิร์นตัวเอง (ไม่โดนนับลดตอนจบเทิร์นนี้)
+    public void ApplySelfStatus(CombatStatusType type, float value, int turns, string popupText)
+    {
+        Statuses.Apply(type, value, turns, appliedDuringOwnTurn: true);
+        if (!string.IsNullOrEmpty(popupText)) ShowPopup(popupText, new Color(1f, 0.82f, 0.3f));
+        UpdateAPUI();
+    }
+
+    public void ShowPopup(string text, Color color)
+    {
+        if (DamagePopupManager.Instance != null)
+            DamagePopupManager.Instance.CreateTextPopup(transform.position + Vector3.up * 2f, text, color);
+    }
 
     // ========================================== WeaponPassiveSystem ==========================================
     public void AddComboStack(int amount, bool isFromSkill = false)
@@ -710,8 +779,7 @@ public class PlayerCombatController : MonoBehaviour
 
         Debug.Log($"<color=red>AP Overflow ({overflowAmount})! Gun Passive Counter-Attacks for {counterDamage} DMG!</color>");
 
-        target.TakeDamage(counterDamage);
-        target.TakePostureDamage(Mathf.RoundToInt(counterDamage * 0.3f));
+        DealDamage(target, counterDamage, counterDamage * 0.3f, WeaponType.Gun);
 
         CameraShakeManager.TryShake(0.5f);
     }

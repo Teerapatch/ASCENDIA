@@ -16,6 +16,12 @@ public class EnemyController : MonoBehaviour
     // ตายแล้วแต่ยังไม่ถูก Destroy (หน่วง 0.5 วิ) กันไม่ให้โดนตีซ้ำแล้ว Die() ซ้ำ
     public bool IsDead { get; private set; }
 
+    // บัฟ/ดีบัฟจากสกิล (Expose Weakness, Shatter, Slow, Burn) นับเทิร์นตอนศัตรูตัวนี้จบเทิร์น (CombatManager.EndCurrentTurn)
+    public readonly CombatStatusSet Statuses = new CombatStatusSet();
+
+    // ความเร็วจริงหลังคิด Slow (CombatManager ใช้ค่านี้คำนวณ AV)
+    public float CurrentSpeed => Mathf.Max(1f, baseSpeed * (1f - Statuses.GetValue(CombatStatusType.Slow)));
+
     [Header("Debuffs")]
     public bool isMarkedByGun = false;
     public Sprite gunMarkIcon;
@@ -25,17 +31,18 @@ public class EnemyController : MonoBehaviour
     {
         public string statusID;
         public Sprite icon;
+        public string label; // ข้อความสั้นบนไอคอน (ใช้กับสถานะที่ไม่มีรูป)
     }
 
     public List<StatusEffect> activeStatuses = new List<StatusEffect>();
 
     public System.Action OnStatusChanged;
-    public void AddStatus(string id, Sprite icon)
+    public void AddStatus(string id, Sprite icon, string label = null)
     {
         // เช็กว่ามีสถานะนี้อยู่แล้วหรือยัง ถ้ายังให้เพิ่มเข้าไป
         if (!activeStatuses.Exists(s => s.statusID == id))
         {
-            activeStatuses.Add(new StatusEffect { statusID = id, icon = icon });
+            activeStatuses.Add(new StatusEffect { statusID = id, icon = icon, label = label });
             OnStatusChanged?.Invoke();
         }
     }
@@ -54,6 +61,24 @@ public class EnemyController : MonoBehaviour
     [Header("Visual Effects")]
     public ParticleSystem staggerParticle;
 
+    private const string CombatStatusPrefix = "CS_";
+
+    private void Awake()
+    {
+        Statuses.OnChanged += SyncCombatStatusIcons;
+    }
+
+    // แปลง CombatStatus ให้ EnemyUI แสดงเป็นไอคอนพร้อมตัวย่อ (เช่น EXP2, SHT)
+    private void SyncCombatStatusIcons()
+    {
+        activeStatuses.RemoveAll(s => s.statusID.StartsWith(CombatStatusPrefix));
+        foreach (CombatStatus status in Statuses.All)
+        {
+            activeStatuses.Add(new StatusEffect { statusID = CombatStatusPrefix + status.type, label = status.ShortLabel });
+        }
+        OnStatusChanged?.Invoke();
+    }
+
     private void Start()
     {
         currentHP = maxHP;
@@ -64,6 +89,13 @@ public class EnemyController : MonoBehaviour
     public void StartTurn()
     {
         Debug.Log($"<color=orange>{enemyName}'s Turn!</color>");
+
+        // Burn: เสียเลือดก่อนลงมือ ถ้าตายตรงนี้ เทิร์นของตัวนี้ถูกลบออกจากคิวไปแล้ว ให้ข้ามไปเทิร์นถัดไปเลย
+        if (ApplyBurnDamage())
+        {
+            if (CombatManager.Instance != null) CombatManager.Instance.NextTurn();
+            return;
+        }
 
         if (isStaggered)
         {
@@ -114,6 +146,44 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    // คืน true ถ้าตายจาก Burn
+    private bool ApplyBurnDamage()
+    {
+        float burn = Statuses.GetValue(CombatStatusType.Burn);
+        if (burn <= 0f) return false;
+
+        if (DamagePopupManager.Instance != null) DamagePopupManager.Instance.CreateTextPopup(transform.position + Vector3.up, "BURN", new Color(1f, 0.5f, 0.1f));
+        TakeDamage(Mathf.RoundToInt(burn));
+        return IsDead;
+    }
+
+    // ตัวคูณดาเมจที่ศัตรูตัวนี้ได้รับ ตามประเภทอาวุธที่ตี (Expose Weakness = Gun / LongSword แรงขึ้น)
+    public float GetIncomingDamageMultiplier(WeaponType source)
+    {
+        float multiplier = 1f;
+        if (source == WeaponType.Gun || source == WeaponType.LongSword)
+        {
+            multiplier += Statuses.GetValue(CombatStatusType.ExposeWeakness);
+        }
+        return multiplier;
+    }
+
+    // ฆ่าทันที (ใช้กับปุ่ม Debug Win)
+    public void Kill()
+    {
+        if (IsDead) return;
+        currentHP = 0;
+        Die();
+    }
+
+    // ทำให้ Stagger ทันทีโดยไม่สนเกจ Posture (Spell Break)
+    public void BreakPosture()
+    {
+        if (IsDead || isStaggered) return;
+        currentPosture = 0;
+        EnterStagger();
+    }
+
     public void TakeDamage(int damage)
     {
         if (IsDead) return;
@@ -134,21 +204,27 @@ public class EnemyController : MonoBehaviour
     {
         if (IsDead || isStaggered) return;
 
+        // Shatter: รับดาเมจ Posture แรงขึ้นจนกว่าจะ Stagger
+        postureDamage = Mathf.RoundToInt(postureDamage * (1f + Statuses.GetValue(CombatStatusType.Shatter)));
+
         currentPosture -= postureDamage;
         Debug.Log($"{enemyName} took {postureDamage} Posture Damage! (Posture: {currentPosture}/{maxPosture})");
 
-        if (currentPosture <= 0)
+        if (currentPosture <= 0) EnterStagger();
+    }
+
+    private void EnterStagger()
+    {
+        isStaggered = true;
+        Statuses.Remove(CombatStatusType.Shatter);
+        Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
+
+        if (staggerParticle != null)
         {
-            isStaggered = true;
-            Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
-
-            if (staggerParticle != null)
-            {
-                staggerParticle.Play();
-            }
-
-            CameraShakeManager.TryShake(1.5f);
+            staggerParticle.Play();
         }
+
+        CameraShakeManager.TryShake(1.5f);
     }
 
     private void Die()

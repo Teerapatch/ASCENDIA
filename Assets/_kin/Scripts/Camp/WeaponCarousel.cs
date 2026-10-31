@@ -19,6 +19,12 @@ public class WeaponCarousel : MonoBehaviour
     public TextMeshProUGUI[] slotNameTexts; 
     public GameObject[] slotAuraEffects;    
 
+    [Header("Skill Selection (ปุ่ม SKILLS ใต้แต่ละช่อง)")]
+    [Tooltip("หน้าเลือกสกิล: LoadoutPanel > SkillSelectPanel")]
+    public SkillLoadoutPanel skillPanel;
+    [Tooltip("ปุ่ม SKILLS ของช่อง 0-3 (ซ่อนเองถ้าช่องนั้นยังไม่ได้ใส่อาวุธ)")]
+    public Button[] skillButtons;
+
     [Header("Default Visuals")]
     public Sprite emptySlotSprite; 
 
@@ -63,6 +69,12 @@ public class WeaponCarousel : MonoBehaviour
         for (int i = 0; i < slotButtons.Length; i++)
         {
             bool isUnlocked = playerData.IsLoadoutSlotUnlocked(i);
+
+            if (skillButtons != null && skillButtons.Length > i && skillButtons[i] != null)
+            {
+                bool hasWeapon = isUnlocked && playerData.activeLoadout.Length > i && playerData.activeLoadout[i] != null;
+                skillButtons[i].gameObject.SetActive(hasWeapon);
+            }
             slotButtons[i].interactable = true; 
             
             if (lockIcons.Length > i && lockIcons[i] != null) 
@@ -117,6 +129,21 @@ public class WeaponCarousel : MonoBehaviour
         }
         Image img = auraObj.GetComponent<Image>();
         if (img != null) img.color = c;
+    }
+
+    // ปุ่ม SKILLS ใต้ช่องอาวุธ (ผูก OnClick ในฉากให้ส่งเลขช่อง 0-3)
+    public void OnClickSkills(int slotIndex)
+    {
+        if (playerData == null || skillPanel == null) return;
+
+        WeaponData weapon = slotIndex < playerData.activeLoadout.Length ? playerData.activeLoadout[slotIndex] : null;
+        if (weapon == null || !playerData.IsLoadoutSlotUnlocked(slotIndex))
+        {
+            if (campManager != null) campManager.ShowSystemMessage("Equip a weapon in this slot first.");
+            return;
+        }
+
+        skillPanel.Open(weapon, playerData);
     }
 
     public void OnClickSlot(int slotIndex)

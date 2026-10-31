@@ -32,8 +32,7 @@ public class MightyCleaveSkill : WeaponSkill
         {
             if (enemy != null)
             {
-                enemy.TakeDamage(finalDamage);
-                enemy.TakePostureDamage(finalPosture);
+                player.DealDamage(enemy, finalDamage, finalPosture);
                 hitCount++;
             }
         }

@@ -24,8 +24,7 @@ public class PommelBashSkill : WeaponSkill
         }
 
         // ทำดาเมจและลดเกจ Posture ของเป้าหมายเดี่ยว
-        target.TakeDamage(finalDamage);
-        target.TakePostureDamage(finalPosture);
+        player.DealDamage(target, finalDamage, finalPosture);
 
         Debug.Log($"<color=orange>🗡️ POMMEL BASH! Low DMG ({finalDamage}), Massive Posture DMG ({finalPosture})!</color>");
 

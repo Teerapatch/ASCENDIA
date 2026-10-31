@@ -16,6 +16,9 @@ public class DaggerMultiHitSkill : WeaponSkill
     [Tooltip("หน่วงเวลาระหว่างแต่ละฮิต (วินาที) เพื่อให้แอนิเมชันดูต่อเนื่อง")]
     public float timeBetweenHits = 0.2f;
 
+    [Tooltip("ดาเมจ Posture ต่อฮิต = ดาเมจต่อฮิต x ค่านี้")]
+    public float postureRatio = 0.3f;
+
     [Header("QTE Bonus")]
     public float qteDamagePerHit = 8f;
 
@@ -38,7 +41,7 @@ public class DaggerMultiHitSkill : WeaponSkill
     private IEnumerator PerformMultiHit(PlayerCombatController player, EnemyController target, float hitDamage)
     {
         int finalDamagePerHit = Mathf.RoundToInt(hitDamage);
-        int postureDamagePerHit = Mathf.RoundToInt(finalDamagePerHit * 0.3f); // ลดเกจเหลือง 30% ของดาเมจ
+        float postureDamagePerHit = finalDamagePerHit * postureRatio;
 
         for (int i = 0; i < numberOfHits; i++)
         {
@@ -52,8 +55,7 @@ public class DaggerMultiHitSkill : WeaponSkill
             Debug.Log($"<color=orange>[{skillName}] Hit {i + 1} / {numberOfHits} !</color>");
 
             // --- 1. ทำดาเมจใส่ศัตรู ---
-            target.TakeDamage(finalDamagePerHit);
-            target.TakePostureDamage(postureDamagePerHit);
+            player.DealDamage(target, finalDamagePerHit, postureDamagePerHit);
 
             // --- 2. [Passive: Dagger] เพิ่ม Combo Stack ตามจำนวนที่ตั้งไว้ ---
             //player.AddComboStack(comboStacksPerHit);

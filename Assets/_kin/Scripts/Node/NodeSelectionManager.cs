@@ -377,6 +377,7 @@ public class NodeSelectionManager : MonoBehaviour
             {
                 encounter = encounter,
                 weapons = GameManager.Instance != null ? GameManager.Instance.playerData.GetEquippedWeapons() : null,
+                equippedSkills = GameManager.Instance != null ? GameManager.Instance.playerData.GetEquippedSkillMap() : null,
                 battleSceneName = battleScene,
                 defeatPenaltyText = "-1 Piton" // ต้องตรงกับกติกาใน ApplyBattleResult
             });
