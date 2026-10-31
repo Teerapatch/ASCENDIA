@@ -40,19 +40,33 @@ public class PlayerData : ScriptableObject
     public WeaponData[] activeLoadout = new WeaponData[4];
     public int unlockedWeaponSlots = 1;
 
+    [Header("Weapon Gating")]
+    [Tooltip("เปิด = จำนวนช่อง Loadout และโควตาคราฟต์อาวุธถูกจำกัดตาม Camp Level (ระบบเดิม)\nปิด = ใช้ได้ครบทุกช่องและคราฟต์ได้ทุกชิ้นตั้งแต่เริ่ม (ยังต้องจ่ายวัตถุดิบตามปกติ)")]
+    public bool limitWeaponsByCampLevel = false;
+
     [Header("Current Wielding")]
     public WeaponData currentWeaponInHand;
 
     // เช็คว่าตอนนี้อยู่ในช่วงสุดท้ายที่จะเจอบอสใหญ่หรือยัง
     public bool IsFinalBossStage => currentCampLevel >= finalCampLevel;
 
-    // อาวุธที่ใส่อยู่ใน Loadout (ข้ามช่องว่าง) ใช้ส่งเข้าฉากต่อสู้
+    // จำนวนช่อง Loadout ที่ใช้ได้ (ทุกที่ที่เช็คช่องล็อกต้องถามจากตรงนี้)
+    public int UnlockedLoadoutSlots => limitWeaponsByCampLevel
+        ? Mathf.Clamp(currentCampLevel, 0, activeLoadout.Length)
+        : activeLoadout.Length;
+
+    public bool IsLoadoutSlotUnlocked(int slotIndex) => slotIndex < UnlockedLoadoutSlots;
+
+    // craftedCount = จำนวนอาวุธที่คราฟต์ไปแล้ว
+    public bool CanCraftNewWeapon(int craftedCount) => !limitWeaponsByCampLevel || craftedCount < currentCampLevel;
+
+    // อาวุธที่ใส่อยู่ใน Loadout (ข้ามช่องว่างและช่องที่ยังล็อก) ใช้ส่งเข้าฉากต่อสู้
     public List<WeaponData> GetEquippedWeapons()
     {
         List<WeaponData> equipped = new List<WeaponData>();
-        foreach (WeaponData weapon in activeLoadout)
+        for (int i = 0; i < activeLoadout.Length; i++)
         {
-            if (weapon != null) equipped.Add(weapon);
+            if (activeLoadout[i] != null && IsLoadoutSlotUnlocked(i)) equipped.Add(activeLoadout[i]);
         }
         return equipped;
     }

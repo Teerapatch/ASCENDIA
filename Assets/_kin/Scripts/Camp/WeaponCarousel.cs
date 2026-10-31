@@ -62,7 +62,7 @@ public class WeaponCarousel : MonoBehaviour
 
         for (int i = 0; i < slotButtons.Length; i++)
         {
-            bool isUnlocked = i < playerData.currentCampLevel;
+            bool isUnlocked = playerData.IsLoadoutSlotUnlocked(i);
             slotButtons[i].interactable = true; 
             
             if (lockIcons.Length > i && lockIcons[i] != null) 
@@ -121,7 +121,7 @@ public class WeaponCarousel : MonoBehaviour
 
     public void OnClickSlot(int slotIndex)
     {
-        if (slotIndex < playerData.currentCampLevel)
+        if (playerData.IsLoadoutSlotUnlocked(slotIndex))
         {
             currentSelectingSlot = slotIndex;
             OpenSelectionGrid();

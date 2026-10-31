@@ -56,7 +56,7 @@ public class ForgeManager : MonoBehaviour
         }
 
         int unlockedCount = GetUnlockedWeaponCount();
-        bool canCraftNewWeapon = unlockedCount < playerData.currentCampLevel;
+        bool canCraftNewWeapon = playerData.CanCraftNewWeapon(unlockedCount);
 
         foreach (WeaponData weapon in allWeaponsInGame)
         {
@@ -92,7 +92,7 @@ public class ForgeManager : MonoBehaviour
         if (currentWeapon == null) return;
 
         int unlockedCount = GetUnlockedWeaponCount();
-        bool canCraftNewWeapon = unlockedCount < playerData.currentCampLevel;
+        bool canCraftNewWeapon = playerData.CanCraftNewWeapon(unlockedCount);
         
         bool isAvailableToView = currentWeapon.isUnlocked || canCraftNewWeapon;
 

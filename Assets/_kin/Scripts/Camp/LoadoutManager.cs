@@ -35,7 +35,7 @@ public class LoadoutManager : MonoBehaviour
         for (int i = 0; i < slotButtons.Length; i++)
         {
             // เช็คว่าแคมป์เลเวลถึงระดับที่ปลดล็อกช่องนี้หรือยัง (เช่น ช่อง 2 ต้องการ Camp Lv.2)
-            bool isUnlocked = i < playerData.currentCampLevel;
+            bool isUnlocked = playerData.IsLoadoutSlotUnlocked(i);
 
             slotButtons[i].interactable = isUnlocked; // เปิด/ปิด การกดปุ่ม
             if (lockIcons[i] != null) lockIcons[i].SetActive(!isUnlocked); // โชว์/ซ่อน กุญแจ
