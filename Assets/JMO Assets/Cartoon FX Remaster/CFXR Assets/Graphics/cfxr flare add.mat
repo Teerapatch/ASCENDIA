@@ -13,9 +13,9 @@ Material:
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _ALPHABLEND_ON
+  - _CFXR_LIGHTING_ALL
   - _FADING_ON
   m_InvalidKeywords:
-  - _
   - _CFXR_DITHERED_SHADOWS_OFF
   - _CFXR_OVERLAYBLEND_RGBA
   - _CFXR_OVERLAYTEX_OFF
@@ -116,7 +116,7 @@ Material:
     - _UseFB: 0
     - _UseFontColor: 0
     - _UseGradientMap: 0
-    - _UseLighting: 0
+    - _UseLighting: 3
     - _UseLightingWorldPosOffset: 0
     - _UseNormalMap: 0
     - _UseSG: 1
