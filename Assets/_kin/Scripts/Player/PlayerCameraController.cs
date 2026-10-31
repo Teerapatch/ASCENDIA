@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class PlayerCameraController : MonoBehaviour
 {
@@ -27,7 +27,7 @@ public class PlayerCameraController : MonoBehaviour
     {
         if (lookTarget != null)
         {
-            lookTargetOffset = lookTarget.localPosition;
+            lookTargetOffset = lookTarget.position - transform.position;
             
             float startTilt = lookTarget.eulerAngles.x;
             if (startTilt > 180f) startTilt -= 360f;
@@ -41,7 +41,34 @@ public class PlayerCameraController : MonoBehaviour
             lookTarget.SetParent(null);
         }
         
-        SwitchToWalkCam();
+        InstallFraming();
+        RestoreGameplayCamera();
+    }
+
+    private void InstallFraming()
+    {
+        foreach (var cam in FindObjectsByType<Unity.Cinemachine.CinemachineCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (cam.gameObject.scene != gameObject.scene) continue;
+            if (cam.name != "WalkCam" && cam.name != "ClimbCam" && cam.name != "InventoryCam" && cam.name != "NodeCam") continue;
+            var framing = cam.GetComponent<PlayerCameraFraming>();
+            if (!framing) framing = cam.gameObject.AddComponent<PlayerCameraFraming>();
+            framing.player = transform;
+        }
+    }
+
+    public void RestoreGameplayCamera()
+    {
+        var state = GetComponent<PlayerStateManager>();
+        if (state && state.currentState == PlayerStateManager.State.NodeSelection)
+        {
+            if (walkCam) walkCam.SetActive(false);
+            if (climbCam) climbCam.SetActive(false);
+            return;
+        }
+        if (state && state.currentState != PlayerStateManager.State.Walking)
+            SwitchToClimbCam(transform.eulerAngles.y);
+        else SwitchToWalkCam();
     }
 
     private void Update()

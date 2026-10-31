@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [RequireComponent(typeof(PlayerStateManager))]
 public class PlayerClimbController : MonoBehaviour
@@ -30,6 +30,7 @@ public class PlayerClimbController : MonoBehaviour
 
     private void Update()
     {
+        if (contactIK != null) contactIK.SetClimbVelocity(Vector3.zero);
         if (GameManager.Instance == null) return;
         
         // 🌟 1. อัปเดตตัวคูณความเร็วตลอดเวลา (Real-time Update) 
@@ -69,6 +70,17 @@ public class PlayerClimbController : MonoBehaviour
         // 🌟 2. ดึงความเร็วปัจจุบันมาใช้ (คูณกับตัวคูณแบบเรียลไทม์)
         float currentVertSpeed = verticalSpeed * currentSpeedMultiplier;
         float currentHorzSpeed = horizontalSpeed * currentSpeedMultiplier;
+
+        if (contactIK != null)
+        {
+            // Do not keep reaching sideways when already at the movement boundary.
+            if ((h < 0 && transform.position.x <= minX) || (h > 0 && transform.position.x >= maxX)) h = 0;
+            if (environmentContainer == null && (v < 0 || transform.position.y >= maxPlayerHeight)) v = 0;
+            contactIK.SetClimbVelocity(new Vector3(h * currentHorzSpeed, v * currentVertSpeed, 0));
+            float rhythm = contactIK.MovementMultiplier;
+            currentVertSpeed *= rhythm;
+            currentHorzSpeed *= rhythm;
+        }
 
         // --- ขยับซ้ายขวา ---
         Vector3 newPos = transform.position + new Vector3(h, 0, 0) * currentHorzSpeed * Time.deltaTime;
