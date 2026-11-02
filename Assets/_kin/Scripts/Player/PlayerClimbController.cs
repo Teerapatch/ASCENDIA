@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 [RequireComponent(typeof(PlayerStateManager))]
 public class PlayerClimbController : MonoBehaviour
@@ -9,6 +9,15 @@ public class PlayerClimbController : MonoBehaviour
     public float minX = -4f;
     public float maxX = 4f;
     public float maxPlayerHeight = 5f;
+    [Range(.1f, 1f), Tooltip("Upward pace only. Downward and sideways speeds are unchanged.")]
+    public float upwardSpeedMultiplier = .3f;
+    [Min(.1f)] public float climbAcceleration = 10f;
+    private Vector3 climbVelocity;
+
+    public static Vector3 RequestedVelocity(float h, float v, float horizontal, float vertical, float upwardMultiplier)
+    {
+        return new Vector3(h * horizontal, v * vertical * (v > 0 ? upwardMultiplier : 1f), 0);
+    }
 
     [Tooltip("ถ้าน้ำหนักเต็มกระเป๋า จะให้ปีนช้าลงเหลือกี่เปอร์เซ็นต์? (0.4 = 40% ของความเร็วปกติ)")]
     public float minSpeedMultiplier = 0.4f;
@@ -31,15 +40,15 @@ public class PlayerClimbController : MonoBehaviour
     private void Update()
     {
         if (contactIK != null) contactIK.SetClimbVelocity(Vector3.zero);
-        if (GameManager.Instance == null) return;
+        if (GameManager.Instance == null) { climbVelocity = Vector3.zero; return; }
         
         // 🌟 1. อัปเดตตัวคูณความเร็วตลอดเวลา (Real-time Update) 
         // ไม่ว่าผู้เล่นจะทำอะไรอยู่ ถ้าน้ำหนักเปลี่ยน ความเร็วจะคำนวณรอไว้เลย
         UpdateSpeedMultiplier();
 
-        if (stateManager.currentState != PlayerStateManager.State.Climbing) return;
+        if (stateManager.currentState != PlayerStateManager.State.Climbing) { climbVelocity = Vector3.zero; return; }
 
-        if (contactIK != null && !contactIK.HasWall) return;
+        if (contactIK != null && !contactIK.HasWall) { climbVelocity = Vector3.zero; return; }
         HandleClimbing();
     }
 
@@ -67,44 +76,35 @@ public class PlayerClimbController : MonoBehaviour
         float h = Input.GetAxisRaw("Horizontal");
         float v = Input.GetAxisRaw("Vertical");
 
-        // 🌟 2. ดึงความเร็วปัจจุบันมาใช้ (คูณกับตัวคูณแบบเรียลไทม์)
-        float currentVertSpeed = verticalSpeed * currentSpeedMultiplier;
-        float currentHorzSpeed = horizontalSpeed * currentSpeedMultiplier;
+                AdvanceClimb(h, v, Time.deltaTime);
+    }
 
-        if (contactIK != null)
+    public void AdvanceClimb(float h, float v, float deltaTime)
+    {
+if ((h < 0 && transform.position.x <= minX) || (h > 0 && transform.position.x >= maxX)) h = 0;
+        if (!environmentContainer && (v < 0 || transform.position.y >= maxPlayerHeight)) v = 0;
+        Vector3 desired = RequestedVelocity(h, v, horizontalSpeed * currentSpeedMultiplier,
+            verticalSpeed * currentSpeedMultiplier, upwardSpeedMultiplier);
+        climbVelocity = Vector3.MoveTowards(climbVelocity, desired, climbAcceleration * deltaTime);
+        // Release input stops that axis immediately; acceleration only softens starting/reversing.
+        if (h == 0) climbVelocity.x = 0;
+        if (v == 0) climbVelocity.y = 0;
+        if (contactIK)
         {
-            // Do not keep reaching sideways when already at the movement boundary.
-            if ((h < 0 && transform.position.x <= minX) || (h > 0 && transform.position.x >= maxX)) h = 0;
-            if (environmentContainer == null && (v < 0 || transform.position.y >= maxPlayerHeight)) v = 0;
-            contactIK.SetClimbVelocity(new Vector3(h * currentHorzSpeed, v * currentVertSpeed, 0));
-            float rhythm = contactIK.MovementMultiplier;
-            currentVertSpeed *= rhythm;
-            currentHorzSpeed *= rhythm;
+            contactIK.SetClimbVelocity(climbVelocity);
+            if (contactIK.MovementMultiplier <= 0) return;
         }
-
-        // --- ขยับซ้ายขวา ---
-        Vector3 newPos = transform.position + new Vector3(h, 0, 0) * currentHorzSpeed * Time.deltaTime;
-        newPos.x = Mathf.Clamp(newPos.x, minX, maxX);
-        transform.position = newPos;
-
-        // --- ปีนขึ้น ---
-        if (v > 0.1f)
+        Vector3 delta = climbVelocity * deltaTime;
+        Vector3 position = transform.position;
+        position.x = Mathf.Clamp(position.x + delta.x, minX, maxX);
+        if (delta.y > 0)
         {
-            if (transform.position.y < maxPlayerHeight)
-            {
-                transform.Translate(Vector3.up * currentVertSpeed * Time.deltaTime, Space.World);
-            }
-            else
-            {
-                if (environmentContainer != null)
-                    environmentContainer.Translate(Vector3.down * currentVertSpeed * Time.deltaTime);
-            }
+            float rise = Mathf.Min(delta.y, Mathf.Max(0, maxPlayerHeight - position.y));
+            position.y += rise;
+            if (environmentContainer) environmentContainer.Translate(Vector3.down * (delta.y - rise), Space.World);
         }
-        // --- ปีนลง ---
-        else if (v < -0.1f)
-        {
-            if (environmentContainer != null)
-                environmentContainer.Translate(Vector3.up * currentVertSpeed * Time.deltaTime);
-        }
+        else if (delta.y < 0 && environmentContainer)
+            environmentContainer.Translate(Vector3.up * -delta.y, Space.World);
+        transform.position = position;
     }
 }

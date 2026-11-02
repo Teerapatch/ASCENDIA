@@ -2204,11 +2204,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eaa188a7b53053b49b7c8a479ed01e61, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerClimbController
-  verticalSpeed: 1
-  horizontalSpeed: 0.45
-  minX: -4
+  verticalSpeed: 5
+  horizontalSpeed: 3
+  minX: 1
   maxX: 4
   maxPlayerHeight: 20
+  upwardSpeedMultiplier: 0.3
+  climbAcceleration: 10
   minSpeedMultiplier: 0.4
   environmentContainer: {fileID: 1088440540}
 --- !u!114 &864942017
@@ -4055,12 +4057,12 @@ MonoBehaviour:
   state: {fileID: 864942017}
   playerRoot: {fileID: 864942010}
   contactWeight: 1
-  wristRotationWeight: 0
-  distancePerCycle: 0.8
   reachMargin: 0.95
-  contactSmoothTime: 0.08
-  phaseOffset: 0
-  pullRhythm: 0.35
+  stepLength: 0.24
+  liftHeight: 0.07
+  stepDuration: 0.2
+  handSurfaceClearance: 0.045
+  footSurfaceClearance: 0.1
 --- !u!1 &1629782040
 GameObject:
   m_ObjectHideFlags: 0
@@ -5146,6 +5148,10 @@ PrefabInstance:
     - target: {fileID: 7938186901144894106, guid: 0f90a3ea6672ddb41a8ee5da577f528c, type: 3}
       propertyPath: m_Name
       value: ClimbingIK_TestWall
+      objectReference: {fileID: 0}
+    - target: {fileID: 7938186901144894106, guid: 0f90a3ea6672ddb41a8ee5da577f528c, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

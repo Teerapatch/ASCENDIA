@@ -8,6 +8,11 @@ public class PlayerCameraFraming : CinemachineExtension
     public Transform player;
     [Range(0f, .3f)] public float screenMargin = .1f;
     private Renderer[] renderers;
+    private Animator playerAnimator;
+    private float stableHeightPerScale;
+    private Vector3 filteredClimbCenter;
+    private bool hasClimbCenter;
+    private int centerFrame = -1;
     private PathNode[] visibleNodes;
     private float nextNodeScan;
     [Range(.2f, .6f)] public float nodePlayerScreenHeight = .32f;
@@ -24,6 +29,43 @@ public class PlayerCameraFraming : CinemachineExtension
             // Fluttering cloth must not continuously push the camera backwards.
             if (r.name.IndexOf("Cape", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;
             if (!found) { bounds = r.bounds; found = true; } else bounds.Encapsulate(r.bounds);
+        }
+        bool climbView = vcam.name == "ClimbCam";
+        if (climbView)
+        {
+            if (!playerAnimator) playerAnimator = player.GetComponentInChildren<Animator>();
+            if (playerAnimator && playerAnimator.isHuman)
+            {
+                //                 // Frame a fixed envelope attached to the gameplay root, never the animated limbs.
+                float visualScale = Mathf.Max(.001f, Mathf.Abs(playerAnimator.transform.lossyScale.y));
+                if (stableHeightPerScale <= 0)
+                {
+                    var head = playerAnimator.GetBoneTransform(HumanBodyBones.Head);
+                    var hips = playerAnimator.GetBoneTransform(HumanBodyBones.Hips);
+                    var thigh = playerAnimator.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+                    var knee = playerAnimator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
+                    var foot = playerAnimator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                    if (head && hips && thigh && knee && foot)
+                        stableHeightPerScale = (Vector3.Distance(head.position,hips.position)
+                            + Vector3.Distance(thigh.position,knee.position)
+                            + Vector3.Distance(knee.position,foot.position)) * 1.18f / visualScale;
+                }
+                if (stableHeightPerScale > 0)
+                {
+                    float height = stableHeightPerScale * visualScale;
+                    var controller = player.GetComponent<CharacterController>();
+                    float baseY = controller ? player.TransformPoint(controller.center).y
+                        - controller.height * Mathf.Abs(player.lossyScale.y) * .5f : player.position.y;
+                    Vector3 center = new Vector3(player.position.x, baseY + height*.6f, player.position.z);
+                    if (!hasClimbCenter || deltaTime < 0 || Vector3.Distance(center, filteredClimbCenter) > height*2)
+                    { filteredClimbCenter = center; hasClimbCenter = true; }
+                    else if (centerFrame != Time.frameCount)
+                        filteredClimbCenter = Vector3.Lerp(filteredClimbCenter, center, 1-Mathf.Exp(-Mathf.Max(0,deltaTime)/.12f));
+                    centerFrame = Time.frameCount;
+                    bounds = new Bounds(filteredClimbCenter, new Vector3(height*.65f, height*1.2f, height*.5f));
+                    found = true;
+                }
+            }
         }
         if (!found) return;
         bool nodeView = vcam.name == "NodeCam";
@@ -79,6 +121,29 @@ public class PlayerCameraFraming : CinemachineExtension
         }
         float x = Mathf.Clamp(0f, max.x-halfX, min.x+halfX);
         float y = Mathf.Clamp(0f, max.y-halfY, min.y+halfY);
+        if (climbView)
+        {
+            // Climbing stays centred immediately, not merely inside the bottom edge of the frame.
+            x = (min.x + max.x) * .5f;
+            y = (min.y + max.y) * .5f;
+        }
         state.PositionCorrection += rotation * new Vector3(x,y,-retreat);
+        if (climbView)
+        {
+            Vector3 finalPosition = state.GetFinalPosition();
+            if (ClimbingContactIK.TryGroundHeight(player, new Vector3(finalPosition.x,
+                Mathf.Max(finalPosition.y, bounds.center.y), finalPosition.z),
+                Mathf.Max(3f, bounds.size.y*2f), out float floor))
+            {
+                float clearance = Mathf.Max(.4f, state.Lens.NearClipPlane*2f);
+                if (finalPosition.y < floor + clearance)
+                {
+                    Vector3 lift = Vector3.up * (floor + clearance - finalPosition.y);
+                    state.PositionCorrection += lift;
+                    state.RawOrientation = Quaternion.LookRotation(bounds.center - (finalPosition + lift), Vector3.up);
+                    state.OrientationCorrection = Quaternion.identity;
+                }
+            }
+        }
     }
 }

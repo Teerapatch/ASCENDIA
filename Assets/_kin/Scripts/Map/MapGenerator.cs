@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 
 public class MapGenerator : MonoBehaviour
@@ -20,6 +20,8 @@ public class MapGenerator : MonoBehaviour
 
     private void Start()
     {
+        // All generated Wall tiles share one moving coordinate frame for IK anchors.
+        if (!GetComponent<ClimbingSurface>()) gameObject.AddComponent<ClimbingSurface>();
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player != null) playerTransform = player.transform;
 
