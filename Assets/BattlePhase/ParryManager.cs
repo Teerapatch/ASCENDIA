@@ -10,9 +10,38 @@ public class ParryManager : MonoBehaviour
     public float swipeThreshold = 50f; //[cite: 6]
 
     [Header("Visuals & UI")]
+    [Tooltip("Hint แบบเก่า (ใช้เมื่อไม่ได้ใส่ Hint VFX ด้านล่าง)")]
     public GameObject hintParticle; //[cite: 6]
     public bool showSwipeTrail = true;
     public LineRenderer swipeLine;
+
+    [Header("Hint VFX (2 จังหวะ: เตือนก่อนฟัน -> บอกทิศที่ต้องลาก)")]
+    [Tooltip("จังหวะ 1: โชว์ระหว่างศัตรูง้างอาวุธ (delayBeforeStrike)")]
+    public GameObject hintStep1Prefab;
+    [Tooltip("จังหวะ 2: โชว์ระหว่าง Parry Window และหมุนให้ด้าน +X ชี้ไปทางทิศที่ต้องลาก")]
+    public GameObject hintStep2DirectionPrefab;
+    [Tooltip("ระยะจากกล้องที่วาง Hint / ParryVFX ค่าเริ่มต้นวัดจากตำแหน่งที่ฝ่ายอาร์ตวางไว้ในฉาก ENVI_Battle")]
+    public float hintDistanceFromCamera = 15.69f;
+    [Tooltip("ตำแหน่งบนจอ (Viewport 0-1) ที่วาง Hint / ParryVFX ค่าเริ่มต้นวัดจากฉาก ENVI_Battle")]
+    public Vector2 hintViewportPosition = new Vector2(0.576f, 0.534f);
+    [Tooltip("เวลาที่โชว์ Hint จังหวะ 1 ก่อนเปลี่ยนเป็นจังหวะ 2 (ช่วงก่อนหน้านั้นของ delayBeforeStrike จะไม่มี Hint) ถ้า delayBeforeStrike สั้นกว่านี้ จะรอเพิ่มให้ครบ")]
+    public float hintStep1Duration = 0.35f;
+    [Tooltip("คูณกับสเกลของ Prefab (Prefab ตั้งไว้ 2 อยู่แล้ว)")]
+    public float hintScale = 1.6f;
+    [Tooltip("ตอน Hint โผล่: ขยายเกินขนาดจริงเท่านี้แล้วหดกลับ ช่วยให้สังเกตเห็นตอนเปลี่ยนจังหวะ")]
+    public float hintPopScale = 1.4f;
+    public float hintPopDuration = 0.15f;
+    [Tooltip("Hint เต้นเป็นจังหวะระหว่างโชว์ (สัดส่วนของขนาด, 0 = ปิด)")]
+    public float hintPulseAmount = 0.08f;
+    public float hintPulseSpeed = 12f;
+    [Tooltip("มุมกระจายของประกายใน Hint (องศา) รอบทิศที่ต้องลาก")]
+    public float hintSparkSpread = 25f;
+    [Tooltip("บวกเพิ่ม Sorting Order ให้ Hint/ParryVFX วาดทับอนุภาคประกอบฉาก (เมฆ หมอก แสง)")]
+    public int hintSortingBoost = 1000;
+    [Tooltip("ขนาด ParryVFX ตอน Parry สำเร็จ (คูณกับสเกลของ Prefab)")]
+    public float parrySuccessScale = 1.8f;
+    [Tooltip("ปิด Hint แล้วรอให้อนุภาคจางหายกี่วินาทีก่อนลบทิ้ง")]
+    public float hintFadeOutTime = 0.4f;
 
     private Vector2 requiredDirection;
     private int incomingDamage;
@@ -23,6 +52,10 @@ public class ParryManager : MonoBehaviour
     private Camera mainCam;
 
     private EnemyController attackingEnemy;
+    private GameObject activeHint;
+    private Vector3 activeHintBaseScale;
+    private float activeHintShownAt;
+    private float currentHintAngle;
 
     // ตัวแปรควบคุม State รายฮิต
     private bool isAwaitingInput = false;
@@ -33,7 +66,87 @@ public class ParryManager : MonoBehaviour
         Instance = this;
         mainCam = Camera.main; //[cite: 6]
         if (swipeLine) swipeLine.positionCount = 0;
-        hintParticle.SetActive(false); //[cite: 6]
+        if (hintParticle) hintParticle.SetActive(false); //[cite: 6]
+    }
+
+    private void OnDisable()
+    {
+        ClearHint();
+    }
+
+    private void Update()
+    {
+        if (activeHint == null) return;
+
+        // โผล่แบบเด้ง (ใหญ่เกิน -> ขนาดจริง) แล้วเต้นเบา ๆ ตลอดที่โชว์ ใช้เวลาจริงเพื่อไม่ค้างตอน Hitstop
+        float t = Time.unscaledTime - activeHintShownAt;
+        float pop = hintPopDuration > 0f ? Mathf.Lerp(hintPopScale, 1f, Mathf.Clamp01(t / hintPopDuration)) : 1f;
+        float pulse = 1f + Mathf.Sin(t * hintPulseSpeed) * hintPulseAmount;
+        activeHint.transform.localScale = activeHintBaseScale * (pop * pulse);
+    }
+
+    // ==========================================
+    // Hint VFX
+    // ==========================================
+    // ตำแหน่ง/การหมุนอิงกล้อง: แกน Z ของ VFX หันตามกล้อง แล้วหมุนรอบแกนนั้นตามทิศที่ต้องลาก (มุมบนจอ)
+    public Vector3 HintPosition()
+    {
+        return mainCam.ViewportToWorldPoint(new Vector3(hintViewportPosition.x, hintViewportPosition.y, hintDistanceFromCamera));
+    }
+
+    public Quaternion HintRotation(float screenAngle)
+    {
+        return mainCam.transform.rotation * Quaternion.Euler(0f, 0f, screenAngle);
+    }
+
+    private void ShowHint(GameObject prefab, float screenAngle)
+    {
+        ClearHint();
+
+        if (prefab != null)
+        {
+            activeHint = Instantiate(prefab, HintPosition(), HintRotation(screenAngle));
+            activeHintBaseScale = prefab.transform.localScale * hintScale;
+            activeHintShownAt = Time.unscaledTime;
+            activeHint.transform.localScale = activeHintBaseScale * hintPopScale;
+            // ประกายของ Hint พุ่งไปทางเดียวกับทิศที่ต้องลาก (แทนการกระจายรอบตัว)
+            Quaternion rot = activeHint.transform.rotation;
+            VFXManager.AimEmission(activeHint, rot * Vector3.right, rot * Vector3.forward, hintSparkSpread);
+            VFXManager.BoostSorting(activeHint, hintSortingBoost);
+        }
+        else if (hintParticle != null)
+        {
+            // ไม่มี VFX ใหม่ -> ใช้ Hint แบบเก่า (จังหวะเตือนไม่มีของเดิม จึงโชว์แค่ตอนบอกทิศ)
+            hintParticle.SetActive(true);
+            hintParticle.transform.rotation = HintRotation(screenAngle);
+        }
+    }
+
+    private void ShowWarningHint()
+    {
+        ClearHint();
+        // หันตามทิศของจังหวะ 2 ด้วย ผู้เล่นจะได้เห็นทิศตั้งแต่จังหวะเตือน
+        if (hintStep1Prefab != null) ShowHint(hintStep1Prefab, currentHintAngle);
+    }
+
+    private void ShowDirectionHint(float screenAngle)
+    {
+        if (hintStep2DirectionPrefab != null) ShowHint(hintStep2DirectionPrefab, screenAngle);
+        else if (hintParticle != null) ShowHint(null, screenAngle);
+    }
+
+    private void ClearHint()
+    {
+        if (hintParticle) hintParticle.SetActive(false);
+        if (activeHint == null) return;
+
+        // VFX วนลูป: หยุดปล่อยอนุภาคแล้วค่อยลบ จะได้จางหายแทนการหายวับ
+        foreach (ParticleSystem ps in activeHint.GetComponentsInChildren<ParticleSystem>())
+        {
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+        }
+        Destroy(activeHint, hintFadeOutTime);
+        activeHint = null;
     }
 
     public void StartParrySequence(EnemyAttackPattern pattern, EnemyController attacker)
@@ -50,9 +163,16 @@ public class ParryManager : MonoBehaviour
         for (int i = 0; i < pattern.strikes.Count; i++)
         {
             ParryStrike strike = pattern.strikes[i];
+            requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
+            currentHintAngle = Mathf.Atan2(requiredDirection.y, requiredDirection.x) * Mathf.Rad2Deg;
 
-            // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ)
-            yield return new WaitForSeconds(strike.delayBeforeStrike);
+            // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ) ช่วงท้ายโชว์ Hint จังหวะ 1 สั้น ๆ ให้ผู้เล่นเตรียมตัวก่อนบอกทิศ
+            float quietTime = strike.delayBeforeStrike - hintStep1Duration;
+            if (quietTime > 0f) yield return new WaitForSeconds(quietTime);
+            if (!IsSequenceStillValid(turnNumber)) break;
+
+            ShowWarningHint();
+            yield return new WaitForSeconds(hintStep1Duration);
 
             // ผู้โจมตีตายจากการสวนกลับ หรือการต่อสู้จบไปแล้ว -> หยุดคอมโบที่เหลือ
             if (!IsSequenceStillValid(turnNumber)) break;
@@ -66,12 +186,12 @@ public class ParryManager : MonoBehaviour
                 evader.UpdateAPUI();
 
                 currentPostureDamage = Mathf.RoundToInt(strike.postureDamageIfParried);
+                ClearHint();
                 OnParrySuccess(attackingEnemy.transform.position, evader.transform.position);
                 continue;
             }
 
             // 2. ตั้งค่าการป้องกันสำหรับฮิตนี้
-            requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
             incomingDamage = Mathf.RoundToInt(strike.damageIfHit);
             currentPostureDamage = Mathf.RoundToInt(strike.postureDamageIfParried);
 
@@ -79,10 +199,8 @@ public class ParryManager : MonoBehaviour
             isStrikeResolved = false;
             isSwiping = false;
 
-            // เปิด UI แจ้งเตือนทิศทาง[cite: 6]
-            hintParticle.SetActive(true);
-            float angle = Mathf.Atan2(requiredDirection.y, requiredDirection.x) * Mathf.Rad2Deg;
-            hintParticle.transform.rotation = Quaternion.Euler(0, 0, angle);
+            // Hint จังหวะ 2: บอกทิศที่ต้องลาก ตลอดช่วง Parry Window
+            ShowDirectionHint(currentHintAngle);
 
             // 3. เริ่มจับเวลา Parry Window
             float timer = strike.parryWindowDuration;
@@ -100,11 +218,11 @@ public class ParryManager : MonoBehaviour
             }
 
             // ปิด UI ของฮิตนี้ เตรียมรอฮิตต่อไป
-            hintParticle.SetActive(false); //[cite: 6]
+            ClearHint();
             if (swipeLine) swipeLine.positionCount = 0;
         }
 
-        hintParticle.SetActive(false);
+        ClearHint();
         if (swipeLine) swipeLine.positionCount = 0;
         isAwaitingInput = false;
 
@@ -167,7 +285,7 @@ public class ParryManager : MonoBehaviour
                     Vector3 startWorldPos = GetWorldPosition(startPosScreen);
                     Vector3 endWorldPos = GetWorldPosition(mouseScreenPos);
 
-                    OnParrySuccess(startWorldPos, endWorldPos);
+                    OnParrySuccess(startWorldPos, endWorldPos, swipeDelta);
                 }
                 else FailStrike("Wrong direction!");
             }
@@ -212,10 +330,13 @@ public class ParryManager : MonoBehaviour
         //return mainCam.ScreenToWorldPoint(new Vector3(screenPos.x, screenPos.y, 5f));
     }
 
-    public void OnParrySuccess(Vector3 startPos, Vector3 endPos)
+    // swipeScreenDirection: ทิศที่ผู้เล่นลากจริงบนจอ (พิกเซล) ประกายของ ParryVFX พุ่งตามทิศนี้
+    // ไม่ส่งมา (เช่น Evasion หลบอัตโนมัติ ไม่มีการลาก) -> ใช้ทิศที่ Hint บอก
+    public void OnParrySuccess(Vector3 startPos, Vector3 endPos, Vector2 swipeScreenDirection = default)
     {
         isStrikeResolved = true;
         isAwaitingInput = false;
+        ClearHint();
 
         bool isSpellActive = (PlayerCombatController.Instance != null &&
                               PlayerCombatController.Instance.ActiveWeapon != null &&
@@ -250,6 +371,11 @@ public class ParryManager : MonoBehaviour
         if (VFXManager.Instance != null)
         {
             VFXManager.Instance.SpawnParrySlash(startPos, endPos);
+            // ParryVFX ตรงจุดเดียวกับ Hint หมุนตามทิศที่ผู้เล่นลากจริง (ลากเฉียงจากทิศ Hint ได้ไม่เกิน ~36° ก็ยังผ่าน)
+            float sparkAngle = swipeScreenDirection.sqrMagnitude > 0.0001f
+                ? Mathf.Atan2(swipeScreenDirection.y, swipeScreenDirection.x) * Mathf.Rad2Deg
+                : currentHintAngle;
+            VFXManager.Instance.SpawnParrySuccess(HintPosition(), HintRotation(sparkAngle), parrySuccessScale, hintSortingBoost);
         }
 
         if (HitstopManager.Instance != null)
@@ -262,6 +388,7 @@ public class ParryManager : MonoBehaviour
     {
         isStrikeResolved = true;
         isAwaitingInput = false;
+        ClearHint();
 
         Debug.Log($"<color=red>PARRY FAILED ({reason}) - Took {incomingDamage} Damage!</color>");
         CameraShakeManager.TryShake(0.8f);

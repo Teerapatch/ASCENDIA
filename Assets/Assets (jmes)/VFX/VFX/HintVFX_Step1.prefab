@@ -48,7 +48,7 @@ ParticleSystem:
   ringBufferMode: 0
   ringBufferLoopRange: {x: 0, y: 1}
   emitterVelocityMode: 0
-  looping: 1
+  looping: 0
   prewarm: 0
   playOnAwake: 1
   useUnscaledTime: 0
@@ -5168,7 +5168,7 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: 30c41c686541ab64bb4c79d84567f3ed, type: 2}
     - target: {fileID: 3251494045315894371, guid: bbf9e36a48d6c5648a13889afab076fd, type: 3}
       propertyPath: looping
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3251494045315894371, guid: bbf9e36a48d6c5648a13889afab076fd, type: 3}
       propertyPath: lengthInSec
@@ -5404,7 +5404,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8771972552311404798, guid: bbf9e36a48d6c5648a13889afab076fd, type: 3}
       propertyPath: looping
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8771972552311404798, guid: bbf9e36a48d6c5648a13889afab076fd, type: 3}
       propertyPath: lengthInSec
@@ -5420,7 +5420,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8771972552311404799, guid: bbf9e36a48d6c5648a13889afab076fd, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9147533049016733718, guid: bbf9e36a48d6c5648a13889afab076fd, type: 3}
       propertyPath: m_IsActive

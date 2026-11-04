@@ -10,6 +10,13 @@ public class OreSpawner : MonoBehaviour
     [Range(0f, 1f)]
     public float spawnChance = 0.4f; // โอกาสเกิด 40%
 
+    [Header("Wall Snap")]
+    [Tooltip("วางของให้ติดผิวหินจริง (ClimbableWall) ตามแกน +Z ของ Spawner แทนตำแหน่งจุดเกิดตรงๆ")]
+    public bool snapToWall = false;
+    [Tooltip("ระยะห่างจากผิวหิน")]
+    public float wallOffset = 0.7f;
+    public float wallProbeBack = 8f;
+
     private void Start()
     {
         SpawnOres();
@@ -31,7 +38,18 @@ public class OreSpawner : MonoBehaviour
 
                 if (selectedItem != null)
                 {
-                    GameObject spawnedObj = Instantiate(selectedItem, spawnPoint.position, selectedItem.transform.rotation);
+                    Vector3 position = spawnPoint.position;
+                    if (snapToWall)
+                    {
+                        // MeshCollider ของหินถูกสร้างใน ClimbableWall.Awake ก่อน Start นี้แล้ว
+                        Vector3 facing = transform.forward;
+                        if (ClimbableWall.Raycast(position - facing * wallProbeBack, facing, wallProbeBack * 3f, out RaycastHit hit))
+                        {
+                            position = hit.point - facing * wallOffset;
+                        }
+                    }
+
+                    GameObject spawnedObj = Instantiate(selectedItem, position, selectedItem.transform.rotation);
                     
                     if (container != null)
                     {

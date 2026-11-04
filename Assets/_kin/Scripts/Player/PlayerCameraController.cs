@@ -13,6 +13,10 @@ public class PlayerCameraController : MonoBehaviour
     public float mouseSensitivity = 3f;   // ความไวเมาส์ (ใช้คำนวณตอนเมาส์ถูกล็อค)
     public bool requireRightClick = false; // ติ๊กถูกถ้าอยากให้ต้องคลิกขวาค้างถึงจะหันมองได้
 
+    [Header("Climb View")]
+    [Tooltip("มุมก้มของกล้องตอนปีน (องศา) 0 = มองตรงเข้ากำแพง, ClimbScene ใช้ 27 ให้เป็นมุมเดียวกับฉากอาร์ต ENVI_Climb")]
+    public float climbTilt = 0f;
+
     private float lockedPan, lockedTilt;
     private Vector3 lookTargetOffset;
 
@@ -90,7 +94,7 @@ public class PlayerCameraController : MonoBehaviour
     {
         virtualMousePos = Vector2.zero;
         lockedPan = wallNormalAngleY;
-        lockedTilt = 0f; // ตอนปีนให้มองตรงไปที่กำแพง
+        lockedTilt = climbTilt; // ตอนปีนมองเข้ากำแพง (ก้มลงตาม climbTilt)
 
         walkCam.SetActive(false);
         climbCam.SetActive(true);

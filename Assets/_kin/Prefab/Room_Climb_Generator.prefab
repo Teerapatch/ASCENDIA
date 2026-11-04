@@ -120,8 +120,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2898051164360092905}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 61.24, z: -2.76}
+  m_LocalRotation: {x: -0.00110041, y: 0.27038085, z: -0.0036377034, w: 0.96274596}
+  m_LocalPosition: {x: -5.46, y: 61.24, z: -1.55}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -129,7 +129,7 @@ Transform:
   - {fileID: 5473635019700374250}
   - {fileID: 1537424660913420687}
   m_Father: {fileID: 6894704895605818407}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -0.009, y: 31.374, z: -0.435}
 --- !u!65 &2207643776034621461
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -149,7 +149,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 8.511908, y: 1, z: 9.810094}
+  m_Size: {x: 20, y: 1, z: 10}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &27614255203316766
 MonoBehaviour:
@@ -379,10 +379,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MapGenerator
   mountainPrefabs:
   - {fileID: 2002122749271754723, guid: 7b102e40afcebb54ab8a0d5f9925fa89, type: 3}
-  - {fileID: 2002122749271754723, guid: e32469c3dfd397b49a34a9901069627f, type: 3}
   - {fileID: 2002122749271754723, guid: 07dd1e64c37a96b4e957fecb244cae28, type: 3}
   topMountainPrefab: {fileID: 7328970248539736144, guid: 28ba696708aaca14eb089aa76bde4c66, type: 3}
-  tileHeight: 20
+  tileHeight: 25
   maxTilesOnScreen: 4
   totalTilesPerRoom: 10
 --- !u!1 &6271095231464990966

@@ -103,6 +103,9 @@ public class PlayerCombatController : MonoBehaviour
             }
         }
 
+        // ฉากที่มีตัวผู้เล่นแต่ไม่มี CombatManager (เช่น ฉากจัดแสง/ฉากอาร์ต ENVI_Battle) ไม่ต้องทำอะไร
+        if (CombatManager.Instance == null) return;
+
         if (CombatManager.Instance.currentState != CombatState.PlayerTurn)
         {
             if (isAiming) ExitAimMode();

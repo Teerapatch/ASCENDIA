@@ -260,6 +260,8 @@ public class CombatManager : MonoBehaviour
     private EnemyController SpawnEnemy(GameObject prefab, Transform spawnPoint)
     {
         GameObject enemyObj = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
+        // ขนาดตามจุดเกิด: ฉากที่ย่อ/ขยายตัวละครทั้งชุด (เช่น Characters scale 2 ใน ENVI) ศัตรูจะได้สเกลเดียวกัน
+        enemyObj.transform.localScale = Vector3.Scale(prefab.transform.localScale, spawnPoint.lossyScale);
         EnemyController controller = enemyObj.GetComponent<EnemyController>();
 
         if (controller == null)

@@ -66,13 +66,17 @@ public class PlayerWalkController : MonoBehaviour
         // 1. เปลี่ยนสถานะ
         stateManager.ChangeState(PlayerStateManager.State.Climbing);
         
-        // 2. ดึงตัวติดกำแพง
-        transform.forward = -hit.normal;
+        // 2. ดึงตัวติดกำแพง: หินอาร์ต (MeshCollider) ขรุขระ ใช้ทิศของหน้าผา (กล่องขอบเขตของไทล์) แทน normal ของจุดที่ชน
+        ClimbableWall wall = hit.collider.GetComponentInParent<ClimbableWall>();
+        Vector3 facing = wall != null ? wall.Facing : -hit.normal;
+        facing.y = 0f;
+        transform.forward = facing.normalized;
         float capsuleRadius = 0.6f;
-        Vector3 stickPos = hit.point + (hit.normal * capsuleRadius);
+        Vector3 stickPos = hit.point - (transform.forward * capsuleRadius);
         transform.position = new Vector3(stickPos.x, transform.position.y, stickPos.z);
 
-        // 3. สั่งตากล้องให้เปลี่ยนมุม
-        camController.SwitchToClimbCam(transform.eulerAngles.y);
+        // 3. สั่งตากล้องให้เปลี่ยนมุม: กล้องใช้ทิศของไทล์ (มุมฉากอาร์ต) ส่วนตัวผู้เล่นหันเข้าหน้าผาที่อาจเอียงจากกล้อง
+        float viewYaw = wall != null ? Quaternion.LookRotation(wall.ViewFacing).eulerAngles.y : transform.eulerAngles.y;
+        camController.SwitchToClimbCam(viewYaw);
     }
 }

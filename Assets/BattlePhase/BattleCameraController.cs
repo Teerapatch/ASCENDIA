@@ -18,6 +18,10 @@ public class BattleCameraController : MonoBehaviour
     [Header("Cinemachine Core")]
     [SerializeField] private CinemachineCamera activeVCam;
 
+    [Header("Scene Scale")]
+    [Tooltip("ตัวคูณระยะกล้องตอนซูมเลือกสกิล/เป้าหมาย ใช้เมื่อฉากขยายตัวละครทั้งชุด (เช่น Characters scale 2 = ใส่ 2)")]
+    public float framingScale = 1f;
+
     [Header("UI Focus Anchor")]
     [Tooltip("ลาก GameObject ของ UI เมนูสกิลมาใส่ที่นี่")]
     public Transform skillMenuUIPos;
@@ -105,7 +109,7 @@ public class BattleCameraController : MonoBehaviour
                 }
                 else if (currentAttacker != null)
                 {
-                    focusPoint = currentAttacker.position + Vector3.up * 1.2f;
+                    focusPoint = currentAttacker.position + Vector3.up * (1.2f * framingScale);
                 }
                 else
                 {
@@ -115,7 +119,7 @@ public class BattleCameraController : MonoBehaviour
                 Vector3 lookDirUI = (focusPoint - sceneDefaultPosition).normalized;
                 if (lookDirUI == Vector3.zero) lookDirUI = Vector3.forward;
 
-                Vector3 skillCamPos = focusPoint - (lookDirUI * Mathf.Abs(skillSelectPreset.positionOffset.z)) + Vector3.up * skillSelectPreset.positionOffset.y;
+                Vector3 skillCamPos = focusPoint - (lookDirUI * Mathf.Abs(skillSelectPreset.positionOffset.z) * framingScale) + Vector3.up * (skillSelectPreset.positionOffset.y * framingScale);
                 Quaternion skillCamRot = Quaternion.LookRotation(focusPoint - skillCamPos);
 
                 ApplyCustomTransition(skillCamPos, skillCamRot, skillSelectPreset.lensSize, skillSelectPreset.transitionDuration);
@@ -149,6 +153,11 @@ public class BattleCameraController : MonoBehaviour
                     }
 
                     // คำนวณตำแหน่งพิกัดเป้าหมาย
+                    // ขยายระยะทั้งหมดตามสเกลของฉาก
+                    targetZOffset *= framingScale;
+                    targetYOffset *= framingScale;
+                    enemyCenterHeight *= framingScale;
+
                     Vector3 enemyCenter = currentTarget.position + Vector3.up * enemyCenterHeight;
                     Vector3 lookDirEnemy = (enemyCenter - sceneDefaultPosition).normalized;
                     if (lookDirEnemy == Vector3.zero) lookDirEnemy = Vector3.forward;
