@@ -2213,6 +2213,7 @@ MonoBehaviour:
   climbAcceleration: 10
   minSpeedMultiplier: 0.4
   environmentContainer: {fileID: 1088440540}
+  useWallWidth: 1
 --- !u!114 &864942017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4057,12 +4058,13 @@ MonoBehaviour:
   state: {fileID: 864942017}
   playerRoot: {fileID: 864942010}
   contactWeight: 1
+  wristRotationWeight: 0
+  distancePerCycle: 0.8
   reachMargin: 0.95
-  stepLength: 0.24
-  liftHeight: 0.07
-  stepDuration: 0.2
-  handSurfaceClearance: 0.045
-  footSurfaceClearance: 0.1
+  footIKWeight: 0
+  contactSmoothTime: 0.08
+  phaseOffset: 0
+  pullRhythm: 0.35
 --- !u!1 &1629782040
 GameObject:
   m_ObjectHideFlags: 0

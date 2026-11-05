@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Unity.Cinemachine;
 
 // Keep the authored view direction. Only correct framing when the body leaves the safe frame.
@@ -7,6 +7,7 @@ public class PlayerCameraFraming : CinemachineExtension
 {
     public Transform player;
     [Range(0f, .3f)] public float screenMargin = .1f;
+    private Vector3 nodePosition; private Quaternion nodeRotation; private bool nodeCaptured;
     private Renderer[] renderers;
     private Animator playerAnimator;
     private float stableHeightPerScale;
@@ -31,7 +32,7 @@ public class PlayerCameraFraming : CinemachineExtension
             if (!found) { bounds = r.bounds; found = true; } else bounds.Encapsulate(r.bounds);
         }
         bool climbView = vcam.name == "ClimbCam";
-        if (climbView)
+        if (climbView || vcam.name == "NodeCam")
         {
             if (!playerAnimator) playerAnimator = player.GetComponentInChildren<Animator>();
             if (playerAnimator && playerAnimator.isHuman)
@@ -72,18 +73,22 @@ public class PlayerCameraFraming : CinemachineExtension
         float playerHeight = bounds.size.y;
         if (nodeView)
         {
-            if (visibleNodes == null || Time.unscaledTime >= nextNodeScan)
+            var playerState=player.GetComponent<PlayerStateManager>();
+            if(nodeCaptured && playerState && playerState.currentState==PlayerStateManager.State.AutoClimbing)
             {
-                visibleNodes = FindObjectsByType<PathNode>(FindObjectsSortMode.None);
-                nextNodeScan = Time.unscaledTime + .5f;
+                state.PositionCorrection+=nodePosition-state.GetFinalPosition();
+                state.RawOrientation=nodeRotation;state.OrientationCorrection=Quaternion.identity;return;
             }
-            foreach (var node in visibleNodes)
-            {
-                // Match the nodes shown by the selection UI, not every room in the level.
-                if (!node || !node.uiNodeTransform || !node.uiNodeTransform.gameObject.activeInHierarchy) continue;
-                bounds.Encapsulate(node.transform.position);
-                if (node.nodeText) bounds.Encapsulate(node.nodeText.bounds);
-            }
+            // Frame the character beside the map UI; world-space labels must not force a zoom-out.
+            Quaternion view = state.GetFinalOrientation();
+            float tangent=Mathf.Tan(state.Lens.FieldOfView*Mathf.Deg2Rad*.5f);
+            float distance=Mathf.Max(2f,playerHeight/(2f*Mathf.Max(.1f,tangent)*.42f));
+            Vector3 desired=bounds.center-view*Vector3.forward*distance
+                -view*Vector3.right*(distance*tangent*state.Lens.Aspect*.4f);
+            state.PositionCorrection += desired-state.GetFinalPosition();
+            nodePosition=desired;nodeRotation=view;nodeCaptured=true;
+            if(state.Lens.Orthographic){var lens=state.Lens;lens.OrthographicSize=playerHeight/(2*.42f);state.Lens=lens;}
+            return;
         }
         Quaternion rotation = state.GetFinalOrientation();
         Quaternion inverse = Quaternion.Inverse(rotation);

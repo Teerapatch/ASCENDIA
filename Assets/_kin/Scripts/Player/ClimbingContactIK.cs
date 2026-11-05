@@ -1,28 +1,68 @@
-﻿using UnityEngine;
+using UnityEngine;
 
-// Humanoid IK is the solver; no animation clip supplies the climbing motion.
 [RequireComponent(typeof(Animator)), DisallowMultipleComponent]
 public class ClimbingContactIK : MonoBehaviour
 {
     public PlayerStateManager state;
     public Transform playerRoot;
     [Range(0, 1)] public float contactWeight = 1f;
-    [Range(.6f, .98f)] public float reachMargin = .92f;
-    [Header("Procedural climbing")]
-    [Range(.1f, .5f)] public float stepLength = .24f;
-    [Range(.02f, .2f)] public float liftHeight = .07f;
-    [Range(.05f, .5f)] public float stepDuration = .2f;
+    [Range(0, 1)] public float wristRotationWeight = 0f;
+    [Tooltip("Distance climbed per animation cycle, measured at visual scale 1.")]
+    public float distancePerCycle = 0.8f;
+    public float reachMargin = 0.95f;
     public bool HasWall { get; private set; }
+    [Range(0, 1)] public float footIKWeight = 0f;
+    private ClimbingHandRig handRig;
+    public Collider WallCollider { get; private set; }
+    public void ReleaseWall()
+    {
+        HasWall=false; WallCollider=null; holdingPose=false; climbingPose=false;rate=0;weight=0;ClearContacts();
+        if(animator){animator.SetBool(Climbing,false);animator.SetFloat(Rate,0);}
+    }
+    private Animator animator;
+    private Transform wall;
+    private ClimbingSurface surface;
+    private Vector3 normal;
+    private Vector3 requestedVelocity;
+    public Vector3 ClimbVelocity => requestedVelocity;
+    private float sideBlend, sidePhase;
+    private bool climbingPose;
+    private bool holdingPose;
+    [Range(.02f, .2f)] public float contactSmoothTime = .08f;
+    [Range(0f, 1f)] public float phaseOffset = 0f;
+    [Range(0f, .8f)] public float pullRhythm = .35f;
+    public void SetClimbVelocity(Vector3 velocity) { requestedVelocity = velocity; }
     public float MovementMultiplier
     {
         get
         {
-            if (!HasWall || !ready || holding || !animator || !wall ||
-                !animator.GetCurrentAnimatorStateInfo(0).IsTag("Climbing") || animator.IsInTransition(0)) return 0f;
-            // IK may reposition its contacts, but cannot veto a valid movement direction.
-            return 1f;
+            if (!animator || !animator.GetCurrentAnimatorStateInfo(0).IsTag("Climbing") || animator.IsInTransition(0)) return 0f;
+            return HasWall && !holdingPose ? 1f : 0f;
         }
     }
+
+    private float weight, rate;
+    private float scale = 1f;
+    private static readonly int Climbing = Animator.StringToHash("IsClimbing");
+    private static readonly int Rate = Animator.StringToHash("ClimbRate");
+    private class Contact { public bool planted, hasAnchor, swinging, hasOutput; public Vector3 localPoint, swingStart, swingEnd, outputLocal, smoothVelocity; }
+    private readonly Contact[] contacts = { new Contact(), new Contact(), new Contact(), new Contact() };
+    private readonly AvatarIKGoal[] goals = { AvatarIKGoal.LeftHand, AvatarIKGoal.RightHand, AvatarIKGoal.LeftFoot, AvatarIKGoal.RightFoot };
+    private readonly HumanBodyBones[] tips = { HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
+    private readonly HumanBodyBones[] mids = { HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg };
+    private readonly HumanBodyBones[] roots = { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm, HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg };
+    public static bool TryGroundHeight(Transform owner, Vector3 position, float range, out float height)
+    {
+        height = float.NegativeInfinity;
+        foreach (var hit in Physics.RaycastAll(position + Vector3.up * .2f, Vector3.down, range,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.collider.transform.IsChildOf(owner) || hit.collider.CompareTag("Wall") || hit.normal.y < .65f) continue;
+            height = Mathf.Max(height, hit.point.y);
+        }
+        return !float.IsNegativeInfinity(height);
+    }
+
     public static float SupportedTravel(Vector3 delta, Vector3 direction, float radius, float requested)
     {
         if (requested <= 0 || radius <= 0) return 0;
@@ -35,207 +75,169 @@ public class ClimbingContactIK : MonoBehaviour
         float discriminant = along*along + radius*radius - delta.sqrMagnitude;
         return discriminant <= 0 ? 0 : Mathf.Min(requested, Mathf.Max(0, -along+Mathf.Sqrt(discriminant)));
     }
-    public void SetClimbVelocity(Vector3 velocity) { requestedVelocity = velocity; }
 
-    [Range(.02f, .10f)] public float handSurfaceClearance = .045f;
-    [Range(.04f, .18f)] public float footSurfaceClearance = .10f;
-    float groundHeight;
-    bool hasGround;
-    float entryLift;
-    Animator animator;
-    Transform wall;
-    ClimbingSurface surface;
-    Vector3 normal, requestedVelocity, bodyOffset;
-    bool climbingPose, holding, ready;
-    float weight, stature = 1.7f, progress;
-    int active = -1, next;
-    readonly int[] order = {0, 3, 1, 2};
-    readonly AvatarIKGoal[] goals = {AvatarIKGoal.LeftHand, AvatarIKGoal.RightHand, AvatarIKGoal.LeftFoot, AvatarIKGoal.RightFoot};
-    readonly AvatarIKHint[] hints = {AvatarIKHint.LeftElbow, AvatarIKHint.RightElbow, AvatarIKHint.LeftKnee, AvatarIKHint.RightKnee};
-    readonly HumanBodyBones[] roots = {HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm, HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg};
-    readonly HumanBodyBones[] mids = {HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg};
-    readonly HumanBodyBones[] tips = {HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot};
-    class Contact { public bool valid; public Vector3 point, start, end, originLocal; public float length; }
-    readonly Contact[] contacts = {new Contact(),new Contact(),new Contact(),new Contact()};
-    static readonly int Climbing = Animator.StringToHash("IsClimbing"), Rate = Animator.StringToHash("ClimbRate");
-
-    void Awake()
+    private bool SameSurface(Collider collider)
+    {
+        return collider && collider.CompareTag("Wall") &&
+            (surface ? collider.GetComponentInParent<ClimbingSurface>() == surface : collider.transform == wall);
+    }
+    private void Awake()
     {
         animator = GetComponent<Animator>();
+        handRig = GetComponent<ClimbingHandRig>();
+        if(!handRig) handRig = gameObject.AddComponent<ClimbingHandRig>();
         if (!state) state = GetComponentInParent<PlayerStateManager>();
         if (!playerRoot && state) playerRoot = state.transform;
     }
-    void LateUpdate()
+    private void LateUpdate()
     {
-        if (!animator || !animator.isHuman || !state || !playerRoot) return;
-        bool climbing = state.currentState == PlayerStateManager.State.Climbing;
-        holding = state.currentState == PlayerStateManager.State.Penalty && climbingPose;
-        climbingPose = climbing || holding;
-        animator.SetBool(Climbing, climbingPose);
-        animator.SetFloat(Rate, 0f);
-        if (holding) { requestedVelocity = Vector3.zero; return; }
-        if (!climbing) { ResetContacts(); HasWall = false; weight = 0; return; }
-        var head = animator.GetBoneTransform(HumanBodyBones.Head);
-        var foot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
-        var hipBone = animator.GetBoneTransform(HumanBodyBones.Hips);
-        var thigh = animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
-        var knee = animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
-        if (head && foot && hipBone && thigh && knee)
-            stature = Mathf.Max(.5f, Vector3.Distance(head.position,hipBone.position)
-                + Vector3.Distance(thigh.position,knee.position) + Vector3.Distance(knee.position,foot.position));
-        HasWall = Physics.Raycast(playerRoot.position, playerRoot.forward, out var hit,
-            Mathf.Max(1.8f, stature), Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) && hit.collider.CompareTag("Wall");
-        if (HasWall)
+        if (!animator || !state || !playerRoot) return;
+        bool climbing = state.currentState == PlayerStateManager.State.Climbing || state.currentState == PlayerStateManager.State.AutoClimbing;
+        holdingPose = (state.currentState == PlayerStateManager.State.Penalty || state.currentState == PlayerStateManager.State.NodeSelection) && climbingPose;
+        climbingPose = climbing || holdingPose;
+        if (holdingPose)
         {
+            // Preserve the animation phase and the last solved contacts throughout the penalty.
+            rate = 0f;
+            requestedVelocity = Vector3.zero;
+            animator.SetBool(Climbing, true);
+            animator.SetFloat(Rate, 0f);
+            return;
+        }
+        scale = Mathf.Max(.1f, Mathf.Abs(transform.lossyScale.y));
+        HasWall = false;
+        if (climbing && Physics.Raycast(playerRoot.position, playerRoot.forward, out var hit, 1.8f * scale, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            && hit.collider.CompareTag("Wall"))
+        {
+            HasWall = true; WallCollider = hit.collider;
             var hitSurface = hit.collider.GetComponentInParent<ClimbingSurface>();
-            var anchorRoot = hitSurface ? hitSurface.transform : hit.transform;
-            if (wall != anchorRoot) { ResetContacts(); wall = anchorRoot; }
+            var anchor = hitSurface ? hitSurface.transform : hit.transform;
+            if (wall != anchor) { wall = anchor; ClearContacts(); }
             surface = hitSurface;
             normal = hit.normal;
-        }
-        else ResetContacts();
-        weight = Mathf.MoveTowards(weight, HasWall ? contactWeight : 0, Time.deltaTime * 5);
-    }
-    void ResetContacts() { foreach (var c in contacts) c.valid = false; ready = false; active = -1; next = 0; progress = 0; bodyOffset = Vector3.zero; entryLift = 0; }
+            // Drive the animation from requested speed, not the pulsed movement it produces.
+            float lateral = Vector3.Dot(requestedVelocity,playerRoot.right);
+            float lateralAmount = Mathf.Abs(lateral)/Mathf.Max(.01f,requestedVelocity.magnitude);
+            sideBlend=Mathf.MoveTowards(sideBlend,requestedVelocity.sqrMagnitude>.001f?lateralAmount:0,Time.deltaTime*4);
+            if(requestedVelocity.sqrMagnitude>.001f)sidePhase+=Time.deltaTime*requestedVelocity.magnitude/Mathf.Max(.2f,scale*.8f);
+            float speed = requestedVelocity.magnitude * (1-sideBlend);
+            var clips = animator.GetCurrentAnimatorClipInfo(0);
+            float duration = clips.Length > 0 ? clips[0].clip.length : 1f;
+            float desiredRate = speed < .02f ? 0f : Mathf.Min(1.5f, speed * duration / Mathf.Max(.05f, distancePerCycle * scale));
+            if (requestedVelocity.y < -.001f) desiredRate = -desiredRate;
+            rate = desiredRate == 0f ? 0f : Mathf.MoveTowards(rate, desiredRate, Time.deltaTime * 5f);
 
-    public static bool TryGroundHeight(Transform owner, Vector3 position, float range, out float height)
-    {
-        height = float.NegativeInfinity;
-        foreach (var hit in Physics.RaycastAll(position + Vector3.up * .2f, Vector3.down, range,
-            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-        {
-            if (hit.collider.transform.IsChildOf(owner) || hit.collider.CompareTag("Wall") || hit.normal.y < .65f) continue;
-            height = Mathf.Max(height, hit.point.y);
         }
-        return !float.IsNegativeInfinity(height);
+        else { WallCollider=null; rate = 0; ClearContacts(); }
+        animator.SetBool(Climbing, climbing);
+        animator.SetFloat(Rate, rate);
+        weight = Mathf.MoveTowards(weight, climbing && HasWall ? contactWeight : 0f, Time.deltaTime * 5f);
     }
-    bool SameSurface(Collider collider)
+    private void ClearContacts() { foreach (var contact in contacts) { contact.planted = false; contact.hasAnchor = false; contact.swinging = false; contact.hasOutput = false; contact.smoothVelocity = Vector3.zero; } }
+    private void OnAnimatorIK(int layer)
     {
-        if (!collider || !collider.CompareTag("Wall")) return false;
-        return surface ? collider.GetComponentInParent<ClimbingSurface>() == surface : collider.transform == wall;
-    }
-
-    bool FindContact(int i, Vector3 origin, Vector3 right, Vector3 up, Vector3 lead, out Vector3 point)
-    {
-        var c = contacts[i]; float side = (i == 0 || i == 2) ? -1 : 1;
-        point = default;
-        // Reach high with the hands; keep feet closer to the hips for bent knees.
-        // Try shorter reaches if the wall depth makes the first target unreachable.
-        for (int attempt=0; attempt<4; attempt++)
+        if (!animator || !playerRoot) return;
+        float phase = Mathf.Repeat(animator.GetCurrentAnimatorStateInfo(0).normalizedTime + phaseOffset, 1f);
+        if(climbingPose && weight>0)
         {
-            float fraction = 1f-attempt*.2f;
-            float vertical = i < 2 ? (i == 0 ? .70f : .60f) : (i == 2 ? -.80f : -.84f);
-            Vector3 desired = origin + up*c.length*vertical*fraction
-                + right*side*c.length*(i<2 ? .22f : .26f) + lead*fraction;
-            if (i >= 2 && hasGround) desired.y = Mathf.Max(desired.y, groundHeight + stature*.055f);
-            if (!Physics.Raycast(desired+normal*stature,-normal,out var hit,stature*2.5f,
-                Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore) || !SameSurface(hit.collider)) continue;
-            Vector3 candidate=hit.point+normal*stature*(i<2?handSurfaceClearance:footSurfaceClearance);
-            if(surface)
+            float side=Vector3.Dot(requestedVelocity,playerRoot.right);
+            animator.bodyRotation=Quaternion.AngleAxis(-Mathf.Sign(side)*sideBlend*9f,playerRoot.forward)*animator.bodyRotation;
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            animator.SetIKPositionWeight(goals[i], 0); animator.SetIKRotationWeight(goals[i], 0);
+            // Animation Rigging owns the hands; descending feet use the animation pose.
+            if (i < 2 && handRig && handRig.Ready) continue;
+            if(i>=2 && climbingPose && weight>0)
             {
-                Vector3 snap=surface.NearestHold(hit.point,stature*.12f)+normal*stature*(i<2?handSurfaceClearance:footSurfaceClearance);
-                if(Vector3.Distance(origin,snap)<c.length*reachMargin)candidate=snap;
+                var foot=animator.GetBoneTransform(tips[i]);var thigh=animator.GetBoneTransform(roots[i]);var knee=animator.GetBoneTransform(mids[i]);
+                float leg=Vector3.Distance(thigh.position,knee.position)+Vector3.Distance(knee.position,foot.position);
+                Vector3 footGoal=foot.position;
+                footGoal.y=Mathf.Min(footGoal.y,thigh.position.y-leg*.48f);
+                if(sideBlend>.01f)
+                {
+                    float cycle=Mathf.Repeat(sidePhase+(i==2?0:.5f),1);
+                    float stride=Mathf.Sin(cycle*Mathf.PI*2)*leg*.18f;
+                    Vector3 sideTarget=thigh.position-Vector3.up*leg*.75f+playerRoot.right*stride-playerRoot.forward*leg*.08f;
+                    sideTarget.y+=Mathf.Max(0,Mathf.Sin(cycle*Mathf.PI*2))*leg*.09f;
+                    footGoal=Vector3.Lerp(footGoal,sideTarget,sideBlend);
+                }
+                footGoal=thigh.position+Vector3.ClampMagnitude(footGoal-thigh.position,leg*.94f);
+                animator.SetIKPositionWeight(goals[i],weight);animator.SetIKPosition(goals[i],footGoal);
+                continue;
             }
-            if(Vector3.Distance(origin,candidate)>c.length*reachMargin)continue;
-            point=wall.InverseTransformPoint(candidate);return true;
-        }
-        return false;
-    }
-
-    void OnAnimatorIK(int layer)
-    {
-        if (layer != 0 || !animator || !playerRoot || !animator.isHuman) return;
-        for (int i=0;i<4;i++) { animator.SetIKPositionWeight(goals[i],0); animator.SetIKRotationWeight(goals[i],0); animator.SetIKHintPositionWeight(hints[i],0); }
-        if (!climbingPose || !HasWall || !wall || weight <= 0) return;
-        Vector3 up = Vector3.ProjectOnPlane(Vector3.up, normal).normalized;
-        if (up.sqrMagnitude < .5f) return;
-        Vector3 right = Vector3.Cross(up, -normal).normalized;
-        Vector3 velocity = Vector3.ProjectOnPlane(requestedVelocity,normal);
-        float speed = holding ? 0 : velocity.magnitude;
-        hasGround = TryGroundHeight(playerRoot, playerRoot.position + normal * stature*.1f, stature*1.5f, out groundHeight);
-        // Keep the torso upright and close enough to the wall for bent arms.
-        if (!holding)
-        {
-            Vector3 hip = animator.GetBoneTransform(HumanBodyBones.Hips).position;
-            float distance = Vector3.Dot(hip-wall.position,normal);
-            if (Physics.Raycast(hip+normal*stature,-normal,out var bodyHit,stature*3,
-                Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore) && SameSurface(bodyHit.collider))
-                distance = Vector3.Dot(hip-bodyHit.point,normal);
-            Vector3 desiredOffset = normal * Mathf.Clamp(stature*.15f-distance,-stature*.3f,stature*.3f);
-            // Shift weight toward the supporting side while a limb is reaching.
-            if (active >= 0)
-                desiredOffset += right * ((active==0 || active==2) ? 1f : -1f)
-                    * stature*.025f*Mathf.Sin(progress*Mathf.PI);
-            if (hasGround)
+            if (i >= 2 && footIKWeight <= 0f) continue;
+            if (i >= 2 && requestedVelocity.y < -.01f) { contacts[i].hasOutput=false;contacts[i].planted=false;continue; }
+            if (weight <= 0 || !wall || !HasWall) continue;
+            var tip = animator.GetBoneTransform(tips[i]); var mid = animator.GetBoneTransform(mids[i]); var root = animator.GetBoneTransform(roots[i]);
+            if (!tip || !mid || !root) continue;
+            var contact = contacts[i];
+            if ((holdingPose || Mathf.Abs(rate) < .001f) && contact.hasOutput)
             {
-                float lowestFoot = Mathf.Min(animator.GetBoneTransform(HumanBodyBones.LeftFoot).position.y,
-                    animator.GetBoneTransform(HumanBodyBones.RightFoot).position.y);
-                // Capture sufficient clearance at entry; never alternate between lifting and sinking.
-                entryLift = Mathf.Max(entryLift, Mathf.Clamp(groundHeight + stature*.055f - lowestFoot, 0, stature*.4f));
+                animator.SetIKPositionWeight(goals[i], weight * (i >= 2 ? footIKWeight : 1f));
+                animator.SetIKPosition(goals[i], wall.TransformPoint(contact.outputLocal));
+                // Resume a reach from the held pose instead of its previous destination.
+                contact.localPoint = contact.outputLocal;
+                contact.hasAnchor = true;
+                contact.planted = true;
+                contact.swinging = false;
+                contact.smoothVelocity = Vector3.zero;
+                continue;
             }
-            desiredOffset.y = Mathf.Max(desiredOffset.y, entryLift);
-            bodyOffset = Vector3.Lerp(bodyOffset,desiredOffset,1-Mathf.Exp(-Time.deltaTime*8));
-        }
-        animator.bodyPosition += bodyOffset * weight;
-        animator.bodyRotation = Quaternion.Slerp(animator.bodyRotation,Quaternion.LookRotation(-normal,up),weight);
-        bool all = true;
-        for(int i=0;i<4;i++)
-        {
-            var root=animator.GetBoneTransform(roots[i]); var mid=animator.GetBoneTransform(mids[i]); var tip=animator.GetBoneTransform(tips[i]);
-            var c=contacts[i];
-            c.originLocal=playerRoot.InverseTransformPoint(root.position+bodyOffset);
-            c.length=Vector3.Distance(root.position,mid.position)+Vector3.Distance(mid.position,tip.position);
-            if (!c.valid && FindContact(i,root.position+bodyOffset,right,up,Vector3.zero,out var initial)) { c.point=initial; c.valid=true; }
-            all &= c.valid;
-        }
-        ready = all;
-        if (ready && speed>.01f && active<0)
-        {
-            // Reposition the support that most limits movement, with cyclic order as a tie-breaker.
-            int chosen=-1, chosenOrder=0;
-            float bestTravel=float.PositiveInfinity;
-            Vector3 bestDestination=Vector3.zero;
-            for(int k=0;k<4;k++)
+            // Probe from the animated pose; contact points remain in wall-local coordinates.
+            Vector3 origin = tip.position + normal * .5f * scale;
+            if (!Physics.Raycast(origin, -normal, out var hit, 1.6f * scale, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore) || !SameSurface(hit.collider)) { contacts[i].planted = false; continue; }
+            Vector3 candidate = surface ? surface.NearestHold(hit.point, .16f * scale) : hit.point;
+            candidate += normal * (i < 2 ? .025f : .055f) * scale;
+            float limbPhase = Mathf.Repeat(phase + (i == 0 || i == 3 ? 0f : .5f), 1f);
+            bool swing = Mathf.Abs(rate) > .05f && limbPhase < .45f;
+            // Freeze both ends of each reach in wall space, including on scrolling walls.
+            if (swing && !contact.swinging)
             {
-                int i=order[(next+k)%4]; var c=contacts[i];
-                Vector3 origin=playerRoot.TransformPoint(c.originLocal);
-                Vector3 lead=velocity.normalized * Mathf.Min(stepLength*stature,c.length*(i<2?.32f:.16f));
-                if(!FindContact(i,origin,right,up,lead,out var destination))continue;
-                Vector3 displacement=wall.TransformPoint(destination)-wall.TransformPoint(c.point);
-                if(displacement.magnitude<c.length*.015f)continue;
-                float travel=SupportedTravel(origin-wall.TransformPoint(c.point),velocity.normalized,c.length*.97f,stature);
-                if(travel>=bestTravel-.0001f)continue;
-                bestTravel=travel;chosen=i;chosenOrder=k;bestDestination=destination;
+                contact.swingStart = contact.hasAnchor ? contact.localPoint : wall.InverseTransformPoint(tip.position);
+                contact.swingEnd = wall.InverseTransformPoint(candidate);
+                contact.swinging = true;
+                contact.planted = false;
             }
-            if(chosen>=0)
+            Vector3 target;
+            if (swing)
             {
-                var c=contacts[chosen];c.start=c.point;c.end=bestDestination;
-                active=chosen;progress=0;next=(next+chosenOrder+1)%4;
+                float t = Mathf.Clamp01(limbPhase / .45f);
+                if (rate < 0f) t = 1f - t;
+                target = Vector3.Lerp(wall.TransformPoint(contact.swingStart), wall.TransformPoint(contact.swingEnd), Mathf.SmoothStep(0, 1, t))
+                    + normal * Mathf.Sin(t * Mathf.PI) * .04f * scale;
             }
-        }
-
-        if(active>=0 && speed>.01f)
-        {
-            var c=contacts[active];
-            float duration=Mathf.Min(stepDuration,Mathf.Max(.045f,stepLength*stature/(speed*4)));
-            progress=Mathf.Min(1,progress+Time.deltaTime/duration);
-            Vector3 world=Vector3.Lerp(wall.TransformPoint(c.start),wall.TransformPoint(c.end),Mathf.SmoothStep(0,1,progress))
-                +normal*Mathf.Sin(progress*Mathf.PI)*liftHeight*stature;
-            c.point=wall.InverseTransformPoint(world);
-            if(progress>=1) { c.point=c.end;active=-1; }
-        }
-        for(int i=0;i<4;i++)
-        {
-            var c=contacts[i];if(!c.valid)continue;
-            Vector3 origin=animator.GetBoneTransform(roots[i]).position+bodyOffset;
-            Vector3 target=wall.TransformPoint(c.point);
-            // A hard reach limit prevents hyperextension. Do not move the stored wall anchor.
-            target=origin+Vector3.ClampMagnitude(target-origin,c.length*reachMargin);
-            animator.SetIKPositionWeight(goals[i],weight);animator.SetIKPosition(goals[i],target);
-            float side=(i==0||i==2)?-1:1;
-            animator.SetIKHintPositionWeight(hints[i],weight*.75f);
-            animator.SetIKHintPosition(hints[i],origin+right*side*c.length*(i<2?.4f:.18f)+normal*c.length*(i<2?.3f:-.18f)-up*c.length*(i<2?.15f:.4f));
+            else
+            {
+                if (!contact.planted)
+                {
+                    contact.localPoint = contact.swinging ? contact.swingEnd : wall.InverseTransformPoint(candidate);
+                    contact.planted = true;
+                    contact.hasAnchor = true;
+                }
+                contact.swinging = false;
+                target = wall.TransformPoint(contact.localPoint);
+            }
+            float length = Vector3.Distance(root.position, mid.position) + Vector3.Distance(mid.position, tip.position);
+            float reach = length * Mathf.Clamp(reachMargin, .5f, 1f);
+            float distance = Vector3.Distance(root.position, target);
+            if (distance > reach) { target = root.position + Vector3.ClampMagnitude(target - root.position, reach); }
+            // Smooth in wall space so scrolling geometry does not drag the contact behind it.
+            Vector3 desiredLocal = wall.InverseTransformPoint(target);
+            if (!contact.hasOutput)
+            {
+                contact.outputLocal = wall.InverseTransformPoint(tip.position);
+                contact.hasOutput = true;
+            }
+            contact.outputLocal = Vector3.SmoothDamp(contact.outputLocal, desiredLocal,
+                ref contact.smoothVelocity, contactSmoothTime, Mathf.Infinity, Time.deltaTime);
+            target = wall.TransformPoint(contact.outputLocal);
+            float influence = weight * (i >= 2 ? footIKWeight : 1f);
+            animator.SetIKPositionWeight(goals[i], influence); animator.SetIKPosition(goals[i], target);
+            if (i < 2 && wristRotationWeight > 0) { animator.SetIKRotationWeight(goals[i], influence * wristRotationWeight); animator.SetIKRotation(goals[i], Quaternion.LookRotation(-normal, Vector3.up)); }
         }
     }
-    void OnDisable() { ResetContacts(); HasWall=false;climbingPose=false;holding=false;weight=0; }
+    private void OnDisable() { climbingPose = false; holdingPose = false; requestedVelocity = Vector3.zero; weight = 0; HasWall = false; ClearContacts(); }
 }
+
+

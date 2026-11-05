@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem; // 🌟 1. เรียกใช้งาน NameSpace ของระบบ Input ใหม่
 
 [RequireComponent(typeof(PlayerStateManager), typeof(PlayerCameraController))]
@@ -12,6 +12,8 @@ public class PlayerWalkController : MonoBehaviour
     [Header("Input Configuration")]
     public InputActionReference moveAction; // 🌟 2. สร้างช่องรับค่า Action จาก Inspector
 
+    private float reattachAt;
+    public void DelayWallAttachment(float seconds) { reattachAt = Time.time + seconds; }
     private PlayerStateManager stateManager;
     private PlayerCameraController camController;
 
@@ -54,7 +56,7 @@ public class PlayerWalkController : MonoBehaviour
         }
 
         // เซนเซอร์ชนกำแพง
-        if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit, wallDetectDistance))
+        if (Time.time >= reattachAt && movement.sqrMagnitude > .02f && Physics.Raycast(transform.position, movement.normalized, out RaycastHit hit, wallDetectDistance))
         {
             if (hit.collider.CompareTag("Wall"))
             {

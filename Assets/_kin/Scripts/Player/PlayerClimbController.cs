@@ -1,4 +1,5 @@
-using UnityEngine;
+﻿using UnityEngine;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(PlayerStateManager))]
 public class PlayerClimbController : MonoBehaviour
@@ -39,7 +40,7 @@ public class PlayerClimbController : MonoBehaviour
 
     private void Update()
     {
-        if (contactIK != null) contactIK.SetClimbVelocity(Vector3.zero);
+        if (contactIK != null && stateManager.currentState != PlayerStateManager.State.AutoClimbing) contactIK.SetClimbVelocity(Vector3.zero);
         if (GameManager.Instance == null) { climbVelocity = Vector3.zero; return; }
         
         // 🌟 1. อัปเดตตัวคูณความเร็วตลอดเวลา (Real-time Update) 
@@ -71,17 +72,39 @@ public class PlayerClimbController : MonoBehaviour
         }
     }
 
+    public bool useWallWidth = true;
+    public Vector2 LastClimbInput { get; private set; }
+    public Vector2 ReadClimbInput()
+    {
+        var walk = GetComponent<PlayerWalkController>();
+        Vector2 input = walk && walk.moveAction ? walk.moveAction.action.ReadValue<Vector2>() : Vector2.zero;
+        var keyboard = Keyboard.current;
+        if(keyboard != null)
+        {
+            int x=(keyboard.dKey.isPressed||keyboard.rightArrowKey.isPressed?1:0)-(keyboard.aKey.isPressed||keyboard.leftArrowKey.isPressed?1:0);
+            int y=(keyboard.wKey.isPressed||keyboard.upArrowKey.isPressed?1:0)-(keyboard.sKey.isPressed||keyboard.downArrowKey.isPressed?1:0);
+            if(x!=0 || y!=0)input=new Vector2(x,y);
+        }
+        LastClimbInput=input;
+        return input;
+    }
     private void HandleClimbing()
     {
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
+        Vector2 input=ReadClimbInput(); float h=input.x, v=input.y;
 
                 AdvanceClimb(h, v, Time.deltaTime);
     }
 
     public void AdvanceClimb(float h, float v, float deltaTime)
     {
-if ((h < 0 && transform.position.x <= minX) || (h > 0 && transform.position.x >= maxX)) h = 0;
+        float left=minX, right=maxX;
+        if(useWallWidth && contactIK && contactIK.WallCollider)
+        {
+            Bounds wallBounds=contactIK.WallCollider.bounds;
+            if(wallBounds.size.x>1f){left=wallBounds.min.x+.4f;right=wallBounds.max.x-.4f;}
+        }
+        if ((h < 0 && transform.position.x <= left) || (h > 0 && transform.position.x >= right)) h = 0;
+        if(v < -.01f && TryLand(verticalSpeed * currentSpeedMultiplier * deltaTime))return;
         if (!environmentContainer && (v < 0 || transform.position.y >= maxPlayerHeight)) v = 0;
         Vector3 desired = RequestedVelocity(h, v, horizontalSpeed * currentSpeedMultiplier,
             verticalSpeed * currentSpeedMultiplier, upwardSpeedMultiplier);
@@ -96,7 +119,7 @@ if ((h < 0 && transform.position.x <= minX) || (h > 0 && transform.position.x >=
         }
         Vector3 delta = climbVelocity * deltaTime;
         Vector3 position = transform.position;
-        position.x = Mathf.Clamp(position.x + delta.x, minX, maxX);
+        position.x = Mathf.Clamp(position.x + delta.x, left, right);
         if (delta.y > 0)
         {
             float rise = Mathf.Min(delta.y, Mathf.Max(0, maxPlayerHeight - position.y));
@@ -107,4 +130,26 @@ if ((h < 0 && transform.position.x <= minX) || (h > 0 && transform.position.x >=
             environmentContainer.Translate(Vector3.up * -delta.y, Space.World);
         transform.position = position;
     }
+    public bool TryLand(float step)
+    {
+        var cc=GetComponent<CharacterController>();
+        float half=cc?cc.height*Mathf.Abs(transform.lossyScale.y)*.5f:1f;
+        float center=cc?transform.TransformVector(cc.center).y:0;
+        if(!ClimbingContactIK.TryGroundHeight(transform,transform.position,half+Mathf.Max(.2f,step)+.3f,out float ground))return false;
+        if(transform.position.y+center-half-ground > Mathf.Max(.12f,step))return false;
+        Vector3 landing=transform.position-transform.forward*.25f;
+        if(!ClimbingContactIK.TryGroundHeight(transform,landing,half+.6f,out float landingGround))return false;
+        landing.y=landingGround+half-center+.025f;
+        bool enabled=cc && cc.enabled;if(enabled)cc.enabled=false;
+        transform.position=landing;transform.forward=-transform.forward;
+        if(enabled)cc.enabled=true;
+        climbVelocity=Vector3.zero;
+        if(contactIK)contactIK.ReleaseWall();
+        if(!stateManager)stateManager=GetComponent<PlayerStateManager>();
+        stateManager.ChangeState(PlayerStateManager.State.Walking);
+        var walk=GetComponent<PlayerWalkController>();if(walk)walk.DelayWallAttachment(1f);
+        var cameraController=GetComponent<PlayerCameraController>();if(cameraController)cameraController.SwitchToWalkCam();
+        return true;
+    }
+
 }
