@@ -59,7 +59,7 @@ Material:
     - _Cull: 0
     - _DstBlend: 0
     - _DstBlendAlpha: 0
-    - _Noise: 5.56
+    - _Noise: 1
     - _NoiseMultiplier: 0.229
     - _QueueControl: 0
     - _QueueOffset: 0
@@ -73,7 +73,7 @@ Material:
     - _ZWriteControl: 0
     m_Colors:
     - _BottomColor: {r: 0.4574973, g: 0.4943396, b: 0.42065498, a: 0}
-    - _TopColor: {r: 0.1254902, g: 0.26666668, b: 0.054901965, a: 1}
+    - _TopColor: {r: 0.1833922, g: 0.26666668, b: 0.054901954, a: 1}
     - _WindDirection: {r: 1, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

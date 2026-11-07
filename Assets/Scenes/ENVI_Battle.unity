@@ -1159,6 +1159,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Bush_01
       objectReference: {fileID: 0}
+    - target: {fileID: 4838918536420687027, guid: 84da55b25c571db4db84f7cd3c834c76, type: 3}
+      propertyPath: m_LODs.Array.data[0].renderers.Array.data[0].renderer
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 7191306869052532806, guid: 84da55b25c571db4db84f7cd3c834c76, type: 3}
       propertyPath: m_LocalScale.x
       value: 429.51
@@ -6009,7 +6013,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 796f70b21b0092d4ea9f6428a9d908ea, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2786534777698132407, guid: 796f70b21b0092d4ea9f6428a9d908ea, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
