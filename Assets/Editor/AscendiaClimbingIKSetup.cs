@@ -62,7 +62,6 @@ public static class AscendiaClimbingIKSetup {
   var wall=(GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_kin/Prefab/ClimbingIK_TestWall.prefab"),scene);Undo.RegisterCreatedObjectUndo(wall,"Create test wall");
   // Existing climbing movement is along world X/Y, so the prototype wall faces -Z.
   wall.transform.position=new Vector3(player.transform.position.x,4,player.transform.position.z+3);
-  var climb=player.GetComponent<PlayerClimbController>();if(climb&&climb.environmentContainer)Undo.SetTransformParent(wall.transform,climb.environmentContainer,"Attach to moving cliff");
   Selection.activeGameObject=wall;EditorSceneManager.MarkSceneDirty(scene);
  }
 }
