@@ -16,6 +16,20 @@ public class PlayerUIManager : MonoBehaviour
     public GameObject skillButtonPrefab;
     public Transform skillListContainer;
 
+    [Header("Weapon Switch Menu (ตกแต่งได้ใน Canvas)")]
+    [Tooltip("หน้าเลือกอาวุธที่จะสลับไป (ต้องมี CanvasGroup)")]
+    public CanvasGroup weaponMenuPanel;
+    [Tooltip("ที่วางปุ่มอาวุธ (ใส่ Layout Group ได้)")]
+    public Transform weaponListContainer;
+    [Tooltip("ปุ่มต้นแบบ 1 อัน (ปิดไว้) ถูกก๊อปปี้ต่ออาวุธ 1 ชิ้น ลูกที่ชื่อ Icon(Image) / Name / Durability / Cost / Status (TMP) จะถูกเติมให้")]
+    public GameObject weaponOptionTemplate;
+    [Tooltip("ปุ่มย้อนกลับในหน้าเลือกอาวุธ (ไม่บังคับ)")]
+    public Button weaponMenuBackButton;
+    public Color activeWeaponTint = new Color(1f, 0.85f, 0.4f);
+    public Color brokenWeaponTint = new Color(0.45f, 0.45f, 0.45f);
+
+    private readonly List<GameObject> spawnedWeaponOptions = new List<GameObject>();
+
     [Header("Animation Settings")]
     public float animSpeed = 20f; // ปรับให้ไวขึ้นนิดนึงเพื่อความกระชับ
 
@@ -29,12 +43,98 @@ public class PlayerUIManager : MonoBehaviour
         // ปิดเมนูทั้งหมดตอนเริ่มเกมแบบทันที
         PlayMenuAnimation(actionMenuPanel, false, instant: true);
         PlayMenuAnimation(skillMenuPanel, false, instant: true);
+        PlayMenuAnimation(weaponMenuPanel, false, instant: true);
+
+        if (weaponOptionTemplate != null) weaponOptionTemplate.SetActive(false);
+        if (weaponMenuBackButton != null)
+        {
+            weaponMenuBackButton.onClick.AddListener(() =>
+            {
+                if (PlayerCombatController.Instance != null) PlayerCombatController.Instance.UI_CancelWeaponSwitch();
+            });
+        }
     }
 
     public void ShowActionMenu()
     {
         HideMenu(skillMenuPanel);
+        HideMenu(weaponMenuPanel);
         PlayMenuAnimation(actionMenuPanel, true);
+    }
+
+    // หน้าเลือกอาวุธ: ปุ่มละ 1 ชิ้นตามลำดับใน inventory ชิ้นที่ถืออยู่/พังแล้วกดไม่ได้
+    public void ShowWeaponMenu(List<WeaponData> weapons, WeaponData activeWeapon, int apCost)
+    {
+        if (weaponMenuPanel == null || weaponOptionTemplate == null)
+        {
+            Debug.LogWarning("PlayerUIManager: ยังไม่ได้ใส่ weaponMenuPanel / weaponOptionTemplate");
+            return;
+        }
+
+        HideMenu(actionMenuPanel);
+        HideMenu(skillMenuPanel);
+
+        foreach (GameObject old in spawnedWeaponOptions) if (old != null) Destroy(old);
+        spawnedWeaponOptions.Clear();
+
+        Transform container = weaponListContainer != null ? weaponListContainer : weaponOptionTemplate.transform.parent;
+        for (int i = 0; i < weapons.Count; i++)
+        {
+            WeaponData weapon = weapons[i];
+            int weaponIndex = i;
+            bool isActive = weapon == activeWeapon;
+            bool isBroken = weapon.currentDurability <= 0f;
+
+            GameObject option = Instantiate(weaponOptionTemplate, container);
+            option.name = $"Weapon_{weapon.weaponName}";
+            option.SetActive(true);
+            spawnedWeaponOptions.Add(option);
+
+            SetText(option, "Name", weapon.weaponName);
+            SetText(option, "Durability", $"DUR {Mathf.CeilToInt(Mathf.Max(0f, weapon.currentDurability))}/{Mathf.CeilToInt(weapon.maxDurability)}");
+            SetText(option, "Cost", isActive || isBroken ? "" : $"{apCost} AP");
+            SetText(option, "Status", isBroken ? "BROKEN" : isActive ? "EQUIPPED" : "");
+
+            Image icon = FindChild<Image>(option, "Icon");
+            if (icon != null)
+            {
+                icon.sprite = weapon.weaponIcon;
+                icon.enabled = weapon.weaponIcon != null;
+            }
+
+            Button button = option.GetComponent<Button>();
+            if (button != null)
+            {
+                button.interactable = !isActive && !isBroken;
+                button.onClick.AddListener(() =>
+                {
+                    if (PlayerCombatController.Instance != null) PlayerCombatController.Instance.UI_SelectWeapon(weaponIndex);
+                });
+            }
+
+            Image background = option.GetComponent<Image>();
+            if (background != null && (isActive || isBroken))
+            {
+                background.color *= isActive ? activeWeaponTint : brokenWeaponTint;
+            }
+        }
+
+        PlayMenuAnimation(weaponMenuPanel, true);
+    }
+
+    private static T FindChild<T>(GameObject root, string childName) where T : Component
+    {
+        foreach (T component in root.GetComponentsInChildren<T>(true))
+        {
+            if (component.gameObject.name == childName) return component;
+        }
+        return null;
+    }
+
+    private static void SetText(GameObject root, string childName, string value)
+    {
+        TextMeshProUGUI text = FindChild<TextMeshProUGUI>(root, childName);
+        if (text != null) text.text = value;
     }
 
     public void ShowSkillMenu(WeaponData currentWeapon)
@@ -74,6 +174,7 @@ public class PlayerUIManager : MonoBehaviour
     {
         HideMenu(actionMenuPanel);
         HideMenu(skillMenuPanel);
+        HideMenu(weaponMenuPanel);
     }
 
     private void HideMenu(CanvasGroup menu, bool instant = false)

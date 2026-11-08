@@ -3,7 +3,8 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public enum PlayerActionState { Waiting, ChoosingAction, ChoosingSkill, ChoosingTarget, DoingQTE, Executing }
+// ค่าถูก serialize เป็นเลข (actionState ในฉาก) เพิ่มค่าใหม่ต่อท้ายเท่านั้น
+public enum PlayerActionState { Waiting, ChoosingAction, ChoosingSkill, ChoosingTarget, DoingQTE, Executing, ChoosingWeapon }
 
 public class PlayerCombatController : MonoBehaviour
 {
@@ -23,6 +24,10 @@ public class PlayerCombatController : MonoBehaviour
 
     public WeaponData CurrentWeapon => inventoryWeapons[currentWeaponIndex];
     public WeaponData ActiveWeapon;
+
+    [Header("Weapon Switch")]
+    [Tooltip("AP ที่เสียทุกครั้งที่กดสลับอาวุธเอง (อาวุธพังแล้วถูกสลับอัตโนมัติไม่เสีย AP)")]
+    public int switchWeaponAPCost = 1;
 
     [Header("Free Aim Settings")]
     public GameObject crosshairUI;
@@ -118,6 +123,19 @@ public class PlayerCombatController : MonoBehaviour
             if (ControlPromptUI.Instance != null)
             {
                 ControlPromptUI.Instance.ShowPrompt("<color=#FFaaaa>[ESC]</color> Back");
+            }
+            return;
+        }
+
+        else if (actionState == PlayerActionState.ChoosingWeapon)
+        {
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            {
+                UI_CancelWeaponSwitch();
+            }
+            else if (ControlPromptUI.Instance != null)
+            {
+                ControlPromptUI.Instance.ShowPrompt($"Switch: <color=#FFFFaa>{switchWeaponAPCost} AP</color>     <color=#FFaaaa>[ESC]</color> Back");
             }
             return;
         }
@@ -450,47 +468,114 @@ public class PlayerCombatController : MonoBehaviour
         }
     }
 
+    // ==========================================
+    // สลับอาวุธ: ปุ่ม Switch เปิดหน้าเลือกอาวุธ (WeaponMenuPanel) เลือกแล้วเสีย switchWeaponAPCost แล้วกลับเมนูหลักในเทิร์นเดิม
+    // ==========================================
     public void Command_SwitchWeapon()
     {
-        int nextIndex = currentWeaponIndex;
-        bool foundValidWeapon = false;
+        if (actionState != PlayerActionState.ChoosingAction) return;
 
-        // วนลูปหาอาวุธถัดไปที่ยังไม่พัง (ป้องกันบั๊กกรณีพังเกือบหมด)
-        for (int i = 0; i < inventoryWeapons.Count; i++)
+        if (!HasOtherUsableWeapon())
         {
-            nextIndex = (nextIndex + 1) % inventoryWeapons.Count;
-            if (inventoryWeapons[nextIndex].currentDurability > 0)
+            ShowPopup("NO OTHER WEAPON", new Color(1f, 0.45f, 0.45f));
+            return;
+        }
+        if (currentAP < switchWeaponAPCost)
+        {
+            ShowPopup("NOT ENOUGH AP", new Color(1f, 0.45f, 0.45f));
+            return;
+        }
+
+        actionState = PlayerActionState.ChoosingWeapon;
+        if (PlayerUIManager.Instance != null)
+        {
+            PlayerUIManager.Instance.ShowWeaponMenu(inventoryWeapons, ActiveWeapon, switchWeaponAPCost);
+        }
+    }
+
+    public void UI_SelectWeapon(int weaponIndex)
+    {
+        if (actionState != PlayerActionState.ChoosingWeapon) return;
+        if (weaponIndex < 0 || weaponIndex >= inventoryWeapons.Count) return;
+
+        WeaponData target = inventoryWeapons[weaponIndex];
+        if (target == ActiveWeapon || target.currentDurability <= 0f) return;
+        if (currentAP < switchWeaponAPCost)
+        {
+            ShowPopup("NOT ENOUGH AP", new Color(1f, 0.45f, 0.45f));
+            return;
+        }
+
+        currentAP -= switchWeaponAPCost;
+        ApplyActiveWeapon(weaponIndex, duringOwnTurn: true);
+        ShowPopup($"SWITCH  -{switchWeaponAPCost} AP", new Color(0.6f, 0.9f, 1f));
+        Debug.Log($"Switched to {ActiveWeapon.weaponName} (-{switchWeaponAPCost} AP)");
+
+        ReturnToActionMenu();
+    }
+
+    public void UI_CancelWeaponSwitch()
+    {
+        if (actionState != PlayerActionState.ChoosingWeapon) return;
+        ReturnToActionMenu();
+    }
+
+    // อาวุธที่ถืออยู่พัง: สลับไปชิ้นถัดไปที่ยังใช้ได้ทันที ไม่เสีย AP (CombatManager.RemoveWeapon เรียก)
+    public void AutoSwitchWeapon()
+    {
+        for (int i = 1; i <= inventoryWeapons.Count; i++)
+        {
+            int next = (currentWeaponIndex + i) % inventoryWeapons.Count;
+            if (next != currentWeaponIndex && inventoryWeapons[next].currentDurability > 0)
             {
-                foundValidWeapon = true;
-                break;
+                bool ownTurn = CombatManager.Instance != null && CombatManager.Instance.currentState == CombatState.PlayerTurn;
+                ApplyActiveWeapon(next, ownTurn);
+                Debug.Log($"Auto-switched to {ActiveWeapon.weaponName}");
+                return;
+            }
+        }
+        Debug.LogWarning("ไม่มีอาวุธอื่นที่ใช้งานได้แล้ว!");
+    }
+
+    private bool HasOtherUsableWeapon()
+    {
+        return inventoryWeapons.Exists(w => w != ActiveWeapon && w.currentDurability > 0);
+    }
+
+    private void ApplyActiveWeapon(int index, bool duringOwnTurn)
+    {
+        WeaponData previous = ActiveWeapon;
+        currentWeaponIndex = index;
+        ActiveWeapon = CurrentWeapon;
+
+        // Orb ธาตุมีเฉพาะตอนถือ Spell ในเทิร์นตัวเอง
+        if (SpellOrbManager.Instance != null)
+        {
+            if (duringOwnTurn && ActiveWeapon.weaponType == WeaponType.Spell)
+            {
+                hasHarvestedThisTurn = false;
+                SpellOrbManager.Instance.SpawnSpellOrbs();
+            }
+            else if (previous != null && previous.weaponType == WeaponType.Spell)
+            {
+                SpellOrbManager.Instance.ClearOrbs();
             }
         }
 
-        if (foundValidWeapon && nextIndex != currentWeaponIndex)
+        UpdateAPUI();
+        if (WeaponUIManager.Instance != null)
         {
-            currentWeaponIndex = nextIndex;
-
-            ActiveWeapon = CurrentWeapon;
-
-            Debug.Log($"Switched to {CurrentWeapon.weaponName}");
-            UpdateAPUI();
-
-            if (WeaponUIManager.Instance != null)
-            {
-                WeaponUIManager.Instance.UpdateWeaponUI(inventoryWeapons, ActiveWeapon);
-            }
-
-            actionState = PlayerActionState.Waiting;
-
-            // --- [อัปเกรดกล้อง] รีเซ็ตกล้อง ---
-            if (BattleCameraController.Instance != null)
-            {
-                BattleCameraController.Instance.SetState(CameraState.Overview, transform);
-            }
+            WeaponUIManager.Instance.UpdateWeaponUI(inventoryWeapons, ActiveWeapon);
         }
-        else if (nextIndex == currentWeaponIndex)
+    }
+
+    private void ReturnToActionMenu()
+    {
+        actionState = PlayerActionState.ChoosingAction;
+        if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.ShowActionMenu();
+        if (BattleCameraController.Instance != null)
         {
-            Debug.LogWarning("ไม่มีอาวุธอื่นที่ใช้งานได้แล้ว!");
+            BattleCameraController.Instance.SetState(CameraState.Overview, transform);
         }
     }
 

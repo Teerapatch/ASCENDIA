@@ -378,6 +378,13 @@ public class ParryManager : MonoBehaviour
             VFXManager.Instance.SpawnParrySuccess(HintPosition(), HintRotation(sparkAngle), parrySuccessScale, hintSortingBoost);
         }
 
+        // แถบแสงขาวพาดหลังตัวศัตรูตามทิศที่ลาก (Evasion ไม่มีการลาก -> ใช้ทิศของ Hint)
+        if (ParryStreakUI.Instance != null && attackingEnemy != null)
+        {
+            Vector2 streakDir = swipeScreenDirection.sqrMagnitude > 0.0001f ? swipeScreenDirection : requiredDirection;
+            ParryStreakUI.Instance.Play(attackingEnemy.transform, streakDir);
+        }
+
         if (HitstopManager.Instance != null)
         {
             HitstopManager.Instance.Freeze(0.12f);

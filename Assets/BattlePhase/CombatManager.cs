@@ -430,8 +430,8 @@ public class CombatManager : MonoBehaviour
         }
         else if (player != null && player.ActiveWeapon == brokenWeapon)
         {
-            // ถ้าอาวุธที่พังคือชิ้นที่ผู้เล่นกำลังถืออยู่ ให้บังคับสลับอาวุธ
-            player.Command_SwitchWeapon();
+            // ถ้าอาวุธที่พังคือชิ้นที่ผู้เล่นกำลังถืออยู่ ให้บังคับสลับอาวุธ (ไม่เสีย AP)
+            player.AutoSwitchWeapon();
         }
     }
 
