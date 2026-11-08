@@ -6,8 +6,10 @@ public class Billboard : MonoBehaviour
     
     [Header("Position Settings")]
     [Tooltip("ระยะห่างจากไอเทมหลัก")]
-    public Vector3 offset = new Vector3(0, 1.5f, 0); 
-    
+    public Vector3 offset = new Vector3(0, 1.5f, 0);
+    [Tooltip("สเกลของข้อความหลังแยกออกจากไอเทม (ฉากที่โลกใหญ่กว่าปกติ เช่น ClimbScene ใช้มากกว่า 1)")]
+    public float worldScale = 1f;
+
     private Transform targetItem; // เป้าหมายที่มันจะบินตาม
 
     private void Start()
@@ -23,7 +25,7 @@ public class Billboard : MonoBehaviour
             transform.SetParent(null);
             
             // 🌟 3. รีเซ็ตสเกลของตัวเองให้เป็น 1,1,1 ปกติ
-            transform.localScale = Vector3.one;
+            transform.localScale = Vector3.one * worldScale;
         }
     }
 

@@ -196,7 +196,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 101a9b63b781ee741b65ddf8e9ae27fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Billboard
-  offset: {x: 0, y: 1, z: -1}
+  offset: {x: 0, y: 2.857, z: -2.857}
+  worldScale: 2.8571
 --- !u!1 &6103220965304804435
 GameObject:
   m_ObjectHideFlags: 0
@@ -225,7 +226,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 2.8571, y: 2.8571, z: 2.8571}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4055487034329641317}

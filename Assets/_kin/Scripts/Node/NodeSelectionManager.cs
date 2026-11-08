@@ -105,6 +105,13 @@ public class NodeSelectionManager : MonoBehaviour
 
         if (nodeCam != null)
         {
+            // แต่ละหน้าผาสูงไม่เท่ากัน: วางกล้องตาม Marker ของหน้าผาชั้นนี้
+            ClimbableWall cliff = MapGenerator.CurrentCliff;
+            if (cliff != null && cliff.nodeCamPoint != null)
+            {
+                nodeCam.transform.position = cliff.nodeCamPoint.position;
+                originalNodeCamRot = cliff.nodeCamPoint.rotation;
+            }
             nodeCam.transform.rotation = originalNodeCamRot;
             nodeCam.SetActive(true);
         }
@@ -401,36 +408,20 @@ public class NodeSelectionManager : MonoBehaviour
     }
 
     // ตั้งกล้อง/สถานะผู้เล่นให้ตรงกับชั้นปัจจุบัน (ชั้น 1 = เดินบนพื้น, ชั้นอื่น = เกาะกำแพง)
-    private void ApplyFloorStartState()
+    public void ApplyFloorStartState()
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        int currentFloor = GameManager.Instance != null ? GameManager.Instance.playerData.currentFloor : 1;
-
         if (camController)
         {
-            if (currentFloor > 1)
-            {
-                camController.walkCam.SetActive(false);
-                camController.climbCam.SetActive(true);
-                camController.SwitchToClimbCam(stateManager.transform.eulerAngles.y);
-            }
-            else
-            {
-                if (camController.climbCam) camController.climbCam.SetActive(false);
-                if (camController.walkCam) camController.walkCam.SetActive(true);
-            }
+            camController.walkCam.SetActive(false);
+            camController.climbCam.SetActive(true);
+            camController.SwitchToClimbCam(stateManager.transform.eulerAngles.y);
             camController.enabled = true;
         }
 
-        if (stateManager)
-        {
-            if (currentFloor > 1)
-                stateManager.ChangeState(PlayerStateManager.State.Climbing);
-            else
-                stateManager.ChangeState(PlayerStateManager.State.Walking);
-        }
+        if (stateManager) stateManager.ChangeState(PlayerStateManager.State.Climbing);
     }
 
     // ถูกเรียกเมื่อกลับมาจากฉากต่อสู้

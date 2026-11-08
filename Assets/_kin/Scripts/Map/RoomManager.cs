@@ -15,11 +15,15 @@ public class RoomManager : MonoBehaviour
 
     private void Awake() { Instance = this; }
 
-    private void Start()
+    private System.Collections.IEnumerator Start()
     {
         GameObject player = GameObject.FindGameObjectWithTag("Player");
-        // 🌟 แก้เป็น Normal 
+        // 🌟 แก้เป็น Normal
         if (player != null) LoadNewRoom(PathNode.RoomType.Normal, player.transform);
+
+        // รอ 1 เฟรมให้ Start ของผู้เล่น/กล้องทำงานก่อน แล้วค่อยตั้งให้เริ่มเกาะหน้าผา (ทุกชั้นเริ่มบนกำแพง)
+        yield return null;
+        if (NodeSelectionManager.Instance != null) NodeSelectionManager.Instance.ApplyFloorStartState();
     }
 
     public void LoadNewRoom(PathNode.RoomType type, Transform playerTransform)
@@ -43,7 +47,7 @@ public class RoomManager : MonoBehaviour
             Transform spawnPoint = null;
             
             // 🌟 แก้เป็น Normal 
-            if (currentFloor > 1 && type == PathNode.RoomType.Normal)
+            if (type == PathNode.RoomType.Normal)
             {
                 // ใช้จุดเกิดแบบเกาะกำแพง
                 spawnPoint = currentActiveRoom.transform.Find("WallSpawnPoint");

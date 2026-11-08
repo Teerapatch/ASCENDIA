@@ -16,6 +16,9 @@ public class PlayerCameraController : MonoBehaviour
     [Header("Climb View")]
     [Tooltip("มุมก้มของกล้องตอนปีน (องศา) 0 = มองตรงเข้ากำแพง, ClimbScene ใช้ 27 ให้เป็นมุมเดียวกับฉากอาร์ต ENVI_Climb")]
     public float climbTilt = 0f;
+    [Tooltip("ใช้มุมกล้องตายตัวตอนปีน (climbTilt / climbPan) ไม่หันตามผนัง ClimbScene ใช้มุมเดียวกับฉากอาร์ต ReArt (27, 50)")]
+    public bool fixedClimbPan = false;
+    public float climbPan = 0f;
 
     private float lockedPan, lockedTilt;
     private Vector3 lookTargetOffset;
@@ -93,7 +96,7 @@ public class PlayerCameraController : MonoBehaviour
     public void SwitchToClimbCam(float wallNormalAngleY)
     {
         virtualMousePos = Vector2.zero;
-        lockedPan = wallNormalAngleY;
+        lockedPan = fixedClimbPan ? climbPan : wallNormalAngleY;
         lockedTilt = climbTilt; // ตอนปีนมองเข้ากำแพง (ก้มลงตาม climbTilt)
 
         walkCam.SetActive(false);

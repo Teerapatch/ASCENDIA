@@ -70,9 +70,10 @@ public class PlayerPenaltySystem : MonoBehaviour
         if (GameManager.Instance.playerData.piton <= 0)
         {
             Debug.Log("💀 GAME OVER - หมุดหมด!");
-            stateManager.ChangeState(PlayerStateManager.State.Walking);
-            transform.position = new Vector3(0, 0.5f, -5f); 
-            camController.SwitchToWalkCam();
+            // ไม่มีพื้นให้เดินแล้ว (ทุกชั้นเริ่มบนหน้าผา): กลับไปจุดเริ่มปีนของหน้าผาชั้นนี้
+            ClimbableWall cliff = MapGenerator.CurrentCliff;
+            if (cliff != null && cliff.climbStart != null) transform.position = cliff.climbStart.position;
+            stateManager.ChangeState(PlayerStateManager.State.Climbing);
         }
         else
         {

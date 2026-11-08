@@ -1,80 +1,49 @@
 using UnityEngine;
-using System.Collections.Generic;
 
+// ห้องปีน 1 ชั้น = หน้าผา 1 ชิ้น: สุ่ม Prefab จาก mountainPrefabs (ไม่ซ้ำกับชั้นก่อนหน้า) แล้วย้ายจุดเกิด/โซนเลือก Node ของห้องไปตาม Marker ของหน้าผานั้น
+// ทำใน Awake เพราะ RoomManager.LoadNewRoom อ่านจุดเกิดทันทีหลัง Instantiate ส่วน NodeSpawner เสกโหนดตอน Start
 public class MapGenerator : MonoBehaviour
 {
-    [Header("Tile Settings")]
-    public GameObject[] mountainPrefabs; 
-    public GameObject topMountainPrefab; 
-    
-    public float tileHeight = 20f; 
-    public int maxTilesOnScreen = 4; 
-    
-    [Header("Room Progression")]
-    public int totalTilesPerRoom = 10; 
+    // หน้าผาของชั้นปัจจุบัน (NodeSelectionManager ใช้วางกล้องเลือก Node)
+    public static ClimbableWall CurrentCliff { get; private set; }
 
-    private Transform playerTransform; 
-    private float spawnY = 0f; 
-    private int tilesSpawned = 0; 
-    private List<GameObject> activeTiles = new List<GameObject>();
+    // static: ฉากถูกโหลดใหม่หลังการต่อสู้ (โหมด Single) ก็ยังจำชิ้นล่าสุดได้
+    private static int lastCliffIndex = -1;
 
-    private void Start()
+    [Header("Cliff Prefabs (สุ่ม 1 ชิ้นต่อชั้น)")]
+    public GameObject[] mountainPrefabs;
+
+    private void Awake()
     {
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        if (player != null) playerTransform = player.transform;
+        if (mountainPrefabs == null || mountainPrefabs.Length == 0) return;
 
-        for (int i = 0; i < maxTilesOnScreen; i++)
-        {
-            if (tilesSpawned < totalTilesPerRoom) SpawnTile();
-        }
+        GameObject cliff = Instantiate(mountainPrefabs[PickCliffIndex()], transform);
+        CurrentCliff = cliff.GetComponent<ClimbableWall>();
+        if (CurrentCliff == null) return;
+
+        CopyMarker(CurrentCliff.climbStart, "WallSpawnPoint");
+        CopyMarker(CurrentCliff.nodeZone, "NodeSelectionZone");
+
+        // โซน Node และโหนดลูกของมันถูกออกแบบไว้สเกลเล็ก ใช้สเกลของ Marker ให้เข้ากับโลกของอาร์ต
+        Transform zone = transform.Find("NodeSelectionZone");
+        if (zone != null && CurrentCliff.nodeZone != null) zone.localScale = CurrentCliff.nodeZone.lossyScale;
     }
 
-    private void Update()
+    private int PickCliffIndex()
     {
-        if (playerTransform == null) return;
-
-        if (activeTiles.Count > 0 && activeTiles[0] != null && activeTiles[0].transform.position.y + tileHeight < playerTransform.position.y - (tileHeight / 2))
+        int index = Random.Range(0, mountainPrefabs.Length);
+        if (mountainPrefabs.Length > 1 && index == lastCliffIndex)
         {
-            DeleteTile();
-            if (tilesSpawned < totalTilesPerRoom) SpawnTile();
+            // เลื่อนไปชิ้นอื่นแบบสุ่ม จะได้ไม่ซ้ำกับชั้นก่อนหน้า
+            index = (index + Random.Range(1, mountainPrefabs.Length)) % mountainPrefabs.Length;
         }
+        lastCliffIndex = index;
+        return index;
     }
 
-    private void SpawnTile()
+    private void CopyMarker(Transform marker, string roomChildName)
     {
-        GameObject tileToSpawn;
-        bool isTopTile = false;
-
-        if (tilesSpawned == totalTilesPerRoom - 1 && topMountainPrefab != null)
-        {
-            tileToSpawn = topMountainPrefab;
-            isTopTile = true;
-        }
-        else
-        {
-            tileToSpawn = mountainPrefabs[Random.Range(0, mountainPrefabs.Length)];
-        }
-        
-        GameObject go = Instantiate(tileToSpawn, transform);
-        go.transform.localPosition = new Vector3(0, spawnY, 0);
-        spawnY += tileHeight;
-        
-        activeTiles.Add(go);
-        tilesSpawned++; 
-
-        // *** ส่วนที่เพิ่มมา: ถ้าเป็นยอดเขา ให้เปิดใช้งาน Trigger ***
-        if (isTopTile)
-        {
-            Debug.Log("🏔️ ถึงยอดเขาแล้ว! เตรียมตัวเลือกโหนด...");
-        }
-    }
-
-    private void DeleteTile()
-    {
-        if (activeTiles.Count > 0)
-        {
-            Destroy(activeTiles[0]);
-            activeTiles.RemoveAt(0);
-        }
+        Transform target = transform.Find(roomChildName);
+        if (marker != null && target != null) target.SetPositionAndRotation(marker.position, marker.rotation);
     }
 }

@@ -13,6 +13,17 @@ public class ClimbableWall : MonoBehaviour
     [Tooltip("กล่องขอบเขตการปีน (วางราบกับหน้าผา) ใช้จำกัดซ้าย-ขวาและเป็นทิศที่ผู้ปีนหันเข้าหา")]
     public BoxCollider bounds;
 
+    [Header("Markers (ย้ายได้ใน Prefab: MapGenerator ย้ายจุดของห้องมาตามนี้)")]
+    [Tooltip("จุดเกิดต่ำสุด: LowestSpawnPoint ใน Cliff Prefab ปีนลงต่ำกว่านี้ไม่ได้ ตั้งให้ขอบล่างของจอไม่เห็นใต้หน้าผา")]
+    public Transform climbStart;
+    [Tooltip("โซนเลือก Node เกือบถึงยอด: ปีนถึงตรงนี้แล้วหยุด ยังเห็นหน้าผาเหนือหัว")]
+    public Transform nodeZone;
+    [Tooltip("ตำแหน่ง/มุมของกล้องตอนเลือก Node")]
+    public Transform nodeCamPoint;
+
+    public float MinClimbY => climbStart != null ? climbStart.position.y : float.NegativeInfinity;
+    public float MaxClimbY => nodeZone != null ? nodeZone.position.y + 1f : float.PositiveInfinity;
+
     // ทิศที่ผู้ปีนหันเข้าหาหน้าผา
     public Vector3 Facing => Flatten(bounds != null ? bounds.transform.forward : transform.forward);
     // ทิศของกล้องตอนปีน (แกน +Z ของไทล์ = มุมเดียวกับฉากอาร์ต) หน้าผาเอียงจากกล้องได้ตามที่อาร์ตจัดไว้

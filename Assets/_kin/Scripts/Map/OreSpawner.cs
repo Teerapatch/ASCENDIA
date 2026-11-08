@@ -26,7 +26,7 @@ public class OreSpawner : MonoBehaviour
     {
         if (spawnableItems == null || spawnableItems.Count == 0) return;
 
-        GameObject container = GameObject.Find("EnvironmentContainer");
+        if (snapToWall) Physics.SyncTransforms();
 
         foreach (Transform spawnPoint in transform)
         {
@@ -49,12 +49,8 @@ public class OreSpawner : MonoBehaviour
                         }
                     }
 
-                    GameObject spawnedObj = Instantiate(selectedItem, position, selectedItem.transform.rotation);
-                    
-                    if (container != null)
-                    {
-                        spawnedObj.transform.SetParent(container.transform, true);
-                    }
+                    // ใส่ไว้ใต้พ่อของ Spawner (ไม่ใช่ตัว Spawner เอง เพราะกำลังวนลูกอยู่): ของที่ไม่ได้เก็บจะหายไปพร้อมห้องของชั้นนี้
+                    Instantiate(selectedItem, position, selectedItem.transform.rotation, transform.parent);
                 }
             }
         }

@@ -379,11 +379,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MapGenerator
   mountainPrefabs:
   - {fileID: 2002122749271754723, guid: 7b102e40afcebb54ab8a0d5f9925fa89, type: 3}
+  - {fileID: 2002122749271754723, guid: e32469c3dfd397b49a34a9901069627f, type: 3}
   - {fileID: 2002122749271754723, guid: 07dd1e64c37a96b4e957fecb244cae28, type: 3}
-  topMountainPrefab: {fileID: 7328970248539736144, guid: 28ba696708aaca14eb089aa76bde4c66, type: 3}
-  tileHeight: 25
-  maxTilesOnScreen: 4
-  totalTilesPerRoom: 10
 --- !u!1 &6271095231464990966
 GameObject:
   m_ObjectHideFlags: 0

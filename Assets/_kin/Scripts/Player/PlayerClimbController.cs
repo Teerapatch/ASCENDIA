@@ -8,7 +8,6 @@ public class PlayerClimbController : MonoBehaviour
     public float horizontalSpeed = 3f;
     public float minX = -4f;
     public float maxX = 4f;
-    public float maxPlayerHeight = 5f;
 
     [Tooltip("ถ้าน้ำหนักเต็มกระเป๋า จะให้ปีนช้าลงเหลือกี่เปอร์เซ็นต์? (0.4 = 40% ของความเร็วปกติ)")]
     public float minSpeedMultiplier = 0.4f;
@@ -34,9 +33,6 @@ public class PlayerClimbController : MonoBehaviour
     private Vector3 wallFacing;
     // ไทล์ที่กำลังเกาะอยู่ (ขอบซ้าย-ขวามาจาก BoxCollider ของไทล์นี้) ถ้าไม่มีใช้ minX..maxX
     private ClimbableWall currentWall;
-
-    [Header("References")]
-    public Transform environmentContainer;
 
     private PlayerStateManager stateManager;
     
@@ -100,24 +96,20 @@ public class PlayerClimbController : MonoBehaviour
         Vector3 step = lateral * (h * currentHorzSpeed * Time.deltaTime);
         transform.position += ClampStepToBounds(transform.position, step);
 
-        // --- ปีนขึ้น ---
-        if (v > 0.1f)
+        // --- ปีนขึ้น/ลง: หน้าผา 1 ชิ้นต่อชั้นอยู่กับที่ ตัวผู้เล่นเป็นคนเคลื่อนที่ ลงต่ำกว่าจุดเริ่ม/สูงเกินโซน Node ไม่ได้ ---
+        if (Mathf.Abs(v) > 0.1f)
         {
-            if (transform.position.y < maxPlayerHeight)
+            Vector3 climbPos = transform.position;
+            float nextY = climbPos.y + Mathf.Sign(v) * currentVertSpeed * Time.deltaTime;
+            if (currentWall != null)
             {
-                transform.Translate(Vector3.up * currentVertSpeed * Time.deltaTime, Space.World);
+                // เทียบกับตำแหน่งเดิมด้วย: ชั้นแรกเริ่มปีนจากพื้นซึ่งต่ำกว่า climbStart ต้องปีนขึ้นได้ ไม่ถูกดึงขึ้นทันที
+                nextY = v > 0f
+                    ? Mathf.Min(nextY, Mathf.Max(climbPos.y, currentWall.MaxClimbY))
+                    : Mathf.Max(nextY, Mathf.Min(climbPos.y, currentWall.MinClimbY));
             }
-            else
-            {
-                if (environmentContainer != null)
-                    environmentContainer.Translate(Vector3.down * currentVertSpeed * Time.deltaTime);
-            }
-        }
-        // --- ปีนลง ---
-        else if (v < -0.1f)
-        {
-            if (environmentContainer != null)
-                environmentContainer.Translate(Vector3.up * currentVertSpeed * Time.deltaTime);
+            climbPos.y = nextY;
+            transform.position = climbPos;
         }
 
         if (followSurface) StickToSurface();
