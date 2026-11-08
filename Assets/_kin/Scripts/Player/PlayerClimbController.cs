@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(PlayerStateManager))]
 public class PlayerClimbController : MonoBehaviour
@@ -8,6 +9,10 @@ public class PlayerClimbController : MonoBehaviour
     public float horizontalSpeed = 3f;
     public float minX = -4f;
     public float maxX = 4f;
+    [Range(.1f, 1f), Tooltip("ตัวคูณความเร็วเฉพาะตอนปีนขึ้น (ลงและซ้าย-ขวาไม่เกี่ยว)")]
+    public float upwardSpeedMultiplier = .3f;
+    [Min(.1f), Tooltip("ความเร่งตอนเริ่มขยับหรือเปลี่ยนทิศ (ปล่อยปุ่มแล้วหยุดทันที)")]
+    public float climbAcceleration = 10f;
 
     [Tooltip("ถ้าน้ำหนักเต็มกระเป๋า จะให้ปีนช้าลงเหลือกี่เปอร์เซ็นต์? (0.4 = 40% ของความเร็วปกติ)")]
     public float minSpeedMultiplier = 0.4f;
@@ -35,6 +40,9 @@ public class PlayerClimbController : MonoBehaviour
     private ClimbableWall currentWall;
 
     private PlayerStateManager stateManager;
+    private ClimbingContactIK contactIK;
+    // x = ซ้าย-ขวาตามผิวหิน, y = ขึ้น-ลง
+    private Vector2 climbVelocity;
     
     // 🌟 ตัวแปรเก็บค่าตัวคูณความเร็วแบบเรียลไทม์
     private float currentSpeedMultiplier = 1f;
@@ -42,11 +50,14 @@ public class PlayerClimbController : MonoBehaviour
     private void Awake()
     {
         stateManager = GetComponent<PlayerStateManager>();
+        contactIK = GetComponentInChildren<ClimbingContactIK>();
     }
 
     private void Update()
     {
-        if (GameManager.Instance == null) return;
+        // ตอน AutoClimbing ความเร็วของท่าปีนมาจาก NodeSelectionManager
+        if (contactIK != null && stateManager.currentState != PlayerStateManager.State.AutoClimbing) contactIK.SetClimbVelocity(Vector3.zero);
+        if (GameManager.Instance == null) { climbVelocity = Vector2.zero; return; }
         
         // 🌟 1. อัปเดตตัวคูณความเร็วตลอดเวลา (Real-time Update) 
         // ไม่ว่าผู้เล่นจะทำอะไรอยู่ ถ้าน้ำหนักเปลี่ยน ความเร็วจะคำนวณรอไว้เลย
@@ -54,6 +65,7 @@ public class PlayerClimbController : MonoBehaviour
 
         if (stateManager.currentState != PlayerStateManager.State.Climbing)
         {
+            climbVelocity = Vector2.zero;
             wallFacing = Vector3.zero; // เริ่มปีนรอบใหม่ค่อยจำทิศกำแพงใหม่
             currentWall = null;
             return;
@@ -81,36 +93,64 @@ public class PlayerClimbController : MonoBehaviour
         }
     }
 
+    // รับทั้ง Move Action (รวมจอย) และ WASD/ลูกศรผ่าน Input System
+    public Vector2 ReadClimbInput()
+    {
+        PlayerWalkController walk = GetComponent<PlayerWalkController>();
+        Vector2 input = walk != null && walk.moveAction != null ? walk.moveAction.action.ReadValue<Vector2>() : Vector2.zero;
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            int x = (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1 : 0) - (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed ? 1 : 0);
+            int y = (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1 : 0);
+            if (x != 0 || y != 0) input = new Vector2(x, y);
+        }
+        if (Mathf.Abs(input.x) < 0.1f) input.x = 0f;
+        if (Mathf.Abs(input.y) < 0.1f) input.y = 0f;
+        return input;
+    }
+
     private void HandleClimbing()
     {
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
+        Vector2 input = ReadClimbInput();
+        float h = input.x;
+        float v = input.y;
 
         // 🌟 2. ดึงความเร็วปัจจุบันมาใช้ (คูณกับตัวคูณแบบเรียลไทม์)
-        float currentVertSpeed = verticalSpeed * currentSpeedMultiplier;
+        float currentVertSpeed = verticalSpeed * currentSpeedMultiplier * (v > 0f ? upwardSpeedMultiplier : 1f);
         float currentHorzSpeed = horizontalSpeed * currentSpeedMultiplier;
+
+        climbVelocity = Vector2.MoveTowards(climbVelocity, new Vector2(h * currentHorzSpeed, v * currentVertSpeed), climbAcceleration * Time.deltaTime);
+        // ปล่อยปุ่มแล้วแกนนั้นหยุดทันที ความเร่งมีผลแค่ตอนเริ่มขยับ/กลับทิศ
+        if (h == 0f) climbVelocity.x = 0f;
+        if (v == 0f) climbVelocity.y = 0f;
 
         // --- ขยับซ้ายขวา ---
         // ปีนตามผิวหิน: เลื่อนตามแนวสัมผัสของผิว (ขวามือของตัวที่หันเข้าหาหิน) แต่ไม่ให้เกินความกว้าง BoxCollider ของไทล์
         Vector3 lateral = followSurface ? Vector3.Cross(Vector3.up, Flat(transform.forward, Vector3.forward)) : Vector3.right;
-        Vector3 step = lateral * (h * currentHorzSpeed * Time.deltaTime);
-        transform.position += ClampStepToBounds(transform.position, step);
+        Vector3 lateralStep = ClampStepToBounds(transform.position, lateral * (climbVelocity.x * Time.deltaTime));
 
         // --- ปีนขึ้น/ลง: หน้าผา 1 ชิ้นต่อชั้นอยู่กับที่ ตัวผู้เล่นเป็นคนเคลื่อนที่ ลงต่ำกว่าจุดเริ่ม/สูงเกินโซน Node ไม่ได้ ---
-        if (Mathf.Abs(v) > 0.1f)
+        float currentY = transform.position.y;
+        float nextY = currentY + climbVelocity.y * Time.deltaTime;
+        if (currentWall != null)
         {
-            Vector3 climbPos = transform.position;
-            float nextY = climbPos.y + Mathf.Sign(v) * currentVertSpeed * Time.deltaTime;
-            if (currentWall != null)
-            {
-                // เทียบกับตำแหน่งเดิมด้วย: ชั้นแรกเริ่มปีนจากพื้นซึ่งต่ำกว่า climbStart ต้องปีนขึ้นได้ ไม่ถูกดึงขึ้นทันที
-                nextY = v > 0f
-                    ? Mathf.Min(nextY, Mathf.Max(climbPos.y, currentWall.MaxClimbY))
-                    : Mathf.Max(nextY, Mathf.Min(climbPos.y, currentWall.MinClimbY));
-            }
-            climbPos.y = nextY;
-            transform.position = climbPos;
+            // เทียบกับตำแหน่งเดิมด้วย: ถ้าเริ่มต่ำกว่า climbStart ต้องปีนขึ้นได้ ไม่ถูกดึงขึ้นทันที
+            nextY = climbVelocity.y > 0f
+                ? Mathf.Min(nextY, Mathf.Max(currentY, currentWall.MaxClimbY))
+                : Mathf.Max(nextY, Mathf.Min(currentY, currentWall.MinClimbY));
         }
+        Vector3 climbStep = lateralStep + Vector3.up * (nextY - currentY);
+
+        // ส่งระยะที่ไปได้จริงให้ท่าปีน ชนขอบแล้วท่าจะหยุดด้วย
+        // ถ้า IK หาหินข้างหน้าไม่เจอ (ผิวหินเว้าลึก) ยังขยับต่อได้ ไม่งั้นผู้เล่นจะติดอยู่กับที่
+        bool canMove = true;
+        if (contactIK != null)
+        {
+            contactIK.SetClimbVelocity(climbStep / Mathf.Max(Time.deltaTime, 0.0001f));
+            canMove = !contactIK.HasWall || contactIK.MovementMultiplier > 0f;
+        }
+        if (canMove) transform.position += climbStep;
 
         if (followSurface) StickToSurface();
     }

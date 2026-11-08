@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
@@ -322,8 +322,8 @@ public class NodeSelectionManager : MonoBehaviour
         }
 
         if (mapUIPanel) mapUIPanel.SetActive(false);
-        if (nodeCam) nodeCam.SetActive(false);
-        if (camController && camController.climbCam) camController.climbCam.SetActive(true);
+        if (nodeCam) nodeCam.SetActive(true);
+        if (camController && camController.climbCam) camController.climbCam.SetActive(false);
 
         Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
         Cursor.lockState = CursorLockMode.Locked;
@@ -351,12 +351,16 @@ public class NodeSelectionManager : MonoBehaviour
 
             while (distance > 0.1f)
             {
-                player.position = Vector3.MoveTowards(player.position, finalDestination, autoClimbSpeed * Time.deltaTime);
+                var climbingIK=player.GetComponentInChildren<ClimbingContactIK>();
+                Vector3 nextPosition=Vector3.MoveTowards(player.position,finalDestination,autoClimbSpeed*Time.deltaTime);
+                if(climbingIK)climbingIK.SetClimbVelocity((nextPosition-player.position)/Mathf.Max(.001f,Time.deltaTime));
+                player.position=nextPosition;
                 distance = Vector3.Distance(player.position, finalDestination);
                 yield return null;
             }
         }
 
+        if(stateManager){var ik=stateManager.GetComponentInChildren<ClimbingContactIK>();if(ik)ik.SetClimbVelocity(Vector3.zero);}
         yield return StartCoroutine(FadeScreen(1f, 1f));
 
         if (GameManager.Instance != null && GameManager.Instance.playerData != null)
@@ -420,6 +424,8 @@ public class NodeSelectionManager : MonoBehaviour
             camController.SwitchToClimbCam(stateManager.transform.eulerAngles.y);
             camController.enabled = true;
         }
+        // หลังเลือก Node กล้องค้างที่ NodeCam ระหว่างปีนอัตโนมัติ ต้องปิดตอนเริ่มชั้นใหม่
+        if (nodeCam) nodeCam.SetActive(false);
 
         if (stateManager) stateManager.ChangeState(PlayerStateManager.State.Climbing);
     }

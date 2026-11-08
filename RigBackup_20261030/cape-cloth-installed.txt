@@ -1,0 +1,2 @@
+particles=216, pinned=134, free=82, capsule colliders=8
+Save scene to retain installation.

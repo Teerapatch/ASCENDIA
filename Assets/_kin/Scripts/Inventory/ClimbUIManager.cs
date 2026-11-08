@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
@@ -127,8 +127,18 @@ public class ClimbUIManager : MonoBehaviour
     }
     private void SwitchCamera(bool showInventoryCam)
     {
-        if (climbCamera != null) climbCamera.SetActive(!showInventoryCam);
         if (inventoryCamera != null) inventoryCamera.SetActive(showInventoryCam);
+        var controller = FindFirstObjectByType<PlayerCameraController>();
+        if (controller != null)
+        {
+            if (showInventoryCam)
+            {
+                if (controller.walkCam) controller.walkCam.SetActive(false);
+                if (controller.climbCam) controller.climbCam.SetActive(false);
+            }
+            else controller.RestoreGameplayCamera();
+        }
+        else if (climbCamera != null) climbCamera.SetActive(!showInventoryCam);
     }
 
     public void RefreshInventoryUI()

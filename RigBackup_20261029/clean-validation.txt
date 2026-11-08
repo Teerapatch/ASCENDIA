@@ -1,0 +1,21 @@
+Avatar valid=True humanoid=True
+Body vertices=3044 missingBones=0 materials=Body,Skin,face
+Cape vertices=224 missingBones=0 materials=Body
+Hair_ vertices=1667 missingBones=0 materials=Hair_
+humanMotion=True length=1.966667 Idle t=0 head=(0.01, 1.40, 0.10) hips=(-0.04, 0.76, -0.02)
+Body bounds=Center: (0.01, 0.00, 0.79), Extents: (0.34, 0.55, 0.92)
+Cape bounds=Center: (-0.31, 0.36, 0.86), Extents: (0.79, 0.73, 0.60)
+Hair_ bounds=Center: (-0.10, -0.15, -0.14), Extents: (0.30, 0.25, 0.27)
+humanMotion=True length=1.966667 Idle t=0.25 head=(0.00, 1.40, 0.09) hips=(-0.04, 0.76, -0.02)
+Body bounds=Center: (0.00, -0.01, 0.79), Extents: (0.34, 0.56, 0.92)
+Cape bounds=Center: (-0.32, 0.36, 0.86), Extents: (0.79, 0.73, 0.62)
+Hair_ bounds=Center: (-0.10, -0.15, -0.14), Extents: (0.31, 0.26, 0.27)
+humanMotion=True length=1.966667 Idle t=0.5 head=(0.00, 1.40, 0.09) hips=(-0.04, 0.76, -0.02)
+Body bounds=Center: (0.00, 0.00, 0.79), Extents: (0.34, 0.55, 0.92)
+Cape bounds=Center: (-0.32, 0.36, 0.86), Extents: (0.79, 0.73, 0.63)
+Hair_ bounds=Center: (-0.10, -0.14, -0.14), Extents: (0.30, 0.24, 0.26)
+humanMotion=True length=1.966667 Idle t=0.75 head=(0.00, 1.40, 0.09) hips=(-0.04, 0.76, -0.02)
+Body bounds=Center: (0.01, 0.00, 0.79), Extents: (0.34, 0.55, 0.92)
+Cape bounds=Center: (-0.32, 0.36, 0.86), Extents: (0.79, 0.73, 0.61)
+Hair_ bounds=Center: (-0.10, -0.14, -0.14), Extents: (0.30, 0.24, 0.26)
+Available clips=1; walk/run not found in supplied animation folder.

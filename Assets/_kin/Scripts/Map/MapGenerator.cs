@@ -15,6 +15,9 @@ public class MapGenerator : MonoBehaviour
 
     private void Awake()
     {
+        // ทั้งหน้าผาของห้องใช้จุดอ้างอิงเดียวกัน มือที่ IK จับไว้จึงไม่หลุดเมื่อข้ามชิ้น Mesh
+        if (!GetComponent<ClimbingSurface>()) gameObject.AddComponent<ClimbingSurface>();
+
         if (mountainPrefabs == null || mountainPrefabs.Length == 0) return;
 
         GameObject cliff = Instantiate(mountainPrefabs[PickCliffIndex()], transform);
