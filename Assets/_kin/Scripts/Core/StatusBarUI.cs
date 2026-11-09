@@ -35,7 +35,8 @@ public class StatusBarUI : MonoBehaviour
         PlayerData data = GameManager.Instance.playerData;
 
         // 🌟 1. ดักจับและทำเด้งดึ๋งเมื่อมีการเปลี่ยนแปลง
-        if (data.stamina > lastStamina || data.weight > lastWeight)
+        // ฟื้นทีละนิดตอนยืนบนพื้นไม่ต้องเด้ง เด้งเฉพาะตอนได้เพิ่มทีเดียว (สมุนไพร/พัก)
+        if (data.stamina > lastStamina + 2f || data.weight > lastWeight)
         {
             if (mainRect != null) mainRect.localScale = Vector3.one * bounceScale;
         }

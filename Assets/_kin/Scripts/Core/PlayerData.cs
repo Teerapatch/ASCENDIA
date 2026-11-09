@@ -16,6 +16,8 @@ public class PlayerData : ScriptableObject
     public float maxStamina = 100f;
     public float stamina = 100f;
     public float baseStaminaDrain = 10f;
+    [Tooltip("ฟื้น Stamina ต่อวินาทีตอนยืน/เดินบนพื้นเรียบ")]
+    public float staminaRegenOnGround = 20f;
 
     [Header("Weapon System (DUR)")]
     public float maxWeaponDUR = 100f;

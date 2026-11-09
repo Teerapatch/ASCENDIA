@@ -4,7 +4,12 @@ using UnityEngine.Animations.Rigging;
 [DefaultExecutionOrder(100), RequireComponent(typeof(Animator))]
 public class ClimbingHandRig : MonoBehaviour
 {
-    [Range(0,1)] public float handWeight = .65f;
+    [Range(0,1)] public float handWeight = .9f;
+    [Header("ช่วงที่มือจับหิน (ตำแหน่งในรอบคลิปปีน: มือเลื่อนลงเทียบตัวช่วง 0.5-1)")]
+    [Range(0,1)] public float plantStart = .4f;
+    [Range(0,1)] public float plantFull = .52f;
+    [Range(0,1)] public float releaseStart = .93f;
+    public float releaseEnd = 1.02f;
     [Min(.01f)] public float probeRadius = .06f;
     public bool Ready { get; private set; }
     Animator animator; ClimbingContactIK source; RigBuilder builder; Rig rig;
@@ -39,10 +44,27 @@ public class ClimbingHandRig : MonoBehaviour
         }
         builder.layers.Add(new RigLayer(rig));Ready=builder.Build();
     }
+    bool mantleActive; Vector3 mantleLeft, mantleRight; float mantleWeight;
+    // ระหว่างท่าขึ้นขอบ PlayerLedgeMantle เป็นคนกำหนดจุดจับ
+    public void SetMantleGrip(Vector3 left, Vector3 right, float weight){mantleActive=true;mantleLeft=left;mantleRight=right;mantleWeight=weight;}
+    public void ClearMantleGrip(){mantleActive=false;mantleWeight=0;}
     float traversePhase;
     void Update()
     {
         if(!Ready||!source||!source.playerRoot)return;
+        if(mantleActive)
+        {
+            for(int i=0;i<2;i++)
+            {
+                var h=hands[i];
+                h.length=Vector3.Distance(h.shoulder.position,h.elbow.position)+Vector3.Distance(h.elbow.position,h.wrist.position);
+                h.target.position=i==0?mantleLeft:mantleRight;
+                h.hint.position=h.shoulder.position+source.playerRoot.right*(i==0?-.35f:.35f)*h.length-source.playerRoot.forward*h.length*.25f;
+                h.constraint.weight=Mathf.MoveTowards(h.constraint.weight,mantleWeight,Time.deltaTime*8);
+                h.planted=false;
+            }
+            return;
+        }
         bool climb=source.state && (source.state.currentState==PlayerStateManager.State.Climbing || source.state.currentState==PlayerStateManager.State.AutoClimbing);
         bool penalty=source.state && (source.state.currentState==PlayerStateManager.State.Penalty || source.state.currentState==PlayerStateManager.State.NodeSelection);
         var info=animator.GetCurrentAnimatorStateInfo(0);
@@ -53,7 +75,7 @@ public class ClimbingHandRig : MonoBehaviour
         float phase=Mathf.Repeat(traverse?traversePhase:info.normalizedTime,1);
         float rate=animator.GetFloat("ClimbRate");
         float scale=Mathf.Max(.1f,Mathf.Abs(transform.lossyScale.y));
-        Vector3 forward=source.playerRoot.forward;
+        Vector3 forward=transform.forward; // ทิศตัวที่เอียงตามความลาดของหินแล้ว
         for(int i=0;i<2;i++)
         {
             var h=hands[i];float wanted=0;
@@ -62,7 +84,7 @@ public class ClimbingHandRig : MonoBehaviour
             {
                 h.length=Vector3.Distance(h.shoulder.position,h.elbow.position)+Vector3.Distance(h.elbow.position,h.wrist.position);
                 float p=Mathf.Repeat(phase+i*.5f,1);
-                float envelope=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.32f,.52f,p))*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.82f,1,p)));
+                float envelope=Mathf.SmoothStep(0,1,Mathf.InverseLerp(plantStart,plantFull,p))*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(releaseStart,releaseEnd,p)));
                 if(penalty || (!traverse && Mathf.Abs(rate)<.01f))envelope=h.planted?1:0;
                 if(envelope<.02f)h.planted=false;
                 if(!h.planted && envelope>.05f)

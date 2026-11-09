@@ -30,6 +30,12 @@ public class PlayerPenaltySystem : MonoBehaviour
                 DrainStamina();
             }
         }
+        else if (stateManager.currentState == PlayerStateManager.State.Walking)
+        {
+            // ยืน/เดินบนพื้นเรียบ: ฟื้น Stamina
+            PlayerData data = GameManager.Instance.playerData;
+            data.stamina = Mathf.Min(data.maxStamina, data.stamina + data.staminaRegenOnGround * Time.deltaTime);
+        }
     }
 
     private void DrainStamina()

@@ -14,6 +14,7 @@ public class PlayerAnimationBridge : MonoBehaviour
         Vector3 delta = transform.position - previous; previous = transform.position;
         if (!animator || Time.deltaTime <= 0) return;
         float speed = state && state.currentState == PlayerStateManager.State.Walking ? new Vector2(delta.x, delta.z).magnitude / Time.deltaTime : 0f;
+        speed /= Mathf.Max(.001f, Mathf.Abs(transform.lossyScale.y)); // เทียบกับขนาดตัว ค่า Blend Tree เป็นหน่วยที่สเกล 1
         if (speed > 10f) speed = 0f; // Ignore teleports.
         animator.SetFloat(Speed, Mathf.Clamp(speed, 0f, 3.5f), damping, Time.deltaTime);
     }

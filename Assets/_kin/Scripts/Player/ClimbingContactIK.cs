@@ -8,10 +8,37 @@ public class ClimbingContactIK : MonoBehaviour
     [Range(0, 1)] public float contactWeight = 1f;
     [Range(0, 1)] public float wristRotationWeight = 0f;
     [Tooltip("Distance climbed per animation cycle, measured at visual scale 1.")]
-    public float distancePerCycle = 0.8f;
+    public float distancePerCycle = 1.22f;
     public float reachMargin = 0.95f;
     public bool HasWall { get; private set; }
     [Range(0, 1)] public float footIKWeight = 0f;
+    [Tooltip("อัตราเล่นคลิปปีนสูงสุด")]
+    public float maxClimbRate = 2f;
+    [Tooltip("ความเร็วเล่นคลิปตอนหยุด เพื่อเข้าท่าที่มือจับหินครบ")]
+    public float settleRate = 1f;
+    [Header("เอียงตัวตามหิน")]
+    public bool alignToSurface = true;
+    [Range(0f, 60f)] public float maxBodyPitch = 35f;
+    public float bodyPitchSharpness = 8f;
+    [Tooltip("ระยะฝ่าเท้าจากผิวหิน (เทียบสเกล 1)")]
+    public float footClearance = .06f;
+    private Vector3 surfaceNormal = Vector3.back;
+    private Vector3 visualBasePosition;
+    private float bodyPitch;
+    private readonly float[] footDepth = new float[2];
+    private bool mantleClimbing;
+    private float mantleRate;
+    private Vector3 mantleFootLeft, mantleFootRight;
+    private float mantleFootWeight;
+    public void SetSurfaceNormal(Vector3 value) { surfaceNormal = value; }
+    public void SetMantleAnimation(bool climbingPose, float animationRate) { mantleClimbing = climbingPose; mantleRate = animationRate; }
+    public void SetMantleFeet(Vector3 left, Vector3 right, float footWeight) { mantleFootLeft = left; mantleFootRight = right; mantleFootWeight = footWeight; }
+    public void EndMantle() { mantleClimbing = false; mantleRate = 0f; mantleFootWeight = 0f; }
+    public void GetFootPositions(out Vector3 left, out Vector3 right)
+    {
+        left = animator.GetBoneTransform(HumanBodyBones.LeftFoot).position;
+        right = animator.GetBoneTransform(HumanBodyBones.RightFoot).position;
+    }
     private ClimbingHandRig handRig;
     public Collider WallCollider { get; private set; }
     public void ReleaseWall()
@@ -84,6 +111,7 @@ public class ClimbingContactIK : MonoBehaviour
     private void Awake()
     {
         animator = GetComponent<Animator>();
+        visualBasePosition = transform.localPosition;
         handRig = GetComponent<ClimbingHandRig>();
         if(!handRig) handRig = gameObject.AddComponent<ClimbingHandRig>();
         if (!state) state = GetComponentInParent<PlayerStateManager>();
@@ -92,6 +120,15 @@ public class ClimbingContactIK : MonoBehaviour
     private void LateUpdate()
     {
         if (!animator || !state || !playerRoot) return;
+        if (state.currentState == PlayerStateManager.State.Mantling)
+        {
+            HasWall = false; WallCollider = null; holdingPose = false; climbingPose = false; requestedVelocity = Vector3.zero;
+            animator.SetBool(Climbing, mantleClimbing);
+            animator.SetFloat(Rate, mantleRate);
+            weight = Mathf.MoveTowards(weight, 0f, Time.deltaTime * 5f);
+            ApplyBodyPitch(0f);
+            return;
+        }
         bool climbing = state.currentState == PlayerStateManager.State.Climbing || state.currentState == PlayerStateManager.State.AutoClimbing;
         holdingPose = (state.currentState == PlayerStateManager.State.Penalty || state.currentState == PlayerStateManager.State.NodeSelection) && climbingPose;
         climbingPose = climbing || holdingPose;
@@ -123,8 +160,8 @@ public class ClimbingContactIK : MonoBehaviour
             float speed = requestedVelocity.magnitude * (1-sideBlend);
             var clips = animator.GetCurrentAnimatorClipInfo(0);
             float duration = clips.Length > 0 ? clips[0].clip.length : 1f;
-            float desiredRate = speed < .02f ? 0f : Mathf.Min(1.5f, speed * duration / Mathf.Max(.05f, distancePerCycle * scale));
-            if (requestedVelocity.y < -.001f) desiredRate = -desiredRate;
+            float desiredRate = speed < .02f ? SettleRate() : Mathf.Min(maxClimbRate, speed * duration / Mathf.Max(.05f, distancePerCycle * scale));
+            if (speed >= .02f && requestedVelocity.y < -.001f) desiredRate = -desiredRate;
             rate = desiredRate == 0f ? 0f : Mathf.MoveTowards(rate, desiredRate, Time.deltaTime * 5f);
 
         }
@@ -132,12 +169,43 @@ public class ClimbingContactIK : MonoBehaviour
         animator.SetBool(Climbing, climbing);
         animator.SetFloat(Rate, rate);
         weight = Mathf.MoveTowards(weight, climbing && HasWall ? contactWeight : 0f, Time.deltaTime * 5f);
+        ApplyBodyPitch(climbing && HasWall && alignToSurface
+            ? Mathf.Clamp(Vector3.SignedAngle(playerRoot.forward, -surfaceNormal, playerRoot.right), -maxBodyPitch, maxBodyPitch)
+            : 0f);
+    }
+
+    // หยุดปีน: เล่นคลิปต่อจนถึงท่าที่มือจับหินครบ (ต้นรอบและกลางรอบ) แล้วจึงค้างท่า
+    private float SettleRate()
+    {
+        if (!animator.GetCurrentAnimatorStateInfo(0).IsTag("Climbing") || animator.IsInTransition(0)) return 0f;
+        float phase = Mathf.Repeat(animator.GetCurrentAnimatorStateInfo(0).normalizedTime + phaseOffset, .5f);
+        float delta = phase > .25f ? .5f - phase : -phase;
+        return Mathf.Abs(delta) < .015f ? 0f : Mathf.Sign(delta) * settleRate;
+    }
+
+    // เอียงตัวละครตามความลาดของหิน หมุนรอบจุดกลางตัวเพื่อไม่ให้ตัวเลื่อนออกจากหิน
+    private void ApplyBodyPitch(float target)
+    {
+        bodyPitch = Mathf.LerpAngle(bodyPitch, target, 1f - Mathf.Exp(-bodyPitchSharpness * Time.deltaTime));
+        Quaternion pitch = Quaternion.AngleAxis(bodyPitch, Vector3.right);
+        transform.localRotation = pitch;
+        transform.localPosition = pitch * visualBasePosition;
     }
     private void ClearContacts() { foreach (var contact in contacts) { contact.planted = false; contact.hasAnchor = false; contact.swinging = false; contact.hasOutput = false; contact.smoothVelocity = Vector3.zero; } }
     private void OnAnimatorIK(int layer)
     {
         if (!animator || !playerRoot) return;
+        if (state && state.currentState == PlayerStateManager.State.Mantling)
+        {
+            animator.SetIKPositionWeight(AvatarIKGoal.LeftHand, 0); animator.SetIKPositionWeight(AvatarIKGoal.RightHand, 0);
+            animator.SetIKPositionWeight(AvatarIKGoal.LeftFoot, mantleFootWeight); animator.SetIKPosition(AvatarIKGoal.LeftFoot, mantleFootLeft);
+            animator.SetIKPositionWeight(AvatarIKGoal.RightFoot, mantleFootWeight); animator.SetIKPosition(AvatarIKGoal.RightFoot, mantleFootRight);
+            return;
+        }
         float phase = Mathf.Repeat(animator.GetCurrentAnimatorStateInfo(0).normalizedTime + phaseOffset, 1f);
+        // หยุดเกาะ: หายใจเบา ๆ ไม่ให้ตัวนิ่งสนิท มือเท้ายังจับหินอยู่ด้วย IK
+        if (climbingPose && weight > 0 && Mathf.Abs(rate) < .01f)
+            animator.bodyPosition -= transform.forward * (Mathf.Sin(Time.time * 1.8f) * .012f * scale);
         if(climbingPose && weight>0)
         {
             float side=Vector3.Dot(requestedVelocity,playerRoot.right);
@@ -162,6 +230,13 @@ public class ClimbingContactIK : MonoBehaviour
                     sideTarget.y+=Mathf.Max(0,Mathf.Sin(cycle*Mathf.PI*2))*leg*.09f;
                     footGoal=Vector3.Lerp(footGoal,sideTarget,sideBlend);
                 }
+                // แอนิเมชันกำหนดจังหวะก้าวขึ้น-ลง ส่วนความลึกยึดจากผิวหินจริง เท้าจึงเหยียบหินที่ขรุขระ
+                Vector3 probeDir=transform.forward;
+                float targetDepth=0f;
+                if(Physics.Raycast(footGoal-probeDir*(1.2f*scale),probeDir,out var rock,2.4f*scale,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore)&&rock.collider.CompareTag("Wall"))
+                    targetDepth=Mathf.Clamp(Vector3.Dot(rock.point+rock.normal*footClearance*scale-footGoal,probeDir),-.4f*scale,.5f*scale);
+                footDepth[i-2]=Mathf.Lerp(footDepth[i-2],targetDepth,1-Mathf.Exp(-Time.deltaTime*14));
+                footGoal+=probeDir*footDepth[i-2];
                 footGoal=thigh.position+Vector3.ClampMagnitude(footGoal-thigh.position,leg*.94f);
                 animator.SetIKPositionWeight(goals[i],weight);animator.SetIKPosition(goals[i],footGoal);
                 continue;

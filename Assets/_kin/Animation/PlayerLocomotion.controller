@@ -21,7 +21,7 @@ AnimatorState:
   m_MirrorParameterActive: 0
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
-  m_Motion: {fileID: -203655887218126122, guid: 2f5c0d517b954b54d9ee66851d1244bc, type: 3}
+  m_Motion: {fileID: 7400000, guid: aef18a99e4687f94d961a00327147c6d, type: 2}
   m_Tag: Climbing
   m_SpeedParameter: ClimbRate
   m_MirrorParameter: 
@@ -153,7 +153,7 @@ BlendTree:
   m_Name: Idle Walk Run
   m_Childs:
   - serializedVersion: 2
-    m_Motion: {fileID: -203655887218126122, guid: 5dbac3039f1928a4fa8376b9a5168e78, type: 3}
+    m_Motion: {fileID: 7400000, guid: 29a981309e2371946b76f1312ed97548, type: 2}
     m_Threshold: 0
     m_Position: {x: 0, y: 0}
     m_TimeScale: 1
@@ -161,10 +161,10 @@ BlendTree:
     m_DirectBlendParameter: Blend
     m_Mirror: 0
   - serializedVersion: 2
-    m_Motion: {fileID: -203655887218126122, guid: e7c0d38aa82bdbc4892b179e03225662, type: 3}
-    m_Threshold: 1.4
+    m_Motion: {fileID: 7400000, guid: 8e340eb783d6d3d43a32d35712ba37a0, type: 2}
+    m_Threshold: 1.05
     m_Position: {x: 0, y: 0}
-    m_TimeScale: 1
+    m_TimeScale: 1.47
     m_CycleOffset: 0
     m_DirectBlendParameter: Blend
     m_Mirror: 0

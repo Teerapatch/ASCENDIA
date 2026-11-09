@@ -11,6 +11,8 @@ public class PlayerClimbController : MonoBehaviour
     public float maxX = 4f;
     [Range(.1f, 1f), Tooltip("ตัวคูณความเร็วเฉพาะตอนปีนขึ้น (ลงและซ้าย-ขวาไม่เกี่ยว)")]
     public float upwardSpeedMultiplier = .3f;
+    [Range(.1f, 1f), Tooltip("ตัวคูณความเร็วตอนปีนลง ให้ท่าปีนทันระยะที่เคลื่อนที่")]
+    public float downwardSpeedMultiplier = .4f;
     [Min(.1f), Tooltip("ความเร่งตอนเริ่มขยับหรือเปลี่ยนทิศ (ปล่อยปุ่มแล้วหยุดทันที)")]
     public float climbAcceleration = 10f;
 
@@ -41,6 +43,7 @@ public class PlayerClimbController : MonoBehaviour
 
     private PlayerStateManager stateManager;
     private ClimbingContactIK contactIK;
+    private PlayerLedgeMantle ledgeMantle;
     // x = ซ้าย-ขวาตามผิวหิน, y = ขึ้น-ลง
     private Vector2 climbVelocity;
     
@@ -51,6 +54,7 @@ public class PlayerClimbController : MonoBehaviour
     {
         stateManager = GetComponent<PlayerStateManager>();
         contactIK = GetComponentInChildren<ClimbingContactIK>();
+        ledgeMantle = GetComponent<PlayerLedgeMantle>();
     }
 
     private void Update()
@@ -117,7 +121,7 @@ public class PlayerClimbController : MonoBehaviour
         float v = input.y;
 
         // 🌟 2. ดึงความเร็วปัจจุบันมาใช้ (คูณกับตัวคูณแบบเรียลไทม์)
-        float currentVertSpeed = verticalSpeed * currentSpeedMultiplier * (v > 0f ? upwardSpeedMultiplier : 1f);
+        float currentVertSpeed = verticalSpeed * currentSpeedMultiplier * (v > 0f ? upwardSpeedMultiplier : downwardSpeedMultiplier);
         float currentHorzSpeed = horizontalSpeed * currentSpeedMultiplier;
 
         climbVelocity = Vector2.MoveTowards(climbVelocity, new Vector2(h * currentHorzSpeed, v * currentVertSpeed), climbAcceleration * Time.deltaTime);
@@ -153,6 +157,12 @@ public class PlayerClimbController : MonoBehaviour
         if (canMove) transform.position += climbStep;
 
         if (followSurface) StickToSurface();
+
+        // ปีนขึ้นไปเจอพื้นเรียบ: ขึ้นไปยืน
+        if (climbVelocity.y > 0f && ledgeMantle != null && ledgeMantle.TryStartMantle(Flat(transform.forward, Vector3.forward), currentWall))
+        {
+            climbVelocity = Vector2.zero;
+        }
     }
 
     // ตัดก้าวซ้าย-ขวาให้หยุดพอดีขอบ: ใช้ความกว้าง BoxCollider ของไทล์ที่เกาะอยู่ ถ้าไม่มีใช้ minX..maxX
@@ -189,6 +199,8 @@ public class PlayerClimbController : MonoBehaviour
             wallFacing = Flat(wall.Facing, wallFacing);
         }
         else if (firstFrame) wallFacing = facing;
+
+        if (contactIK != null) contactIK.SetSurfaceNormal(normal);
 
         // ทิศที่ควรหัน = สวนทาง normal (แนวนอน) แต่ไม่เกิน maxSurfaceAngle จากทิศกำแพง
         Vector3 surfaceFacing = Flat(-normal, facing);
