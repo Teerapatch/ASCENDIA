@@ -54,6 +54,16 @@ public class BattleCameraController : MonoBehaviour
         transitionDuration = 0.4f
     };
 
+    [Header("Action Framing (ตอนผู้เล่นลงมือ คูณ framingScale)")]
+    public float meleeCameraDistance = 7f;
+    public float meleeCameraHeight = 1.5f;
+    [Tooltip("ความสูงจุดที่กล้องมอง (ระดับอกตัวละคร)")]
+    public float actionLookHeight = 1.5f;
+    public float rangedCameraBack = 4.5f;
+    public float rangedCameraSide = 2f;
+    public float rangedCameraHeight = 2.2f;
+    public float actionTransition = 0.35f;
+
     [Header("Current Targets")]
     private Transform currentAttacker;
     private Transform currentTarget;
@@ -169,6 +179,36 @@ public class BattleCameraController : MonoBehaviour
                 }
                 break;
         }
+    }
+
+    // กล้องตอนลงมือ: ตีประชิดมองจากด้านข้างให้เห็นทั้งสองฝ่าย ยิง/ร่ายมองข้ามไหล่ไปหาเป้า
+    public void FrameAction(Vector3 attackerPosition, Vector3 targetPosition, bool melee)
+    {
+        CurrentState = CameraState.ActionExecution;
+        Vector3 look = Vector3.up * (actionLookHeight * framingScale);
+        Vector3 toTarget = targetPosition - attackerPosition;
+        toTarget.y = 0f;
+        toTarget = toTarget.sqrMagnitude > 0.001f ? toTarget.normalized : Vector3.forward;
+
+        Vector3 focus;
+        Vector3 camPos;
+        if (melee)
+        {
+            focus = Vector3.Lerp(attackerPosition, targetPosition, 0.5f) + look;
+            // อยู่ฝั่งเดียวกับกล้องภาพรวมเสมอ จะได้ไม่มุดเข้าหน้าผา
+            Vector3 side = Vector3.Cross(Vector3.up, toTarget);
+            if (Vector3.Dot(side, sceneDefaultPosition - focus) < 0f) side = -side;
+            camPos = focus + (side - toTarget * 0.35f).normalized * (meleeCameraDistance * framingScale) + Vector3.up * ((meleeCameraHeight - actionLookHeight) * framingScale);
+        }
+        else
+        {
+            Vector3 side = Vector3.Cross(Vector3.up, toTarget);
+            if (Vector3.Dot(side, sceneDefaultPosition - attackerPosition) < 0f) side = -side;
+            focus = Vector3.Lerp(attackerPosition, targetPosition, 0.65f) + look;
+            camPos = attackerPosition - toTarget * (rangedCameraBack * framingScale) + side * (rangedCameraSide * framingScale) + Vector3.up * (rangedCameraHeight * framingScale);
+        }
+
+        ApplyCustomTransition(camPos, Quaternion.LookRotation(focus - camPos), sceneDefaultLensSize, actionTransition);
     }
 
     private void ApplyCustomTransition(Vector3 targetPos, Quaternion targetRot, float lensSize, float duration)

@@ -20,6 +20,11 @@ public class BulletHellSkill : WeaponSkill
     public int maxHits = 10;
     public float timeBetweenHits = 0.08f;
 
+    public override float ExtraHitDuration(PlayerCombatController player)
+    {
+        return (Mathf.Clamp(player.totalGunCounterAttacks, minHits, maxHits) - 1) * timeBetweenHits;
+    }
+
     public override void ExecuteSkill(PlayerCombatController player, EnemyController target, int qteSuccesses)
     {
         int hits = Mathf.Clamp(player.totalGunCounterAttacks, minHits, maxHits);
@@ -31,6 +36,7 @@ public class BulletHellSkill : WeaponSkill
 
     private IEnumerator FireRoutine(PlayerCombatController player, int hits, float damagePerHit)
     {
+        float interval = player.HitInterval(hits, timeBetweenHits);
         for (int i = 0; i < hits; i++)
         {
             foreach (EnemyController enemy in new List<EnemyController>(CombatManager.Instance.enemies))
@@ -39,7 +45,7 @@ public class BulletHellSkill : WeaponSkill
             }
             CameraShakeManager.TryShake(0.25f);
 
-            yield return new WaitForSeconds(timeBetweenHits);
+            yield return new WaitForSeconds(interval);
         }
     }
 }

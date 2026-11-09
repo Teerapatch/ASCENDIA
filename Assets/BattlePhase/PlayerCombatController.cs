@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -50,6 +51,7 @@ public class PlayerCombatController : MonoBehaviour
 
 
     private WeaponSkill selectedSkill;
+    private PlayerBattleAnimator battleAnimator;
 
     // บัฟของผู้เล่น (Evasion, Berserk, AttackUp) ใช้ร่วมกันทุกอาวุธ นับเทิร์นตอนจบเทิร์นของผู้เล่น
     public readonly CombatStatusSet Statuses = new CombatStatusSet();
@@ -69,6 +71,9 @@ public class PlayerCombatController : MonoBehaviour
         {
             ActiveWeapon = inventoryWeapons[0];
         }
+
+        battleAnimator = GetComponent<PlayerBattleAnimator>();
+        if (battleAnimator == null) battleAnimator = gameObject.AddComponent<PlayerBattleAnimator>();
     }
 
     // สกิลที่ผู้เล่นเลือกไว้ใน Camp (ส่งมากับ BattleRequest) ถ้าไม่มีใช้ 3 สกิลแรกของอาวุธ
@@ -156,6 +161,13 @@ public class PlayerCombatController : MonoBehaviour
             {
                 ControlPromptUI.Instance.HidePrompt();
             }
+        }
+
+        // ระหว่างเล่นท่า/กด QTE ห้ามเล็งยิงแทรก
+        if (actionState == PlayerActionState.Executing || actionState == PlayerActionState.DoingQTE)
+        {
+            if (isAiming) ExitAimMode();
+            return;
         }
 
         // โหมด Free Aim (คลิกขวาค้าง)
@@ -336,79 +348,152 @@ public class PlayerCombatController : MonoBehaviour
     // ==========================================
     private void ExecutePendingAction(EnemyController targetEnemy)
     {
-        if (pendingActionType == 0)
+        if (pendingActionType == 1 && selectedSkill == null) return;
+
+        // กันกดซ้ำระหว่างเล่นท่า และซ่อนเมนูให้เห็นตัวละครเต็มที่
+        actionState = PlayerActionState.Executing;
+        if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
+        if (ControlPromptUI.Instance != null) ControlPromptUI.Instance.HidePrompt();
+
+        StartCoroutine(pendingActionType == 0 ? BasicAttackRoutine(targetEnemy) : SkillRoutine(targetEnemy, selectedSkill));
+    }
+
+    // ระยะห่างระหว่างฮิตของสกิลหลายฮิต: กระจายตลอดท่า แต่ไม่ถี่กว่าค่าที่สกิลกำหนด
+    public float HitInterval(int hits, float minimumInterval)
+    {
+        if (hits <= 1 || battleAnimator == null) return minimumInterval;
+        return Mathf.Max(minimumInterval, battleAnimator.TimeAfterImpact * 0.85f / (hits - 1));
+    }
+
+    private IEnumerator BasicAttackRoutine(EnemyController target)
+    {
+        BattleClip clip = battleAnimator != null ? battleAnimator.AttackClip : null;
+        yield return ActionRoutine(target, clip, null, null, () => ApplyBasicAttack(target), 0f);
+    }
+
+    private IEnumerator SkillRoutine(EnemyController target, WeaponSkill skill)
+    {
+        BattleClip clip = battleAnimator != null ? battleAnimator.SkillClip(skill) : null;
+        bool useQTE = skill.useQTE && SkillQTEManager.Instance != null;
+        bool qteFinished = !useQTE;
+        int qteSuccesses = 0;
+
+        // QTE เริ่มหลังพุ่งเข้าประชิดแล้ว ตัวละครง้างท่าค้างรอจนกดครบ แล้วจึงฟาดลงจริง
+        void BeginQTE()
         {
-            // ตีปกติ ไม่ต้องมี QTE ทำงานได้เลย
-            actionState = PlayerActionState.Executing;
-            int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage);
-            int postureDamage = Mathf.RoundToInt(finalDamage * ActiveWeapon.postureDamageMultiplier);
-
-            if (ActiveWeapon.weaponType == WeaponType.LongSword)
+            if (!useQTE) return;
+            actionState = PlayerActionState.DoingQTE;
+            SkillQTEManager.Instance.StartQTE(skill.qteSteps, successes =>
             {
-                // 1. สร้างเกจ Posture มากกว่าปกติหลายเท่า
-                postureDamage = Mathf.RoundToInt(postureDamage * ActiveWeapon.postureDamageMultiplier);
+                qteSuccesses = successes;
+                qteFinished = true;
+            });
+        }
 
-                // 2. ถ้าเป้าหมายกำลังติด Stagger อยู่ดาเมจคูณเพิ่มมหาศาล!
-                if (targetEnemy.isStaggered)
-                {
-                    finalDamage = Mathf.RoundToInt(finalDamage * ActiveWeapon.staggerDamageMultiplier);
-                    Debug.Log($"<color=orange>⚔️ HEAVY EXECUTION! LongSword deals {ActiveWeapon.staggerDamageMultiplier}x DMG to Staggered target! Final: {finalDamage}</color>");
+        void Impact()
+        {
+            currentAP -= skill.apCost;
+            UpdateAPUI();
+            skill.ExecuteSkill(this, target, qteSuccesses);
+        }
 
-                    // สั่นกล้องแรงสะใจ
-                    CameraShakeManager.TryShake(1.6f);
-                }
-                else
-                {
-                    // สั่นกล้องธรรมดาเวลาฟันโดน
-                    CameraShakeManager.TryShake(0.8f);
-                }
+        yield return ActionRoutine(target, clip, BeginQTE, () => qteFinished, Impact, skill.ExtraHitDuration(this));
+    }
+
+    // ลำดับของการลงมือทุกแบบ: กล้องเข้า -> พุ่งเข้าหา -> เล่นท่า (ดาเมจตรงจังหวะโดน) -> กลับที่ -> ค้างให้เห็นผล -> จบเทิร์น
+    private IEnumerator ActionRoutine(EnemyController target, BattleClip clip, System.Action onApproached, System.Func<bool> ready, System.Action onImpact, float extraHitTime)
+    {
+        int turn = CombatManager.Instance.TurnNumber;
+        bool melee = battleAnimator != null && clip != null && clip.melee;
+        Vector3 attackerAt = melee ? battleAnimator.MeleeDestination(target) : transform.position;
+
+        if (BattleCameraController.Instance != null)
+        {
+            BattleCameraController.Instance.FrameAction(attackerAt, target.transform.position, melee);
+        }
+
+        if (battleAnimator != null)
+        {
+            battleAnimator.FaceTarget(target.transform);
+            if (melee) yield return battleAnimator.DashTo(attackerAt);
+        }
+
+        onApproached?.Invoke();
+
+        float impactTime = -1f;
+        System.Action impact = () =>
+        {
+            impactTime = Time.time;
+            onImpact?.Invoke();
+        };
+
+        if (battleAnimator != null) yield return battleAnimator.PlayAction(clip, ready, impact);
+        else
+        {
+            while (ready != null && !ready()) yield return null;
+            impact();
+        }
+
+        // สกิลหลายฮิตยังตีไม่ครบ รอให้ครบก่อน
+        while (impactTime >= 0f && Time.time < impactTime + extraHitTime) yield return null;
+
+        if (battleAnimator != null)
+        {
+            if (melee) yield return battleAnimator.DashBack();
+            battleAnimator.ResetFacing();
+            yield return new WaitForSeconds(battleAnimator.RecoveryDelay);
+        }
+
+        // ระหว่างเล่นท่าอาจจบการต่อสู้ หรือขึ้น Wave ใหม่ไปแล้ว
+        if (CombatManager.Instance.IsBattleOver || CombatManager.Instance.TurnNumber != turn) yield break;
+        FinishTurnAction();
+    }
+
+    private void ApplyBasicAttack(EnemyController targetEnemy)
+    {
+        if (targetEnemy == null || targetEnemy.IsDead) return;
+
+        int finalDamage = Mathf.RoundToInt(ActiveWeapon.baseDamage);
+        int postureDamage = Mathf.RoundToInt(finalDamage * ActiveWeapon.postureDamageMultiplier);
+
+        if (ActiveWeapon.weaponType == WeaponType.LongSword)
+        {
+            // 1. สร้างเกจ Posture มากกว่าปกติหลายเท่า
+            postureDamage = Mathf.RoundToInt(postureDamage * ActiveWeapon.postureDamageMultiplier);
+
+            // 2. ถ้าเป้าหมายกำลังติด Stagger อยู่ดาเมจคูณเพิ่มมหาศาล!
+            if (targetEnemy.isStaggered)
+            {
+                finalDamage = Mathf.RoundToInt(finalDamage * ActiveWeapon.staggerDamageMultiplier);
+                Debug.Log($"<color=orange>⚔️ HEAVY EXECUTION! LongSword deals {ActiveWeapon.staggerDamageMultiplier}x DMG to Staggered target! Final: {finalDamage}</color>");
+
+                // สั่นกล้องแรงสะใจ
+                CameraShakeManager.TryShake(1.6f);
             }
             else
             {
-                // ถ้าเป็นอาวุธประเภทอื่น (เช่น Dagger)
-                if (ActiveWeapon.weaponType == WeaponType.Dagger)
-                {
-                    AddComboStack(1);
-                }
-
-                if (ActiveWeapon.weaponType == WeaponType.Spell)
-                {
-                    AddElement(ElementTypes.RandomPlayable());
-                }
+                // สั่นกล้องธรรมดาเวลาฟันโดน
+                CameraShakeManager.TryShake(0.8f);
             }
-
-            DealDamage(targetEnemy, finalDamage, postureDamage);
-
-            RestoreAP(1);
-            FinishTurnAction();
         }
-        else if (pendingActionType == 1 && selectedSkill != null)
+        else
         {
-            // สกิล -> เช็คว่าสกิลนี้ต้องใช้ QTE ไหม
-            if (selectedSkill.useQTE && SkillQTEManager.Instance != null)
+            // ถ้าเป็นอาวุธประเภทอื่น (เช่น Dagger)
+            if (ActiveWeapon.weaponType == WeaponType.Dagger)
             {
-                actionState = PlayerActionState.DoingQTE;
-                Debug.Log("รอผู้เล่นกด QTE...");
-
-                // ส่งคำสั่งเปิด QTE และรอรับผลลัพธ์ผ่าน Callback
-                SkillQTEManager.Instance.StartQTE(selectedSkill.qteSteps, (successCount) =>
-                {
-                    // [เมื่อ QTE จบลง ฟังก์ชันข้างในนี้ถึงจะทำงาน]
-                    currentAP -= selectedSkill.apCost;
-                    selectedSkill.ExecuteSkill(this, targetEnemy, successCount);
-
-                    FinishTurnAction(); // สั่งจบเทิร์น
-                });
+                AddComboStack(1);
             }
-            else
+
+            if (ActiveWeapon.weaponType == WeaponType.Spell)
             {
-                // ถ้าสกิลนี้ไม่ต้องใช้ QTE (หรือไม่มี Manager) ก็ปล่อยสกิลเลยโดยส่ง QTE = 0
-                actionState = PlayerActionState.Executing;
-                currentAP -= selectedSkill.apCost;
-                selectedSkill.ExecuteSkill(this, targetEnemy, 0);
-                FinishTurnAction();
+                AddElement(ElementTypes.RandomPlayable());
             }
         }
+
+        DealDamage(targetEnemy, finalDamage, postureDamage);
+
+        RestoreAP(1);
+        UpdateAPUI();
     }
 
     // แยกการทำงานตอนจบเทิร์นออกมา เพื่อให้เรียกง่ายขึ้น
@@ -437,6 +522,7 @@ public class PlayerCombatController : MonoBehaviour
         ActiveWeapon = weaponData;
 
         currentWeaponIndex = inventoryWeapons.IndexOf(weaponData);
+        if (battleAnimator != null) battleAnimator.SetWeapon(ActiveWeapon.weaponType);
 
         actionState = PlayerActionState.ChoosingAction;
         UpdateAPUI();
@@ -547,6 +633,7 @@ public class PlayerCombatController : MonoBehaviour
         WeaponData previous = ActiveWeapon;
         currentWeaponIndex = index;
         ActiveWeapon = CurrentWeapon;
+        if (battleAnimator != null) battleAnimator.SetWeapon(ActiveWeapon.weaponType);
 
         // Orb ธาตุมีเฉพาะตอนถือ Spell ในเทิร์นตัวเอง
         if (SpellOrbManager.Instance != null)
@@ -702,6 +789,7 @@ public class PlayerCombatController : MonoBehaviour
                     CameraShakeManager.TryShake(1.5f);
                 }
 
+                if (battleAnimator != null && battleAnimator.AttackClip != null) battleAnimator.PlayOneShot(battleAnimator.AttackClip.state);
                 DealDamage(enemy, finalDamage, postureDamage);
                 currentAP -= 1;
                 ExitAimMode();

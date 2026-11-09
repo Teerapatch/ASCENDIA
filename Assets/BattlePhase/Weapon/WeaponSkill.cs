@@ -35,6 +35,9 @@ public abstract class WeaponSkill : ScriptableObject
     // ฟังก์ชันนี้บังคับให้คลาสลูกทุกตัวต้องเอาไปเขียนรายละเอียดของตัวเอง (Polymorphism)
     public abstract void ExecuteSkill(PlayerCombatController player, EnemyController target, int qteSuccesses);
 
+    // สกิลที่ทยอยโดนหลายครั้ง: เวลาหลังฮิตแรกจนถึงฮิตสุดท้าย เพื่อไม่ให้จบเทิร์นก่อนตีครบ
+    public virtual float ExtraHitDuration(PlayerCombatController player) { return 0f; }
+
     // เงื่อนไขพิเศษก่อนใช้สกิล (เช่น สกิลเวทที่ต้องมีธาตุใน Slot) reason = ข้อความสั้นที่โชว์ให้ผู้เล่น
     public virtual bool CanExecute(PlayerCombatController player, out string reason)
     {

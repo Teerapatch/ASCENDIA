@@ -338,6 +338,8 @@ public class ParryManager : MonoBehaviour
         isAwaitingInput = false;
         ClearHint();
 
+        if (PlayerBattleAnimator.Instance != null) PlayerBattleAnimator.Instance.PlayParry();
+
         bool isSpellActive = (PlayerCombatController.Instance != null &&
                               PlayerCombatController.Instance.ActiveWeapon != null &&
                               PlayerCombatController.Instance.ActiveWeapon.weaponType == WeaponType.Spell);

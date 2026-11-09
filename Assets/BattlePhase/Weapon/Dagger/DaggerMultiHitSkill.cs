@@ -23,6 +23,8 @@ public class DaggerMultiHitSkill : WeaponSkill
     public float qteDamagePerHit = 8f;
 
 
+    public override float ExtraHitDuration(PlayerCombatController player) { return Mathf.Max(0, numberOfHits - 1) * timeBetweenHits; }
+
     // ฟังก์ชันนี้ถูกเรียกจาก PlayerCombatController
     public override void ExecuteSkill(PlayerCombatController player, EnemyController target, int qteSuccessCount)
     {
@@ -42,6 +44,7 @@ public class DaggerMultiHitSkill : WeaponSkill
     {
         int finalDamagePerHit = Mathf.RoundToInt(hitDamage);
         float postureDamagePerHit = finalDamagePerHit * postureRatio;
+        float interval = player.HitInterval(numberOfHits, timeBetweenHits);
 
         for (int i = 0; i < numberOfHits; i++)
         {
@@ -69,7 +72,7 @@ public class DaggerMultiHitSkill : WeaponSkill
             // (Optional: ใส่โค้ดเล่นเสียงฟันตรงนี้)
 
             // หน่วงเวลารอฮิตต่อไป
-            yield return new WaitForSeconds(timeBetweenHits);
+            yield return new WaitForSeconds(interval);
         }
 
         Debug.Log($"<color=magenta>[{skillName}] Finished! Total Combo Stacks gained: {numberOfHits * comboStacksPerHit}</color>");
