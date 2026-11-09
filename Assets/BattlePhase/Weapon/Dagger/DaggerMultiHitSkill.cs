@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using UnityEngine;
+﻿using UnityEngine;
 
 [CreateAssetMenu(fileName = "New Dagger Skill", menuName = "Ascendia/Skills/Dagger Multi-Hit")]
 public class DaggerMultiHitSkill : WeaponSkill
@@ -13,17 +12,12 @@ public class DaggerMultiHitSkill : WeaponSkill
     [Tooltip("จำนวน Combo Stack ที่จะได้ต่อ 1 ฮิต")]
     public int comboStacksPerHit = 1;
 
-    [Tooltip("หน่วงเวลาระหว่างแต่ละฮิต (วินาที) เพื่อให้แอนิเมชันดูต่อเนื่อง")]
-    public float timeBetweenHits = 0.2f;
-
     [Tooltip("ดาเมจ Posture ต่อฮิต = ดาเมจต่อฮิต x ค่านี้")]
     public float postureRatio = 0.3f;
 
     [Header("QTE Bonus")]
     public float qteDamagePerHit = 8f;
 
-
-    public override float ExtraHitDuration(PlayerCombatController player) { return Mathf.Max(0, numberOfHits - 1) * timeBetweenHits; }
 
     // ฟังก์ชันนี้ถูกเรียกจาก PlayerCombatController
     public override void ExecuteSkill(PlayerCombatController player, EnemyController target, int qteSuccessCount)
@@ -36,45 +30,9 @@ public class DaggerMultiHitSkill : WeaponSkill
             Debug.Log($"<color=yellow>QTE Success! Damage per hit increased to {qteDamagePerHit}</color>");
         }
 
-        // 2. เรียก Coroutine ให้ตัวละครทำแอ็กชันโจมตีหลายครั้ง
-        player.StartCoroutine(PerformMultiHit(player, target, currentHitDamage));
-    }
-
-    private IEnumerator PerformMultiHit(PlayerCombatController player, EnemyController target, float hitDamage)
-    {
-        int finalDamagePerHit = Mathf.RoundToInt(hitDamage);
-        float postureDamagePerHit = finalDamagePerHit * postureRatio;
-        float interval = player.HitInterval(numberOfHits, timeBetweenHits);
-
-        for (int i = 0; i < numberOfHits; i++)
-        {
-            // หยุดถ้าศัตรูตายไปก่อนจะฟันครบ
-            if (target == null || target.IsDead)
-            {
-                Debug.Log($"<color=gray>Target died before all hits connected. Stopped at hit {i}.</color>");
-                break;
-            }
-
-            Debug.Log($"<color=orange>[{skillName}] Hit {i + 1} / {numberOfHits} !</color>");
-
-            // --- 1. ทำดาเมจใส่ศัตรู ---
-            player.DealDamage(target, finalDamagePerHit, postureDamagePerHit);
-
-            // --- 2. [Passive: Dagger] เพิ่ม Combo Stack ตามจำนวนที่ตั้งไว้ ---
-            //player.AddComboStack(comboStacksPerHit);
-            player.AddComboStack(comboStacksPerHit, true);
-
-            // --- 3. [Visual Feedback] สั่นกล้องเบาๆ ทุกฮิต ---
-            // ฮิตสุดท้ายสั่นแรงหน่อย
-            CameraShakeManager.TryShake((i == numberOfHits - 1) ? 0.6f : 0.3f);
-
-            // (Optional: ใส่โค้ดเรียก Particle Effect เอฟเฟกต์ฟันตรงนี้)
-            // (Optional: ใส่โค้ดเล่นเสียงฟันตรงนี้)
-
-            // หน่วงเวลารอฮิตต่อไป
-            yield return new WaitForSeconds(interval);
-        }
-
-        Debug.Log($"<color=magenta>[{skillName}] Finished! Total Combo Stacks gained: {numberOfHits * comboStacksPerHit}</color>");
+        // 2. รวมดาเมจทุกฮิตเป็นก้อนเดียว PlayerCombatController จะแบ่งลงตามจังหวะฟันของท่า
+        int totalDamage = Mathf.RoundToInt(currentHitDamage) * numberOfHits;
+        player.DealDamage(target, totalDamage, totalDamage * postureRatio);
+        player.AddComboStack(comboStacksPerHit * numberOfHits, true);
     }
 }

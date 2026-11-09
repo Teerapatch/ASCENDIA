@@ -92,32 +92,29 @@ public class PlayerBattleAnimator : MonoBehaviour
 
     public float RecoveryDelay => set != null ? set.recoveryDelay : 0.2f;
 
-    // เวลาที่เหลือของท่าหลังจังหวะโดน สกิลหลายฮิตใช้กระจายดาเมจให้ทันท่า
-    public float TimeAfterImpact { get; private set; }
-
     private bool HasState(string state)
     {
         return current != null && !string.IsNullOrEmpty(state) && current.animator.HasState(0, Animator.StringToHash(state));
     }
 
     // เล่นท่าจนจบ: ถ้ายังไม่ปล่อย (ready = false เช่นกำลังกด QTE) จะง้างค้างก่อนถึงจังหวะโดน
-    public IEnumerator PlayAction(BattleClip clip, Func<bool> ready, Action onImpact)
+    public IEnumerator PlayAction(BattleClip clip, Func<bool> ready, Action<int, int> onHit)
     {
         if (clip == null || !HasState(clip.state))
         {
             while (ready != null && !ready()) yield return null;
-            onImpact?.Invoke();
+            onHit?.Invoke(0, 1);
             yield break;
         }
 
-        TimeAfterImpact = 0f;
+        List<float> hits = clip.hits != null && clip.hits.Count > 0 ? clip.hits : new List<float> { clip.impact };
         Animator animator = current.animator;
         animator.speed = Mathf.Max(0.01f, clip.speed);
         animator.CrossFadeInFixedTime(clip.state, set.crossFade, 0, 0f);
         yield return null;
 
-        bool impacted = false;
-        float holdPoint = clip.impact * 0.85f;
+        int next = 0;
+        float firstHit = hits[0];
         int stateHash = Animator.StringToHash(clip.state);
         float released = -1f;
 
@@ -127,27 +124,29 @@ public class PlayerBattleAnimator : MonoBehaviour
             bool isReady = ready == null || ready();
             if (isReady && released < 0f) released = Time.time;
 
-            if (!isReady && time >= holdPoint)
-                animator.speed = time >= clip.impact * 0.98f ? 0f : set.qteHoldSpeed;
+            if (!isReady && time >= firstHit * 0.85f)
+                animator.speed = time >= firstHit * 0.98f ? 0f : set.qteHoldSpeed;
             else
                 animator.speed = Mathf.Max(0.01f, clip.speed);
 
-            if (!impacted && isReady && time >= clip.impact)
+            while (isReady && next < hits.Count && time >= hits[next])
             {
-                impacted = true;
-                AnimatorStateInfo info = animator.GetCurrentAnimatorStateInfo(0);
-                TimeAfterImpact = Mathf.Max(0f, 1f - time) * info.length / Mathf.Max(0.01f, clip.speed);
-                onImpact?.Invoke();
+                onHit?.Invoke(next, hits.Count);
+                next++;
             }
 
             // จบท่าแล้ว หรือกันค้าง: State ถูกเปลี่ยนไปแล้ว/รอเกินเวลา
-            bool finished = impacted && time >= 0.95f;
+            bool finished = next >= hits.Count && time >= 0.95f;
             bool stuck = released >= 0f && Time.time - released > 12f;
             if (finished || stuck) break;
             yield return null;
         }
 
-        if (!impacted) onImpact?.Invoke();
+        while (next < hits.Count)
+        {
+            onHit?.Invoke(next, hits.Count);
+            next++;
+        }
         animator.speed = 1f;
         animator.CrossFadeInFixedTime(current.data.idleState, set.crossFade * 1.5f, 0);
     }

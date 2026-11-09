@@ -22,6 +22,7 @@ public static class AscendiaBuildBattleAnimators
         public WeaponType type;
         public string path;
         public string name;
+        public string weaponMesh;
         public bool melee;
         public string fallbackSelf;
         public (string skill, string clip, bool strike)[] map;
@@ -29,16 +30,16 @@ public static class AscendiaBuildBattleAnimators
 
     static readonly Source[] Sources =
     {
-        new Source { type = WeaponType.Dagger, name = "Dagger", melee = true, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Dagger_Anim/Dagger_Anim_V2.fbx",
+        new Source { type = WeaponType.Dagger, name = "Dagger", weaponMesh = "Dagger", melee = true, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Dagger_Anim/Dagger_Anim_V2.fbx",
             map = new[] { ("Quick Attack", "Attack", true), ("Dancing Knife", "DanceSkill", true), ("Flurry Strike", "FlurrySkill", true), ("Eviscerate", "Attack", true),
                           ("Expose Weakness", "Attack", true), ("Throwing Knife", "Attack", false), ("Vanish Blade", "Parry1", false) } },
-        new Source { type = WeaponType.Gun, name = "Gun", melee = false, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Gun_Anim/Gun_Anim_V2.fbx",
+        new Source { type = WeaponType.Gun, name = "Gun", weaponMesh = "Gun", melee = false, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Gun_Anim/Gun_Anim_V2.fbx",
             map = new[] { ("Bullet Hell", "BulletSkill", false), ("Quick Draw", "QuickSkill2", false), ("Overdraw", "QuickSkill2", false), ("Piercer Shot", "Attack", false),
                           ("Trick Shot", "Attack", false), ("Tactical Reload", "Parry1", false) } },
-        new Source { type = WeaponType.LongSword, name = "LongSword", melee = true, fallbackSelf = "Parry1", path = "Assets/Animation/Player/LongSword_anim/Longsword_Anim_v2.fbx",
+        new Source { type = WeaponType.LongSword, name = "LongSword", weaponMesh = "Sword", melee = true, fallbackSelf = "Parry1", path = "Assets/Animation/Player/LongSword_anim/Longsword_Anim_v2.fbx",
             map = new[] { ("Executioner", "ExecutSkill", true), ("Heavy Impact", "HeavySkill", true), ("Mighty Cleave", "MightySkill", true), ("Pommel Bash", "Attack", true),
                           ("Unyielding", "Attack", true), ("Berserk", "Parry1", false) } },
-        new Source { type = WeaponType.Spell, name = "Spell", melee = false, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Wand_Anim/Wand_Anim2.fbx",
+        new Source { type = WeaponType.Spell, name = "Spell", weaponMesh = "Wand", melee = false, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Wand_Anim/Wand_Anim2.fbx",
             map = new[] { ("Chaos Catalyst", "ChaosSkill", false), ("Elemental Discharge", "ElementalSkill", false), ("Aura Fusion", "ElementalSkill", false),
                           ("Spell Burn", "SpellSkill", false), ("Spell Break", "SpellSkill", false), ("Elemental Transmutation", "SpellSkill", false) } },
     };
@@ -75,11 +76,11 @@ public static class AscendiaBuildBattleAnimators
                 GameObject instance = Object.Instantiate(model);
                 SceneManager.MoveGameObjectToScene(instance, scene);
 
-                var impacts = new Dictionary<string, float>();
+                var impacts = new Dictionary<string, List<float>>();
                 report.AppendLine($"== {source.name} ({clips.Count} clips)");
                 foreach (var pair in clips)
                 {
-                    impacts[pair.Key] = FindImpact(instance, pair.Value, report);
+                    impacts[pair.Key] = FindHits(instance, pair.Value, source.weaponMesh, report);
                 }
                 Object.DestroyImmediate(instance);
 
@@ -112,70 +113,106 @@ public static class AscendiaBuildBattleAnimators
         return report.ToString();
     }
 
-    // ท่าที่โดนหลายครั้ง: ดาเมจเริ่มที่จังหวะแรกแล้วทยอยตลอดคลิป และเร่งท่าที่ยาวเกินไป
-    static readonly Dictionary<string, (float impact, float speed)> Overrides = new Dictionary<string, (float, float)>
+    // จังหวะโดนที่หาจากข้อมูลไม่ได้ถูก (เช่นท่ายิงรัว) กำหนดเองที่นี่ ใช้สเกลเวลา 0-1 ของคลิป
+    static readonly Dictionary<string, (float[] hits, float speed)> Overrides = new Dictionary<string, (float[], float)>
     {
-        { "BulletSkill", (0.14f, 1.5f) },
-        { "FlurrySkill", (0.10f, 1.2f) },
+        // ยิงรัว: จังหวะสะบัดจากแรงถีบของปืนแต่ละนัด และเร่งท่าที่ยาว 7.5 วินาที
+        { "BulletSkill", (new[] { 0.14f, 0.19f, 0.24f, 0.28f, 0.33f, 0.38f, 0.42f, 0.47f, 0.52f, 0.57f, 0.61f, 0.66f, 0.71f, 0.76f, 0.80f, 0.85f }, 1.5f) },
+        { "FlurrySkill", (null, 1.2f) },
+        // ท่าที่มีจังหวะง้าง/ชักอาวุธเร็ว ๆ ซึ่งไม่ใช่จังหวะโดน
+        { "QuickSkill2", (new[] { 0.55f }, 1f) },
+        { "SpellSkill", (new[] { 0.71f }, 1f) },
+        { "ExecutSkill", (new[] { 0.47f }, 1f) },
     };
 
-    static BattleClip MakeClip(string state, Dictionary<string, float> impacts, bool melee)
+    static BattleClip MakeClip(string state, Dictionary<string, List<float>> found, bool melee)
     {
-        var clip = new BattleClip { state = state, impact = impacts.TryGetValue(state, out float impact) ? impact : 0.5f, speed = 1f, melee = melee };
+        List<float> hits = found.TryGetValue(state, out List<float> list) ? new List<float>(list) : new List<float> { 0.5f };
+        float speed = 1f;
         if (Overrides.TryGetValue(state, out var value))
         {
-            clip.impact = value.impact;
-            clip.speed = value.speed;
+            if (value.hits != null) hits = value.hits.ToList();
+            speed = value.speed;
         }
-        return clip;
+        return new BattleClip { state = state, impact = hits[0], hits = hits, speed = speed, melee = melee };
     }
 
-    // จังหวะโดน = ตอนมือข้างที่เร็วกว่าเคลื่อนที่เร็วที่สุด (เทียบกับลำตัว) ในช่วงกลางคลิป
-    static float FindImpact(GameObject instance, AnimationClip clip, StringBuilder report)
+    // จังหวะฟันแต่ละครั้ง = ช่วงที่ปลายอาวุธเคลื่อนเร็วสุด โดยต้องมีช่วงช้าลงคั่นจึงนับเป็นคนละครั้ง
+    static List<float> FindHits(GameObject instance, AnimationClip clip, string weaponMesh, StringBuilder report)
     {
         Transform hips = Find(instance, "DEF-spine");
-        Transform left = Find(instance, "DEF-hand.L");
-        Transform right = Find(instance, "DEF-hand.R");
+        Transform handR = Find(instance, "DEF-hand.R");
+        SkinnedMeshRenderer weapon = instance.GetComponentsInChildren<SkinnedMeshRenderer>(true).FirstOrDefault(r => r.name == weaponMesh);
+        var baked = new Mesh();
+        int tip = -1;
         int frames = Mathf.Max(8, Mathf.RoundToInt(clip.length * 60f));
-        var speedL = new float[frames + 1];
-        var speedR = new float[frames + 1];
-        Vector3 prevL = default, prevR = default, firstHips = default;
-        float minHipsZ = float.MaxValue, maxHipsZ = float.MinValue;
+        var position = new Vector3[frames + 1];
 
         for (int i = 0; i <= frames; i++)
         {
             clip.SampleAnimation(instance, clip.length * i / frames);
-            Vector3 l = instance.transform.InverseTransformPoint(left.position) - instance.transform.InverseTransformPoint(hips.position);
-            Vector3 r = instance.transform.InverseTransformPoint(right.position) - instance.transform.InverseTransformPoint(hips.position);
-            Vector3 h = instance.transform.InverseTransformPoint(hips.position);
-            if (i == 0) firstHips = h;
-            minHipsZ = Mathf.Min(minHipsZ, h.z - firstHips.z);
-            maxHipsZ = Mathf.Max(maxHipsZ, h.z - firstHips.z);
-            if (i > 0)
+            Vector3 point = handR.position;
+            if (weapon != null)
             {
-                speedL[i] = (l - prevL).magnitude;
-                speedR[i] = (r - prevR).magnitude;
+                weapon.BakeMesh(baked, true);
+                Vector3[] vertices = baked.vertices;
+                if (tip < 0)
+                {
+                    float far = -1f;
+                    for (int v = 0; v < vertices.Length; v++)
+                    {
+                        float d = (weapon.transform.TransformPoint(vertices[v]) - handR.position).sqrMagnitude;
+                        if (d > far) { far = d; tip = v; }
+                    }
+                }
+                point = weapon.transform.TransformPoint(vertices[tip]);
             }
-            prevL = l;
-            prevR = r;
+            position[i] = point - hips.position;
         }
+        Object.DestroyImmediate(baked);
 
-        float[] speed = speedR.Sum() >= speedL.Sum() ? speedR : speedL;
-        float[] smooth = new float[frames + 1];
-        for (int i = 1; i < frames; i++) smooth[i] = (speed[i - 1] + speed[i] + speed[i + 1]) / 3f;
-
-        int start = Mathf.RoundToInt(frames * 0.15f), end = Mathf.RoundToInt(frames * 0.85f), best = start;
-        for (int i = start; i <= end; i++) if (smooth[i] > smooth[best]) best = i;
-
-        // รายงานจุดสูงสุดทั้งหมดไว้ตรวจสอบท่าที่โดนหลายครั้ง
-        var peaks = new List<string>();
-        for (int i = 2; i < frames - 1; i++)
+        var speed = new float[frames + 1];
+        for (int i = 1; i <= frames; i++) speed[i] = (position[i] - position[i - 1]).magnitude * 60f;
+        var smooth = new float[frames + 1];
+        for (int i = 0; i <= frames; i++)
         {
-            if (smooth[i] >= smooth[best] * 0.55f && smooth[i] >= smooth[i - 1] && smooth[i] > smooth[i + 1]) peaks.Add(((float)i / frames).ToString("0.00"));
+            int from = Mathf.Max(0, i - 2), to = Mathf.Min(frames, i + 2);
+            float sum = 0f;
+            for (int k = from; k <= to; k++) sum += speed[k];
+            smooth[i] = sum / (to - from + 1);
         }
-        float impact = (float)best / frames;
-        report.AppendLine($"  {clip.name}: {clip.length:0.00}s loop={clip.isLooping} impact {impact:0.00} peaks [{string.Join(" ", peaks)}] hipsZ {minHipsZ:0.00}..{maxHipsZ:0.00}");
-        return impact;
+
+        // ตัดช่วงต้น (ชักอาวุธ) และช่วงท้าย (ดึงอาวุธกลับ) ออก
+        int start = Mathf.RoundToInt(frames * 0.08f), end = Mathf.RoundToInt(frames * 0.85f);
+        float max = 0f;
+        for (int i = start; i <= end; i++) max = Mathf.Max(max, smooth[i]);
+
+        var peaks = new List<int>();
+        for (int i = start + 1; i < end; i++)
+        {
+            if (smooth[i] < max * 0.45f || smooth[i] < smooth[i - 1] || smooth[i] <= smooth[i + 1]) continue;
+            if (peaks.Count > 0)
+            {
+                int last = peaks[peaks.Count - 1];
+                float valley = float.MaxValue;
+                for (int k = last; k <= i; k++) valley = Mathf.Min(valley, smooth[k]);
+                if (valley >= 0.6f * Mathf.Min(smooth[last], smooth[i]))
+                {
+                    if (smooth[i] > smooth[last]) peaks[peaks.Count - 1] = i;
+                    continue;
+                }
+            }
+            peaks.Add(i);
+        }
+        if (peaks.Count == 0) peaks.Add(Mathf.RoundToInt(frames * 0.5f));
+
+        report.AppendLine($"  {clip.name}: {clip.length:0.00}s");
+        foreach (int i in peaks)
+        {
+            Vector3 v = (position[Mathf.Min(frames, i + 1)] - position[Mathf.Max(0, i - 1)]).normalized;
+            report.AppendLine($"     t {(float)i / frames:0.00}  speed {smooth[i] / max:0.00}  tip ({position[i].x:0.00},{position[i].y:0.00},{position[i].z:0.00})  dir ({v.x:0.0},{v.y:0.0},{v.z:0.0})");
+        }
+        return peaks.Select(i => (float)i / frames).ToList();
     }
 
     static Transform Find(GameObject root, string name)

@@ -1697,6 +1697,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f2b563879e77f3a44abe8ac91aa795a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraShakeManager
+  strengthMultiplier: 2.5
 --- !u!114 &180243330
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11847,6 +11848,7 @@ MonoBehaviour:
   streakGroup: {fileID: 599773737}
   depthBehindTarget: 2.5
   lengthScreenRatio: 1.6
+  bandHeightScreenRatio: 0.6
   sweepTime: 0.1
   holdTime: 0.12
   fadeTime: 0.3
@@ -15549,6 +15551,14 @@ MonoBehaviour:
   currentComboStacks: 0
   totalGunCounterAttacks: 0
   elementSlots: 
+  finalHitWeight: 1.5
+  lightHitShake: 0.7
+  heavyHitShake: 1.5
+  lightHitstop: 0.035
+  heavyHitstop: 0.09
+  killHitstop: 0.14
+  lightHitLensKick: 1.2
+  heavyHitLensKick: 3.5
 --- !u!136 &2064914703
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -20968,7 +20978,7 @@ MonoBehaviour:
   rangedCameraBack: 4.5
   rangedCameraSide: 5
   rangedCameraHeight: 2.2
-  actionTransition: 0.35
+  actionTransition: 0.1
 --- !u!1 &2132769246
 GameObject:
   m_ObjectHideFlags: 0

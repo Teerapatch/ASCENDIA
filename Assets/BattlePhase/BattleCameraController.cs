@@ -74,6 +74,8 @@ public class BattleCameraController : MonoBehaviour
     private float sceneDefaultLensSize;
 
     private Coroutine transitionCoroutine;
+    private Coroutine punchCoroutine;
+    private float sceneDefaultFov;
 
     private void Awake()
     {
@@ -85,6 +87,7 @@ public class BattleCameraController : MonoBehaviour
             sceneDefaultPosition = activeVCam.transform.position;
             sceneDefaultRotation = activeVCam.transform.rotation;
             sceneDefaultLensSize = activeVCam.Lens.OrthographicSize;
+            sceneDefaultFov = activeVCam.Lens.FieldOfView;
         }
 
         overviewPreset = new CameraPreset
@@ -224,8 +227,7 @@ public class BattleCameraController : MonoBehaviour
         Vector3 startPos = activeVCam.transform.position;
         Quaternion startRot = activeVCam.transform.rotation;
 
-        var lens = activeVCam.Lens;
-        float startLens = lens.OrthographicSize;
+        float startLens = activeVCam.Lens.OrthographicSize;
 
         float elapsedTime = 0f;
 
@@ -237,15 +239,49 @@ public class BattleCameraController : MonoBehaviour
             activeVCam.transform.position = Vector3.Lerp(startPos, targetPos, t);
             activeVCam.transform.rotation = Quaternion.Slerp(startRot, targetRot, t);
 
-            lens.OrthographicSize = Mathf.Lerp(startLens, targetLens, t);
-            activeVCam.Lens = lens;
+            SetLensSize(Mathf.Lerp(startLens, targetLens, t));
 
             yield return null;
         }
 
         activeVCam.transform.position = targetPos;
         activeVCam.transform.rotation = targetRot;
-        lens.OrthographicSize = targetLens;
+        SetLensSize(targetLens);
+    }
+
+    // อ่านเลนส์ใหม่ทุกครั้ง เพื่อไม่ทับค่า FOV ที่ Punch กำลังขยับอยู่
+    private void SetLensSize(float size)
+    {
+        var lens = activeVCam.Lens;
+        lens.OrthographicSize = size;
+        activeVCam.Lens = lens;
+    }
+
+    // เลนส์กระตุกเข้าแล้วคลายออกตอนโดน ใช้เวลาจริงเพื่อให้เห็นระหว่าง Hitstop
+    public void Punch(float fovKick)
+    {
+        if (activeVCam == null || fovKick <= 0f) return;
+        if (punchCoroutine != null) StopCoroutine(punchCoroutine);
+        punchCoroutine = StartCoroutine(PunchRoutine(fovKick));
+    }
+
+    private IEnumerator PunchRoutine(float fovKick)
+    {
+        const float attack = 0.04f, release = 0.22f;
+        for (float t = 0f; t < attack + release; t += Time.unscaledDeltaTime)
+        {
+            float amount = t < attack ? t / attack : 1f - Mathf.SmoothStep(0f, 1f, (t - attack) / release);
+            SetFov(sceneDefaultFov - fovKick * amount);
+            yield return null;
+        }
+        SetFov(sceneDefaultFov);
+        punchCoroutine = null;
+    }
+
+    private void SetFov(float fov)
+    {
+        var lens = activeVCam.Lens;
+        lens.FieldOfView = fov;
         activeVCam.Lens = lens;
     }
 }

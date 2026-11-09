@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -18,12 +17,6 @@ public class BulletHellSkill : WeaponSkill
     public int minHits = 1;
     [Tooltip("จำนวนนัดสูงสุด กันดาเมจพุ่งเกินไป")]
     public int maxHits = 10;
-    public float timeBetweenHits = 0.08f;
-
-    public override float ExtraHitDuration(PlayerCombatController player)
-    {
-        return (Mathf.Clamp(player.totalGunCounterAttacks, minHits, maxHits) - 1) * timeBetweenHits;
-    }
 
     public override void ExecuteSkill(PlayerCombatController player, EnemyController target, int qteSuccesses)
     {
@@ -31,21 +24,11 @@ public class BulletHellSkill : WeaponSkill
         float damagePerHit = WeaponDamage(player) * damagePerHitMultiplier * (1f + bonusPerQTE * qteSuccesses);
 
         Debug.Log($"<color=orange>[{skillName}] ยิง {hits} รอบใส่ศัตรูทุกตัว ({Mathf.RoundToInt(damagePerHit)} ต่อนัด)</color>");
-        player.StartCoroutine(FireRoutine(player, hits, damagePerHit));
-    }
-
-    private IEnumerator FireRoutine(PlayerCombatController player, int hits, float damagePerHit)
-    {
-        float interval = player.HitInterval(hits, timeBetweenHits);
-        for (int i = 0; i < hits; i++)
+        // รวมดาเมจทุกนัด PlayerCombatController จะแบ่งลงตามจังหวะยิงของท่า
+        float total = damagePerHit * hits;
+        foreach (EnemyController enemy in new List<EnemyController>(CombatManager.Instance.enemies))
         {
-            foreach (EnemyController enemy in new List<EnemyController>(CombatManager.Instance.enemies))
-            {
-                player.DealDamage(enemy, damagePerHit, damagePerHit * postureRatio, WeaponType.Gun);
-            }
-            CameraShakeManager.TryShake(0.25f);
-
-            yield return new WaitForSeconds(interval);
+            player.DealDamage(enemy, total, total * postureRatio, WeaponType.Gun);
         }
     }
 }

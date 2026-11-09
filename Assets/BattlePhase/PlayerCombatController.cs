@@ -53,6 +53,28 @@ public class PlayerCombatController : MonoBehaviour
     private WeaponSkill selectedSkill;
     private PlayerBattleAnimator battleAnimator;
 
+    private class CapturedHit
+    {
+        public EnemyController target;
+        public int damage;
+        public int posture;
+    }
+    private List<CapturedHit> damageCapture;
+    private List<CapturedHit> pendingHits;
+    private float capturedShakeForce;
+
+    [Header("Hit Impact")]
+    [Tooltip("จังหวะสุดท้ายของท่ารับดาเมจกี่เท่าของจังหวะอื่น")]
+    public float finalHitWeight = 1.5f;
+    public float lightHitShake = 0.7f;
+    public float heavyHitShake = 1.5f;
+    public float lightHitstop = 0.035f;
+    public float heavyHitstop = 0.09f;
+    public float killHitstop = 0.14f;
+    [Tooltip("องศา FOV ที่เลนส์กระตุกตอนโดน")]
+    public float lightHitLensKick = 1.2f;
+    public float heavyHitLensKick = 3.5f;
+
     // บัฟของผู้เล่น (Evasion, Berserk, AttackUp) ใช้ร่วมกันทุกอาวุธ นับเทิร์นตอนจบเทิร์นของผู้เล่น
     public readonly CombatStatusSet Statuses = new CombatStatusSet();
 
@@ -358,17 +380,10 @@ public class PlayerCombatController : MonoBehaviour
         StartCoroutine(pendingActionType == 0 ? BasicAttackRoutine(targetEnemy) : SkillRoutine(targetEnemy, selectedSkill));
     }
 
-    // ระยะห่างระหว่างฮิตของสกิลหลายฮิต: กระจายตลอดท่า แต่ไม่ถี่กว่าค่าที่สกิลกำหนด
-    public float HitInterval(int hits, float minimumInterval)
-    {
-        if (hits <= 1 || battleAnimator == null) return minimumInterval;
-        return Mathf.Max(minimumInterval, battleAnimator.TimeAfterImpact * 0.85f / (hits - 1));
-    }
-
     private IEnumerator BasicAttackRoutine(EnemyController target)
     {
         BattleClip clip = battleAnimator != null ? battleAnimator.AttackClip : null;
-        yield return ActionRoutine(target, clip, null, null, () => ApplyBasicAttack(target), 0f);
+        yield return ActionRoutine(target, clip, null, null, () => ApplyBasicAttack(target));
     }
 
     private IEnumerator SkillRoutine(EnemyController target, WeaponSkill skill)
@@ -390,18 +405,18 @@ public class PlayerCombatController : MonoBehaviour
             });
         }
 
-        void Impact()
+        void Apply()
         {
             currentAP -= skill.apCost;
             UpdateAPUI();
             skill.ExecuteSkill(this, target, qteSuccesses);
         }
 
-        yield return ActionRoutine(target, clip, BeginQTE, () => qteFinished, Impact, skill.ExtraHitDuration(this));
+        yield return ActionRoutine(target, clip, BeginQTE, () => qteFinished, Apply);
     }
 
-    // ลำดับของการลงมือทุกแบบ: กล้องเข้า -> พุ่งเข้าหา -> เล่นท่า (ดาเมจตรงจังหวะโดน) -> กลับที่ -> ค้างให้เห็นผล -> จบเทิร์น
-    private IEnumerator ActionRoutine(EnemyController target, BattleClip clip, System.Action onApproached, System.Func<bool> ready, System.Action onImpact, float extraHitTime)
+    // ลำดับของการลงมือทุกแบบ: กล้องเข้า -> พุ่งเข้าหา -> เล่นท่า (แบ่งดาเมจตามจังหวะโดน) -> กลับที่ -> ค้างให้เห็นผล -> จบเทิร์น
+    private IEnumerator ActionRoutine(EnemyController target, BattleClip clip, System.Action onApproached, System.Func<bool> ready, System.Action apply)
     {
         int turn = CombatManager.Instance.TurnNumber;
         bool melee = battleAnimator != null && clip != null && clip.melee;
@@ -420,22 +435,19 @@ public class PlayerCombatController : MonoBehaviour
 
         onApproached?.Invoke();
 
-        float impactTime = -1f;
-        System.Action impact = () =>
+        System.Action<int, int> onHit = (index, count) =>
         {
-            impactTime = Time.time;
-            onImpact?.Invoke();
+            // จังหวะแรกคำนวณผลของท่าทั้งหมด (บัฟ/AP/ดาเมจรวม) แล้วทยอยแบ่งดาเมจลงทีละจังหวะ
+            if (index == 0) CaptureDamage(apply);
+            ResolveHit(index, count);
         };
 
-        if (battleAnimator != null) yield return battleAnimator.PlayAction(clip, ready, impact);
+        if (battleAnimator != null) yield return battleAnimator.PlayAction(clip, ready, onHit);
         else
         {
             while (ready != null && !ready()) yield return null;
-            impact();
+            onHit(0, 1);
         }
-
-        // สกิลหลายฮิตยังตีไม่ครบ รอให้ครบก่อน
-        while (impactTime >= 0f && Time.time < impactTime + extraHitTime) yield return null;
 
         if (battleAnimator != null)
         {
@@ -447,6 +459,73 @@ public class PlayerCombatController : MonoBehaviour
         // ระหว่างเล่นท่าอาจจบการต่อสู้ หรือขึ้น Wave ใหม่ไปแล้ว
         if (CombatManager.Instance.IsBattleOver || CombatManager.Instance.TurnNumber != turn) yield break;
         FinishTurnAction();
+    }
+
+    private void CaptureDamage(System.Action apply)
+    {
+        damageCapture = new List<CapturedHit>();
+        CameraShakeManager.BeginCapture();
+        try { apply?.Invoke(); }
+        finally
+        {
+            capturedShakeForce = CameraShakeManager.EndCapture();
+            pendingHits = damageCapture;
+            damageCapture = null;
+        }
+    }
+
+    // แบ่งดาเมจเป็นส่วนเท่า ๆ กัน จังหวะสุดท้ายหนักกว่า ผลรวมเท่าดาเมจเดิมพอดี
+    private void ResolveHit(int index, int count)
+    {
+        if (pendingHits == null) return;
+
+        float totalWeight = count - 1 + finalHitWeight;
+        float from = index / totalWeight;
+        float to = index == count - 1 ? 1f : (index + 1) / totalWeight;
+        bool last = index == count - 1;
+        bool landed = false, killed = false;
+        Vector3 hitPosition = transform.position;
+
+        foreach (CapturedHit hit in pendingHits)
+        {
+            if (hit.target == null || hit.target.IsDead) continue;
+            int damage = Mathf.RoundToInt(hit.damage * to) - Mathf.RoundToInt(hit.damage * from);
+            int posture = Mathf.RoundToInt(hit.posture * to) - Mathf.RoundToInt(hit.posture * from);
+            if (damage <= 0 && posture <= 0) continue;
+
+            if (!landed) hitPosition = hit.target.transform.position;
+            landed = true;
+            if (damage > 0) hit.target.TakeDamage(damage);
+            if (posture > 0 && !hit.target.IsDead) hit.target.TakePostureDamage(posture);
+            killed |= hit.target.IsDead;
+        }
+
+        if (landed) PlayHitImpact(last, killed, count, hitPosition);
+        if (last) pendingHits = null;
+    }
+
+    // ความรู้สึกตอนโดน: กล้องกระแทกไปทางเดียวกับแรงตี หยุดภาพสั้น ๆ และเลนส์กระตุก จังหวะสุดท้ายแรงสุด
+    private void PlayHitImpact(bool finalHit, bool killed, int hitCount, Vector3 targetPosition)
+    {
+        float weapon = ActiveWeapon == null ? 1f
+            : ActiveWeapon.weaponType == WeaponType.LongSword ? 1.35f
+            : ActiveWeapon.weaponType == WeaponType.Dagger ? 0.8f
+            : ActiveWeapon.weaponType == WeaponType.Gun ? 0.75f : 1f;
+
+        float strength = (finalHit ? Mathf.Max(heavyHitShake, capturedShakeForce) : lightHitShake) * weapon;
+        if (killed) strength *= 1.4f;
+
+        Camera cam = Camera.main;
+        float side = cam != null ? Mathf.Sign(Vector3.Dot(targetPosition - transform.position, cam.transform.right)) : 1f;
+        CameraShakeManager.Impact(strength, new Vector2(side * 0.8f, finalHit ? -0.7f : -0.2f));
+
+        if (BattleCameraController.Instance != null) BattleCameraController.Instance.Punch(finalHit ? heavyHitLensKick : lightHitLensKick);
+
+        // ท่ายิงรัวหลายนัดไม่หยุดภาพทุกนัด เดี๋ยวท่าจะกระตุก
+        if (HitstopManager.Instance != null && (finalHit || hitCount <= 6))
+        {
+            HitstopManager.Instance.Freeze(killed ? killHitstop : finalHit ? heavyHitstop : lightHitstop);
+        }
     }
 
     private void ApplyBasicAttack(EnemyController targetEnemy)
@@ -892,8 +971,16 @@ public class PlayerCombatController : MonoBehaviour
         if (damage > 0f)
         {
             finalDamage = Mathf.RoundToInt(damage * GetOutgoingDamageMultiplier() * target.GetIncomingDamageMultiplier(type));
-            target.TakeDamage(finalDamage);
         }
+
+        // ระหว่างคำนวณท่า: เก็บดาเมจไว้แบ่งลงตามจังหวะโดน
+        if (damageCapture != null)
+        {
+            damageCapture.Add(new CapturedHit { target = target, damage = finalDamage, posture = Mathf.RoundToInt(postureDamage) });
+            return finalDamage;
+        }
+
+        if (damage > 0f) target.TakeDamage(finalDamage);
 
         if (postureDamage > 0f) target.TakePostureDamage(Mathf.RoundToInt(postureDamage));
         return finalDamage;

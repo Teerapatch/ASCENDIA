@@ -345,7 +345,10 @@ public class ParryManager : MonoBehaviour
                               PlayerCombatController.Instance.ActiveWeapon.weaponType == WeaponType.Spell);
 
         Debug.Log($"<color=cyan>PARRY SUCCESS! Countering with {currentPostureDamage} Posture Damage!</color>");
-        CameraShakeManager.TryShake(0.1f);
+        // Parry สำเร็จ: กล้องกระแทกตามทิศที่ลาก พร้อมเลนส์กระตุก
+        Vector2 impactDirection = swipeScreenDirection.sqrMagnitude > 0.0001f ? swipeScreenDirection.normalized : Vector2.right;
+        CameraShakeManager.Impact(2.2f, impactDirection);
+        if (BattleCameraController.Instance != null) BattleCameraController.Instance.Punch(5f);
 
         if (isSpellActive)
         {
@@ -389,7 +392,7 @@ public class ParryManager : MonoBehaviour
 
         if (HitstopManager.Instance != null)
         {
-            HitstopManager.Instance.Freeze(0.12f);
+            HitstopManager.Instance.Freeze(0.15f);
         }
     }
 

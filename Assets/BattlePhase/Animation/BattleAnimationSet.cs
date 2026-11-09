@@ -10,6 +10,8 @@ public class BattleClip
     public string state;
     [Range(0f, 1f), Tooltip("จังหวะที่โดนเป้า (สัดส่วนของคลิป)")]
     public float impact = 0.5f;
+    [Tooltip("จังหวะที่อาวุธโดนแต่ละครั้ง (สัดส่วนของคลิป) ดาเมจจะถูกแบ่งตามจำนวนนี้")]
+    public List<float> hits = new List<float>();
     [Tooltip("ความเร็วเล่นคลิป")]
     public float speed = 1f;
     [Tooltip("พุ่งเข้าไปตีถึงตัวศัตรู")]
@@ -50,7 +52,7 @@ public class BattleAnimationSet : ScriptableObject
 
     [Header("จังหวะ")]
     [Tooltip("ระยะหยุดหน้าศัตรู (นับจากขอบตัวศัตรู หน่วยใน Characters)")]
-    public float meleeStandoff = 1.3f;
+    public float meleeStandoff = 2.4f;
     public float dashInDuration = 0.24f;
     public float dashBackDuration = 0.3f;
     [Tooltip("เวลาค้างก่อนจบเทิร์น ให้เห็นผลของการโจมตี")]

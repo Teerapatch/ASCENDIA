@@ -21,6 +21,8 @@ public class ParryStreakUI : MonoBehaviour
     public float depthBehindTarget = 2.5f;
     [Tooltip("ความยาวแถบเทียบกับเส้นทแยงจอ (>1 = ยาวเลยขอบจอ)")]
     public float lengthScreenRatio = 1.6f;
+    [Tooltip("ความหนาของแถบเทียบกับความสูงจอ (0.6 = 60% ของจอ)")]
+    public float bandHeightScreenRatio = 0.6f;
 
     [Header("Animation (เวลาจริง ไม่โดน Hitstop)")]
     public float sweepTime = 0.1f;
@@ -68,7 +70,9 @@ public class ParryStreakUI : MonoBehaviour
             float thickness = Mathf.Lerp(startThickness, 1f, Mathf.Clamp01((t - sweepTime) / Mathf.Max(0.0001f, holdTime)));
             thickness = Mathf.Lerp(thickness, 0f, fade);
 
-            streak.localScale = new Vector3(easeOut, thickness, 1f);
+            // ขยายแถบให้หนาเทียบกับจอ ไม่ว่าจะตั้งความสูงใน Canvas ไว้เท่าไร
+            float bandScale = ((RectTransform)canvas.transform).rect.height * bandHeightScreenRatio / Mathf.Max(1f, streak.sizeDelta.y);
+            streak.localScale = new Vector3(easeOut, thickness * bandScale, 1f);
             if (streakGroup != null) streakGroup.alpha = 1f - fade;
             yield return null;
         }
@@ -85,12 +89,11 @@ public class ParryStreakUI : MonoBehaviour
         canvas.planeDistance = Mathf.Max(cam.nearClipPlane + 0.05f, depth + depthBehindTarget);
 
         RectTransform canvasRect = (RectTransform)canvas.transform;
-        Vector2 screen = cam.WorldToScreenPoint(center);
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screen, cam, out Vector2 local);
 
+        // แถบพาดผ่านกลางจอเสมอ ความลึกยังอยู่หลังตัวศัตรู
         float length = canvasRect.rect.size.magnitude * lengthScreenRatio;
         streak.sizeDelta = new Vector2(length, streak.sizeDelta.y);
-        streak.anchoredPosition = local - dir * (length * 0.5f);
+        streak.anchoredPosition = -dir * (length * 0.5f);
         streak.localRotation = Quaternion.Euler(0f, 0f, angle);
     }
 
