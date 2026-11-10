@@ -302,6 +302,7 @@ GameObject:
   - component: {fileID: 5094145237017318311}
   - component: {fileID: 1812225575503695679}
   - component: {fileID: 7928519462542762205}
+  - component: {fileID: 7600000001}
   m_Layer: 10
   m_Name: ORC_Boss
   m_TagString: Boss
@@ -341,7 +342,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6942937387013762572}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -418,7 +419,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 55dce16312fea4a49b5c4218d01283fd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyController
-  enemyName: Orc
+  enemyName: Guardian
   baseSpeed: 70
   maxHP: 400
   currentHP: 0
@@ -766,3 +767,15 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4565375865030702674, guid: c751c4587aadfee4ea973a766b98d159, type: 3}
   m_PrefabInstance: {fileID: 6899095173894481999}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &7600000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6942937387013762572}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a538089f653248cebaa36aad208b206f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GuardianBossController

@@ -8,7 +8,8 @@ public enum CameraState
     SkillSelecting,
     TargetSelecting,
     ActionExecution,
-    Custom
+    Custom,
+    WeaponSelecting
 }
 
 public class BattleCameraController : MonoBehaviour
@@ -54,6 +55,19 @@ public class BattleCameraController : MonoBehaviour
         transitionDuration = 0.4f
     };
 
+    [Header("จุดกล้อง (ลากใน Scene ได้ที่ BattleCameraPoints)")]
+    public BattleCameraPoint skillPoint;
+    public BattleCameraPoint switchWeaponPoint;
+    [Tooltip("จุดมองศัตรู 1 จุดต่อตำแหน่งเกิด ระบบเลือกจุดที่ใกล้ศัตรูที่สุด")]
+    public BattleCameraPoint[] focusPoints;
+    [Tooltip("ถอยกล้องออกจากจุด Focus กี่เท่าสำหรับบอส/ศัตรูตัวใหญ่")]
+    public float largeTargetPullback = 1.4f;
+
+    [Header("Free Aim")]
+    [Tooltip("องศา FOV ที่เปลี่ยนตอนเล็ง (ติดลบ = ซูมเข้า)")]
+    public float aimFovOffset = -7f;
+    public float aimZoomSpeed = 9f;
+
     [Header("Action Framing (ตอนผู้เล่นลงมือ คูณ framingScale)")]
     public float meleeCameraDistance = 7f;
     public float meleeCameraHeight = 1.5f;
@@ -76,6 +90,9 @@ public class BattleCameraController : MonoBehaviour
     private Coroutine transitionCoroutine;
     private Coroutine punchCoroutine;
     private float sceneDefaultFov;
+    private float punchAmount;
+    private float aimBlend;
+    private bool aimZoomed;
 
     private void Awake()
     {
@@ -106,6 +123,9 @@ public class BattleCameraController : MonoBehaviour
         CurrentState = newState;
         if (attacker != null) currentAttacker = attacker;
         if (target != null) currentTarget = target;
+
+        // จุดกล้องที่ตั้งไว้ในฉากมาก่อนสูตรคำนวณเดิม
+        if (MoveToPoint(newState)) return;
 
         switch (newState)
         {
@@ -182,6 +202,50 @@ public class BattleCameraController : MonoBehaviour
                 }
                 break;
         }
+    }
+
+    private bool MoveToPoint(CameraState state)
+    {
+        if (state == CameraState.SkillSelecting) return MoveToPoint(skillPoint, 1f);
+        if (state == CameraState.WeaponSelecting) return MoveToPoint(switchWeaponPoint, 1f);
+        if (state != CameraState.TargetSelecting || currentTarget == null || focusPoints == null) return false;
+
+        BattleCameraPoint nearest = null;
+        float best = float.MaxValue;
+        foreach (BattleCameraPoint point in focusPoints)
+        {
+            if (point == null) continue;
+            float distance = (point.transform.position - currentTarget.position).sqrMagnitude;
+            if (distance < best) { best = distance; nearest = point; }
+        }
+        bool large = currentTarget.CompareTag("Boss") || currentTarget.CompareTag("Large");
+        return MoveToPoint(nearest, large ? largeTargetPullback : 1f);
+    }
+
+    private bool MoveToPoint(BattleCameraPoint point, float pullback)
+    {
+        if (point == null) return false;
+
+        Vector3 position = point.transform.position;
+        if (pullback != 1f && currentTarget != null)
+        {
+            Vector3 focus = point.transform.forward * Vector3.Dot(currentTarget.position - position, point.transform.forward);
+            position -= focus * (pullback - 1f);
+        }
+        ApplyCustomTransition(position, point.transform.rotation, sceneDefaultLensSize, point.transitionDuration);
+        return true;
+    }
+
+    public void SetAimZoom(bool zoomed)
+    {
+        aimZoomed = zoomed;
+    }
+
+    private void LateUpdate()
+    {
+        if (activeVCam == null) return;
+        aimBlend = Mathf.MoveTowards(aimBlend, aimZoomed ? 1f : 0f, Time.unscaledDeltaTime * aimZoomSpeed);
+        SetFov(sceneDefaultFov + aimFovOffset * aimBlend - punchAmount);
     }
 
     // กล้องตอนลงมือ: ตีประชิดมองจากด้านข้างให้เห็นทั้งสองฝ่าย ยิง/ร่ายมองข้ามไหล่ไปหาเป้า
@@ -271,10 +335,10 @@ public class BattleCameraController : MonoBehaviour
         for (float t = 0f; t < attack + release; t += Time.unscaledDeltaTime)
         {
             float amount = t < attack ? t / attack : 1f - Mathf.SmoothStep(0f, 1f, (t - attack) / release);
-            SetFov(sceneDefaultFov - fovKick * amount);
+            punchAmount = fovKick * amount;
             yield return null;
         }
-        SetFov(sceneDefaultFov);
+        punchAmount = 0f;
         punchCoroutine = null;
     }
 

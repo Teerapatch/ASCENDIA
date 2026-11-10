@@ -50,7 +50,7 @@ public class CollectibleItem : MonoBehaviour
     private void Update()
     {
         // ถ้าผู้เล่นอยู่ใกล้ๆ และมีการกดปุ่ม E บนคีย์บอร์ด
-        if (isPlayerNearby && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        if (!GameExitMenu.IsOpen && isPlayerNearby && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
         {
             InteractWithItem();
         }

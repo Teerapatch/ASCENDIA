@@ -16,6 +16,10 @@ public class PlayerCombatController : MonoBehaviour
     public int maxAP = 5;
     public int currentAP = 3;
     public TextMeshProUGUI textAP;
+    [Tooltip("แถบ AP แบบ Filled (ไม่บังคับ)")]
+    public UnityEngine.UI.Image apFillImage;
+    [Tooltip("แสดง AP แบบ 3/5 ปิดไว้จะแสดงแค่ 3")]
+    public bool showMaxAP = true;
 
     [Header("Weapons")]
     [Tooltip("ใช้เมื่อเปิดฉากนี้ตรงๆ ถ้าถูกเรียกผ่าน BattleSession จะใช้อาวุธจาก Loadout ที่ส่งมาแทน")]
@@ -125,8 +129,15 @@ public class PlayerCombatController : MonoBehaviour
         if (crosshairUI != null) crosshairUI.SetActive(false);
     }
 
+    // ตอนนี้ปุ่ม Esc ใช้ย้อนกลับในเมนูการต่อสู้
+    public bool IsChoosingFromMenu => actionState == PlayerActionState.ChoosingSkill
+        || actionState == PlayerActionState.ChoosingWeapon
+        || actionState == PlayerActionState.ChoosingTarget;
+
     private void Update()
     {
+        if (GameExitMenu.IsOpen) return;
+
         if (actionState == PlayerActionState.Waiting)
         {
             if (ControlPromptUI.Instance != null)
@@ -420,6 +431,7 @@ public class PlayerCombatController : MonoBehaviour
     {
         int turn = CombatManager.Instance.TurnNumber;
         bool melee = battleAnimator != null && clip != null && clip.melee;
+        Debug.Log($"[Action] เทิร์น {turn} อาวุธ {ActiveWeapon.weaponType} ท่า {(clip != null ? clip.state : "ไม่มี")} พุ่งเข้าตี {melee}");
         Vector3 attackerAt = melee ? battleAnimator.MeleeDestination(target) : transform.position;
 
         if (BattleCameraController.Instance != null)
@@ -656,6 +668,10 @@ public class PlayerCombatController : MonoBehaviour
         {
             PlayerUIManager.Instance.ShowWeaponMenu(inventoryWeapons, ActiveWeapon, switchWeaponAPCost);
         }
+        if (BattleCameraController.Instance != null)
+        {
+            BattleCameraController.Instance.SetState(CameraState.WeaponSelecting, transform);
+        }
     }
 
     public void UI_SelectWeapon(int weaponIndex)
@@ -749,6 +765,8 @@ public class PlayerCombatController : MonoBehaviour
     {
         isAiming = true;
         if (crosshairUI != null) crosshairUI.SetActive(true);
+        if (battleAnimator != null) battleAnimator.BeginAim();
+        if (BattleCameraController.Instance != null) BattleCameraController.Instance.SetAimZoom(true);
         if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
 
         if (ActiveWeapon != null && ActiveWeapon.weaponType == WeaponType.Spell)
@@ -764,6 +782,8 @@ public class PlayerCombatController : MonoBehaviour
     {
         isAiming = false;
         if (crosshairUI != null) crosshairUI.SetActive(false);
+        if (battleAnimator != null) battleAnimator.EndAim();
+        if (BattleCameraController.Instance != null) BattleCameraController.Instance.SetAimZoom(false);
 
         // ยิงตัวสุดท้ายตายแล้ว ไม่ต้องเปิดเมนูกลับมา (ช่วงหน่วงก่อนโชว์หน้าสรุปผล)
         bool battleOver = CombatManager.Instance != null && CombatManager.Instance.IsBattleOver;
@@ -782,6 +802,20 @@ public class PlayerCombatController : MonoBehaviour
     {
         Vector2 mousePos = Mouse.current.position.ReadValue();
         if (crosshairUI != null) crosshairUI.transform.position = mousePos;
+
+        // จุดเล็ง: โดนศัตรูก็เล็งที่ตัว ไม่โดนก็เล็งที่ระนาบแถวศัตรู
+        if (battleAnimator != null && mainCam != null)
+        {
+            Ray aimRay = mainCam.ScreenPointToRay(mousePos);
+            Vector3 aimPoint = aimRay.GetPoint(40f);
+            if (Physics.Raycast(aimRay, out RaycastHit aimHit, 1000f, enemyLayer)) aimPoint = aimHit.point;
+            else if (CombatManager.Instance != null && CombatManager.Instance.enemies.Count > 0)
+            {
+                Plane enemyRow = new Plane(mainCam.transform.forward, CombatManager.Instance.enemies[0].transform.position);
+                if (enemyRow.Raycast(aimRay, out float rowDistance)) aimPoint = aimRay.GetPoint(rowDistance);
+            }
+            battleAnimator.SetAimPoint(aimPoint);
+        }
 
         if (Mouse.current.leftButton.wasPressedThisFrame) ExecuteFreeAimShoot(mousePos);
     }
@@ -868,7 +902,7 @@ public class PlayerCombatController : MonoBehaviour
                     CameraShakeManager.TryShake(1.5f);
                 }
 
-                if (battleAnimator != null && battleAnimator.AttackClip != null) battleAnimator.PlayOneShot(battleAnimator.AttackClip.state);
+                if (battleAnimator != null) battleAnimator.PlayFreeAimShot();
                 DealDamage(enemy, finalDamage, postureDamage);
                 currentAP -= 1;
                 ExitAimMode();
@@ -947,14 +981,16 @@ public class PlayerCombatController : MonoBehaviour
 
     public void UpdateAPUI()
     {
+        if (apFillImage != null) apFillImage.fillAmount = maxAP > 0 ? (float)currentAP / maxAP : 0f;
         if (textAP == null) return;
 
         // บัฟที่ติดอยู่ แสดงใต้ตัวเลข AP (เช่น BSK2  EVA)
         string buffs = "";
         foreach (CombatStatus status in Statuses.All) buffs += status.ShortLabel + "  ";
+        string apLabel = showMaxAP ? $"{currentAP}/{maxAP}" : currentAP.ToString();
         textAP.text = buffs.Length > 0
-            ? $"{currentAP}/{maxAP}\n<size=45%><color=#FFD27A>{buffs.TrimEnd()}</color></size>"
-            : $"{currentAP}/{maxAP}";
+            ? $"{apLabel}\n<size=45%><color=#FFD27A>{buffs.TrimEnd()}</color></size>"
+            : apLabel;
     }
 
     // ==========================================

@@ -85,7 +85,7 @@ public class ClimbUIManager : MonoBehaviour
         // ========================================================
         // โค้ดปุ่ม Tab ปกติ (จะทำงานเมื่อหน้าเลือก Node ปิดอยู่เท่านั้น)
         // ========================================================
-        if (Input.GetKeyDown(KeyCode.Tab))
+        if (!GameExitMenu.IsOpen && Input.GetKeyDown(KeyCode.Tab))
         {
             isInventoryOpen = !isInventoryOpen;
             SwitchCamera(isInventoryOpen);

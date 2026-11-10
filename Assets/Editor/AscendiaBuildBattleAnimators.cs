@@ -82,6 +82,8 @@ public static class AscendiaBuildBattleAnimators
                 {
                     impacts[pair.Key] = FindHits(instance, pair.Value, source.weaponMesh, report);
                 }
+                AimInfo aim = source.weaponMesh == "Gun" && clips.ContainsKey(AimClip) ? FindAim(instance, clips[AimClip], source.weaponMesh, impacts[AimClip], report) : null;
+                AvatarMask upperMask = aim != null ? BuildUpperMask(instance, ControllerFolder + "/GunUpper.mask") : null;
                 Object.DestroyImmediate(instance);
 
                 string controllerPath = $"{ControllerFolder}/{source.name}.controller";
@@ -94,6 +96,19 @@ public static class AscendiaBuildBattleAnimators
                     attack = MakeClip("Attack", impacts, source.melee),
                     parries = clips.Keys.Where(k => k.StartsWith("Parry")).OrderBy(k => k).ToList()
                 };
+                if (aim != null)
+                {
+                    data.aimState = AimClip;
+                    data.aimHoldTime = aim.hold;
+                    data.aimFireStart = Mathf.Max(aim.hold, impacts[AimClip].Count > 0 && Overrides.TryGetValue(AimClip, out var shot) && shot.hits != null ? shot.hits[0] - 0.04f : aim.hold);
+                    data.aimFireEnd = 0.7f;
+                    data.aimBone = aim.bone;
+                    data.aimPivotBone = "DEF-spine.002";
+                    data.aimUpperRoots = new List<string> { "MCH-spine.002", "DEF-spine.002", aim.bone };
+                    AddAimLayer((AnimatorController)data.controller, clips[AimClip], upperMask);
+                    data.barrelAxis = aim.axis;
+                }
+
                 foreach (var entry in source.map)
                 {
                     string clip = clips.ContainsKey(entry.clip) ? entry.clip : "Attack";
@@ -213,6 +228,147 @@ public static class AscendiaBuildBattleAnimators
             report.AppendLine($"     t {(float)i / frames:0.00}  speed {smooth[i] / max:0.00}  tip ({position[i].x:0.00},{position[i].y:0.00},{position[i].z:0.00})  dir ({v.x:0.0},{v.y:0.0},{v.z:0.0})");
         }
         return peaks.Select(i => (float)i / frames).ToList();
+    }
+
+    const string AimClip = "QuickSkill2";
+    const string AimBoneName = "Bone";
+
+    class AimInfo
+    {
+        public float hold;
+        public string bone;
+        public Vector3 axis;
+    }
+
+    // ท่าเล็งของปืน: จุดนิ่งสุดก่อนยิง, กระดูกที่ปืนติด, แขนข้างที่จับ และแกนลำกล้อง
+    static AimInfo FindAim(GameObject instance, AnimationClip clip, string weaponMesh, List<float> hits, StringBuilder report)
+    {
+        SkinnedMeshRenderer weapon = instance.GetComponentsInChildren<SkinnedMeshRenderer>(true).First(r => r.name == weaponMesh);
+        // จังหวะยิงจริงมาจาก Overrides เพราะจุดเร็วแรกของคลิปคือตอนชักปืน
+        float shot = Overrides.TryGetValue(clip.name, out var manual) && manual.hits != null ? manual.hits[0] : hits[0];
+
+        var totals = new float[weapon.bones.Length];
+        foreach (BoneWeight w in weapon.sharedMesh.boneWeights)
+        {
+            totals[w.boneIndex0] += w.weight0; totals[w.boneIndex1] += w.weight1;
+            totals[w.boneIndex2] += w.weight2; totals[w.boneIndex3] += w.weight3;
+        }
+        Transform bone = weapon.bones[System.Array.IndexOf(totals, totals.Max())];
+
+        Vector3 prev = default;
+        float bestSpeed = float.MaxValue, hold = shot * 0.8f;
+        for (float t = shot * 0.55f; t <= shot - 0.05f; t += 0.01f)
+        {
+            clip.SampleAnimation(instance, clip.length * t);
+            Vector3 p = bone.position;
+            if (t > shot * 0.55f && (p - prev).sqrMagnitude < bestSpeed)
+            {
+                bestSpeed = (p - prev).sqrMagnitude;
+                hold = t;
+            }
+            prev = p;
+        }
+
+        clip.SampleAnimation(instance, clip.length * hold);
+        var baked = new Mesh();
+        weapon.BakeMesh(baked, true);
+        var points = baked.vertices.Select(v => weapon.transform.TransformPoint(v)).Distinct().ToList();
+        Object.DestroyImmediate(baked);
+        Vector3 axis = FindBarrelAxis(points, bone.position, out Vector3 muzzle);
+
+        Transform left = Find(instance, "DEF-hand.L"), right = Find(instance, "DEF-hand.R");
+        var info = new AimInfo
+        {
+            hold = hold,
+            bone = bone.name,
+            axis = (Quaternion.Inverse(bone.rotation) * axis).normalized
+        };
+        report.AppendLine($"  AIM hold {hold:0.00} bone {info.bone} axis {info.axis:F3} barrel {axis:F2} muzzleOffset {(muzzle - bone.position).magnitude:0.00} handR {(right.position - bone.position).magnitude:0.00} handL {(left.position - bone.position).magnitude:0.00}");
+        return info;
+    }
+
+    // แกนลำกล้อง = เส้นตรงยาวที่สุดในรูปทรงปืน นับจากปลายกระบอก เพราะด้ามปืนทำให้เส้นจากจุดหมุนไปปลายกระบอกเอียง
+    static Vector3 FindBarrelAxis(List<Vector3> points, Vector3 origin, out Vector3 muzzle)
+    {
+        muzzle = points.OrderByDescending(p => (p - origin).sqrMagnitude).First();
+        Vector3 tip = muzzle;
+        float length = Mathf.Sqrt(points.Max(p => (p - tip).sqrMagnitude));
+        float radius = length * 0.07f;
+        Vector3 best = (tip - origin).normalized;
+        int bestCount = 0;
+
+        foreach (Vector3 candidate in points)
+        {
+            float span = (candidate - tip).magnitude;
+            if (span < length * 0.25f) continue;
+            Vector3 direction = (tip - candidate) / span;
+            int count = 0;
+            foreach (Vector3 point in points)
+            {
+                Vector3 offset = point - tip;
+                float along = Vector3.Dot(offset, direction);
+                if (along <= 0.001f && (offset - direction * along).magnitude <= radius) count++;
+            }
+            if (count > bestCount)
+            {
+                bestCount = count;
+                best = direction;
+            }
+        }
+        return best.normalized;
+    }
+
+    // หน้ากากท่อนบน: คลิปเล็งมีผลแค่กระดูกอก แขน หัว และปืน ส่วนขาใช้ท่ายืนจากเลเยอร์หลัก
+    static AvatarMask BuildUpperMask(GameObject instance, string assetPath)
+    {
+        var mask = new AvatarMask();
+        Transform[] all = instance.GetComponentsInChildren<Transform>(true);
+        mask.transformCount = all.Length - 1;
+        int index = 0;
+        foreach (Transform t in all)
+        {
+            if (t == instance.transform) continue;
+            mask.SetTransformPath(index, AnimationUtility.CalculateTransformPath(t, instance.transform));
+            mask.SetTransformActive(index, IsUpperBody(t));
+            index++;
+        }
+
+        if (AssetDatabase.LoadAssetAtPath<AvatarMask>(assetPath) != null) AssetDatabase.DeleteAsset(assetPath);
+        AssetDatabase.CreateAsset(mask, assetPath);
+        return mask;
+    }
+
+    static bool IsUpperBody(Transform t)
+    {
+        for (Transform p = t; p != null; p = p.parent)
+        {
+            if (p.name == "MCH-spine.002" || p.name == "DEF-spine.002" || p.name == AimBoneName) return true;
+        }
+        return false;
+    }
+
+    static void AddAimLayer(AnimatorController controller, AnimationClip clip, AvatarMask mask)
+    {
+        controller.AddParameter(new AnimatorControllerParameter { name = "AimSpeed", type = AnimatorControllerParameterType.Float, defaultFloat = 1f });
+
+        var machine = new AnimatorStateMachine { name = "UpperAim", hideFlags = HideFlags.HideInHierarchy };
+        AssetDatabase.AddObjectToAsset(machine, controller);
+        AnimatorState empty = machine.AddState("Empty");
+        machine.defaultState = empty;
+        AnimatorState aim = machine.AddState(clip.name);
+        aim.motion = clip;
+        aim.speedParameterActive = true;
+        aim.speedParameter = "AimSpeed";
+
+        controller.AddLayer(new AnimatorControllerLayer
+        {
+            name = "UpperAim",
+            defaultWeight = 0f,
+            avatarMask = mask,
+            blendingMode = AnimatorLayerBlendingMode.Override,
+            stateMachine = machine
+        });
+        EditorUtility.SetDirty(controller);
     }
 
     static Transform Find(GameObject root, string name)

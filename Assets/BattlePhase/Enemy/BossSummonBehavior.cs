@@ -23,6 +23,9 @@ public class BossSummonBehavior : MonoBehaviour
         enemyController = GetComponent<EnemyController>();
     }
 
+    public bool CanSummon => !hasSummoned && minionsToSummon != null && minionsToSummon.Count > 0
+        && (float)enemyController.currentHP / enemyController.maxHP <= healthThreshold;
+
     /// <summary>
     /// ฟังก์ชันที่จะถูกเรียกจาก EnemyController เมื่อถึงเทิร์นของบอส
     /// </summary>

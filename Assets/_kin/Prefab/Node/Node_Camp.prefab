@@ -344,7 +344,7 @@ MonoBehaviour:
   oreRewardItem: {fileID: 0}
   oreAmount: 5
   staminaRestore: 50
-  nodeIcon: {fileID: 21300000, guid: 24b5b4081b1dd6f4fbfba282cc5a914f, type: 3}
+  nodeIcon: {fileID: 21300000, guid: d4c545c6353760f408c1bc665af8004f, type: 3}
   nodeAura3D: {fileID: 0}
   uiMapAura: {fileID: 0}
   uiNodeTransform: {fileID: 0}

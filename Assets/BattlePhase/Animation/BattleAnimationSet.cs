@@ -36,6 +36,25 @@ public class BattleWeaponAnimation
     public List<BattleSkillClip> skills = new List<BattleSkillClip>();
     public List<string> parries = new List<string>();
 
+    [Header("Free Aim (เว้นว่าง = อาวุธนี้ไม่มีท่าเล็ง)")]
+    public string aimState;
+    [Range(0f, 1f), Tooltip("จุดในคลิปที่ค้างท่าเล็ง")]
+    public float aimHoldTime = 0.45f;
+    [Range(0f, 1f), Tooltip("จุดในคลิปที่เริ่มเล่นตอนกดยิง")]
+    public float aimFireStart = 0.5f;
+    [Range(0f, 1f), Tooltip("จุดในคลิปที่จบท่ายิงแล้วกลับไปค้าง")]
+    public float aimFireEnd = 0.9f;
+    [Tooltip("กระดูกที่ปืนติดอยู่")]
+    public string aimBone;
+    [Tooltip("กระดูกกลางอก ใช้เป็นจุดหมุนท่อนบนตอนเล็ง")]
+    public string aimPivotBone;
+    [Tooltip("ความเร็วคลิปตอนชักปืนขึ้นเล็ง")]
+    public float aimDrawSpeed = 2f;
+    [Tooltip("กระดูกท่อนบนที่หมุนตามจุดเล็ง")]
+    public List<string> aimUpperRoots = new List<string>();
+    [Tooltip("แกนลำกล้องในพื้นที่ของกระดูกปืน")]
+    public Vector3 barrelAxis = Vector3.forward;
+
     public BattleClip FindSkill(string skillName)
     {
         BattleSkillClip found = skills.Find(s => s.skillName == skillName);
@@ -47,7 +66,7 @@ public class BattleAnimationSet : ScriptableObject
 {
     [Header("ตำแหน่งโมเดลใต้ Player_Holder")]
     public Vector3 modelLocalPosition = new Vector3(0.2f, -0.139f, -1.37f);
-    public Vector3 modelLocalEuler = new Vector3(0f, 45f, 0f);
+    public Vector3 modelLocalEuler = new Vector3(0f, 65f, 0f);
     public Vector3 modelLocalScale = Vector3.one;
 
     [Header("จังหวะ")]

@@ -56,6 +56,24 @@ public class PathNode : MonoBehaviour
 
     public bool IsBattle => roomType == RoomType.Battle || roomType == RoomType.MiniBoss || roomType == RoomType.Boss;
 
+    // ชื่อบนแผนที่ UI (ฟอนต์ของอาร์ตไม่มีอักษรไทย)
+    public string DisplayName
+    {
+        get
+        {
+            switch (roomType)
+            {
+                case RoomType.Battle: return "BATTLE";
+                case RoomType.MiniBoss: return "MINI BOSS";
+                case RoomType.Boss: return "BOSS";
+                case RoomType.Ore: return "ORE";
+                case RoomType.Rest: return "REST";
+                case RoomType.Camp: return "CAMP";
+                default: return "NORMAL";
+            }
+        }
+    }
+
     public EncounterData PickEncounter()
     {
         List<EncounterData> valid = encounterPool.FindAll(e => e != null);

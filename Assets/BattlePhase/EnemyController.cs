@@ -112,6 +112,10 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        // บอสที่มีอนิเมชันคุมเทิร์นเอง
+        GuardianBossController guardian = GetComponent<GuardianBossController>();
+        if (guardian != null && guardian.TakeTurn()) return;
+
         BossSummonBehavior summonBehavior = GetComponent<BossSummonBehavior>();
         if (summonBehavior != null)
         {
@@ -259,12 +263,16 @@ public class ParryStrike
     [Tooltip("เวลาที่ผู้เล่นมีสิทธิ์ Parry (วินาที)")]
     public float parryWindowDuration = 0.8f;
 
+    [Tooltip("เวลาขึ้น Hint เตือนก่อนฟัน (ติดลบ = ใช้ค่าจาก ParryManager)")]
+    public float warningDuration = -1f;
+
     [Header("Consequences")]
     public float damageIfHit = 15f;
     public float postureDamageIfParried = 10f;
 
     [Header("Osu Slider Type")]
-    [Tooltip("0=ขวา, 1=ซ้าย, 2=ลง, 3=ขึ้น, 4=ขวาบน, 5=ซ้ายบน, 6=ขวาล่าง ,7=ซ้ายล่าง")]
+    [Tooltip("ทิศที่ผู้เล่นต้องลาก")]
+    [ParryDirectionPad]
     public int sliderDirectionIndex = 0;
 }
 

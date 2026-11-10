@@ -25,6 +25,7 @@ public class WeaponUIManager : MonoBehaviour
             foreach (var weapon in inventory)
             {
                 GameObject go = Instantiate(weaponSlotPrefab, container);
+                go.SetActive(true);
                 spawnedSlots.Add(go.GetComponent<WeaponSlotUI>());
             }
         }

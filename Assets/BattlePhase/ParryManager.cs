@@ -24,6 +24,8 @@ public class ParryManager : MonoBehaviour
     public float hintDistanceFromCamera = 15.69f;
     [Tooltip("ตำแหน่งบนจอ (Viewport 0-1) ที่วาง Hint / ParryVFX ค่าเริ่มต้นวัดจากฉาก ENVI_Battle")]
     public Vector2 hintViewportPosition = new Vector2(0.576f, 0.534f);
+    [Tooltip("ให้ Hint / ParryVFX โผล่กลางตัวศัตรูที่กำลังโจมตี (ปิด = ใช้ Hint Viewport Position จุดเดียวตลอด)")]
+    public bool hintAtEnemy = true;
     [Tooltip("เวลาที่โชว์ Hint จังหวะ 1 ก่อนเปลี่ยนเป็นจังหวะ 2 (ช่วงก่อนหน้านั้นของ delayBeforeStrike จะไม่มี Hint) ถ้า delayBeforeStrike สั้นกว่านี้ จะรอเพิ่มให้ครบ")]
     public float hintStep1Duration = 0.35f;
     [Tooltip("คูณกับสเกลของ Prefab (Prefab ตั้งไว้ 2 อยู่แล้ว)")]
@@ -42,6 +44,8 @@ public class ParryManager : MonoBehaviour
     public float parrySuccessScale = 1.8f;
     [Tooltip("ปิด Hint แล้วรอให้อนุภาคจางหายกี่วินาทีก่อนลบทิ้ง")]
     public float hintFadeOutTime = 0.4f;
+    [Range(0.05f, 1f), Tooltip("ความเร็วเวลาระหว่างที่ Hint ทิศทางขึ้น (1 = ไม่ Slow)")]
+    public float parryHintTimeScale = 0.6f;
 
     private Vector2 requiredDirection;
     private int incomingDamage;
@@ -60,6 +64,7 @@ public class ParryManager : MonoBehaviour
     // ตัวแปรควบคุม State รายฮิต
     private bool isAwaitingInput = false;
     private bool isStrikeResolved = false;
+    private bool isParrySlowActive = false;
 
     private void Awake()
     {
@@ -72,6 +77,21 @@ public class ParryManager : MonoBehaviour
     private void OnDisable()
     {
         ClearHint();
+        EndParrySlow();
+    }
+
+    private void BeginParrySlow()
+    {
+        isParrySlowActive = true;
+        HitstopManager.SetBaseTimeScale(parryHintTimeScale);
+    }
+
+    // เรียกก่อน Hitstop ของการ Parry เสมอ ไม่ให้ Slow ค้างหลังจบจังหวะ
+    private void EndParrySlow()
+    {
+        if (!isParrySlowActive) return;
+        isParrySlowActive = false;
+        HitstopManager.SetBaseTimeScale(1f);
     }
 
     private void Update()
@@ -89,9 +109,23 @@ public class ParryManager : MonoBehaviour
     // Hint VFX
     // ==========================================
     // ตำแหน่ง/การหมุนอิงกล้อง: แกน Z ของ VFX หันตามกล้อง แล้วหมุนรอบแกนนั้นตามทิศที่ต้องลาก (มุมบนจอ)
+    // วางตรงตัวศัตรูบนจอ แต่คงระยะจากกล้องเดิม ขนาด Hint จึงเท่าเดิมและวาดทับฉากเหมือนเดิม
     public Vector3 HintPosition()
     {
-        return mainCam.ViewportToWorldPoint(new Vector3(hintViewportPosition.x, hintViewportPosition.y, hintDistanceFromCamera));
+        Vector2 viewport = hintViewportPosition;
+        if (hintAtEnemy && attackingEnemy != null)
+        {
+            Vector3 onScreen = mainCam.WorldToViewportPoint(EnemyCenter(attackingEnemy));
+            if (onScreen.z > 0f) viewport = onScreen;
+        }
+        return mainCam.ViewportToWorldPoint(new Vector3(viewport.x, viewport.y, hintDistanceFromCamera));
+    }
+
+    // ใช้ Collider ลำตัวก่อน เพราะ Bounds ของ Mesh รวมดาบยาวของบอสเข้าไปด้วย จุดกลางจะเบี้ยว
+    private static Vector3 EnemyCenter(EnemyController enemy)
+    {
+        Collider body = enemy.GetComponent<Collider>();
+        return body != null && body.enabled ? body.bounds.center : ParryStreakUI.TargetCenter(enemy.transform);
     }
 
     public Quaternion HintRotation(float screenAngle)
@@ -162,71 +196,113 @@ public class ParryManager : MonoBehaviour
         // ลูปตามจำนวนการฟัน (Strikes) ในชุดคอมโบ
         for (int i = 0; i < pattern.strikes.Count; i++)
         {
-            ParryStrike strike = pattern.strikes[i];
-            requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
-            currentHintAngle = Mathf.Atan2(requiredDirection.y, requiredDirection.x) * Mathf.Rad2Deg;
-
-            // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ) ช่วงท้ายโชว์ Hint จังหวะ 1 สั้น ๆ ให้ผู้เล่นเตรียมตัวก่อนบอกทิศ
-            float quietTime = strike.delayBeforeStrike - hintStep1Duration;
-            if (quietTime > 0f) yield return new WaitForSeconds(quietTime);
+            yield return PlayStrike(pattern.strikes[i], turnNumber);
             if (!IsSequenceStillValid(turnNumber)) break;
-
-            ShowWarningHint();
-            yield return new WaitForSeconds(hintStep1Duration);
-
-            // ผู้โจมตีตายจากการสวนกลับ หรือการต่อสู้จบไปแล้ว -> หยุดคอมโบที่เหลือ
-            if (!IsSequenceStillValid(turnNumber)) break;
-
-            // Evasion (Vanish Blade): หลบฮิตนี้อัตโนมัติ นับเป็น Parry สำเร็จ
-            PlayerCombatController evader = PlayerCombatController.Instance;
-            if (evader != null && evader.Statuses.ConsumeCharge(CombatStatusType.Evasion))
-            {
-                Debug.Log("<color=cyan>EVASION! หลบการโจมตีอัตโนมัติ (นับเป็น Parry)</color>");
-                evader.ShowPopup("EVADE", Color.cyan);
-                evader.UpdateAPUI();
-
-                currentPostureDamage = Mathf.RoundToInt(strike.postureDamageIfParried);
-                ClearHint();
-                OnParrySuccess(attackingEnemy.transform.position, evader.transform.position);
-                continue;
-            }
-
-            // 2. ตั้งค่าการป้องกันสำหรับฮิตนี้
-            incomingDamage = Mathf.RoundToInt(strike.damageIfHit);
-            currentPostureDamage = Mathf.RoundToInt(strike.postureDamageIfParried);
-
-            isAwaitingInput = true;
-            isStrikeResolved = false;
-            isSwiping = false;
-
-            // Hint จังหวะ 2: บอกทิศที่ต้องลาก ตลอดช่วง Parry Window
-            ShowDirectionHint(currentHintAngle);
-
-            // 3. เริ่มจับเวลา Parry Window
-            float timer = strike.parryWindowDuration;
-            while (timer > 0 && !isStrikeResolved)
-            {
-                timer -= Time.deltaTime;
-                HandleSwipeInput(); // ย้ายการเช็คเมาส์มาไว้ใน Loop 
-                yield return null;
-            }
-
-            // 4. หมดเวลาแล้วยังไม่สำเร็จ (ไม่ได้ลาก หรือลากไม่สุด)
-            if (!isStrikeResolved)
-            {
-                FailStrike("Too slow!");
-            }
-
-            // ปิด UI ของฮิตนี้ เตรียมรอฮิตต่อไป
-            ClearHint();
-            if (swipeLine) swipeLine.positionCount = 0;
         }
 
         ClearHint();
         if (swipeLine) swipeLine.positionCount = 0;
         isAwaitingInput = false;
 
+        // ถ้าเทิร์นถัดไปเป็นของอาวุธอื่น โมเดลจะถูกสลับทันที จึงต้องรอท่า Parry เล่นจบก่อน
+        if (PlayerBattleAnimator.Instance != null && CombatManager.Instance.TurnNumber == turnNumber && !CombatManager.Instance.IsBattleOver)
+        {
+            yield return PlayerBattleAnimator.Instance.WaitForOneShot();
+        }
+
         // จบชุดคอมโบ ส่งเทิร์นคืนให้ Timeline (เฉพาะถ้ายังเป็นเทิร์นเดิม ไม่ใช่เทิร์นของ Wave ใหม่)
+        if (CombatManager.Instance.TurnNumber == turnNumber)
+        {
+            CombatManager.Instance.EndCurrentTurn();
+        }
+    }
+
+    // ฟัน 1 ครั้ง: เรียกจากชุดคอมโบปกติ หรือจากบอสที่กำหนดจังหวะตามอนิเมชันเอง
+    public IEnumerator PlayStrike(ParryStrike strike, int turnNumber)
+    {
+        requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
+        currentHintAngle = Mathf.Atan2(requiredDirection.y, requiredDirection.x) * Mathf.Rad2Deg;
+
+        // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ) ช่วงท้ายโชว์ Hint จังหวะ 1 สั้น ๆ ให้ผู้เล่นเตรียมตัวก่อนบอกทิศ
+        float warning = strike.warningDuration >= 0f ? strike.warningDuration : hintStep1Duration;
+        float quietTime = strike.delayBeforeStrike - warning;
+        if (quietTime > 0f) yield return new WaitForSeconds(quietTime);
+        if (!IsSequenceStillValid(turnNumber)) yield break;
+
+        ShowWarningHint();
+        if (warning > 0f) yield return new WaitForSeconds(warning);
+
+        // ผู้โจมตีตายจากการสวนกลับ หรือการต่อสู้จบไปแล้ว -> หยุดคอมโบที่เหลือ
+        if (!IsSequenceStillValid(turnNumber)) yield break;
+
+        // Evasion (Vanish Blade): หลบฮิตนี้อัตโนมัติ นับเป็น Parry สำเร็จ
+        PlayerCombatController evader = PlayerCombatController.Instance;
+        if (evader != null && evader.Statuses.ConsumeCharge(CombatStatusType.Evasion))
+        {
+            Debug.Log("<color=cyan>EVASION! หลบการโจมตีอัตโนมัติ (นับเป็น Parry)</color>");
+            evader.ShowPopup("EVADE", Color.cyan);
+            evader.UpdateAPUI();
+
+            currentPostureDamage = Mathf.RoundToInt(strike.postureDamageIfParried);
+            ClearHint();
+            OnParrySuccess(attackingEnemy.transform.position, evader.transform.position);
+            yield break;
+        }
+
+        // 2. ตั้งค่าการป้องกันสำหรับฮิตนี้
+        incomingDamage = Mathf.RoundToInt(strike.damageIfHit);
+        currentPostureDamage = Mathf.RoundToInt(strike.postureDamageIfParried);
+
+        isAwaitingInput = true;
+        isStrikeResolved = false;
+        isSwiping = false;
+
+        // Hint จังหวะ 2: บอกทิศที่ต้องลาก ตลอดช่วง Parry Window
+        ShowDirectionHint(currentHintAngle);
+        BeginParrySlow();
+
+        // 3. เริ่มจับเวลา Parry Window
+        float timer = strike.parryWindowDuration;
+        while (timer > 0 && !isStrikeResolved)
+        {
+            timer -= Time.deltaTime;
+            HandleSwipeInput(); // ย้ายการเช็คเมาส์มาไว้ใน Loop 
+            yield return null;
+        }
+
+        // 4. หมดเวลาแล้วยังไม่สำเร็จ (ไม่ได้ลาก หรือลากไม่สุด)
+        if (!isStrikeResolved)
+        {
+            FailStrike("Too slow!");
+        }
+
+        // ปิด UI ของฮิตนี้ เตรียมรอฮิตต่อไป
+        ClearHint();
+        if (swipeLine) swipeLine.positionCount = 0;
+    }
+
+    public void BeginCustomAttack(EnemyController attacker)
+    {
+        attackingEnemy = attacker;
+    }
+
+    public bool IsTurnValid(int turnNumber)
+    {
+        return IsSequenceStillValid(turnNumber);
+    }
+
+    // จบเทิร์นของศัตรูที่คุมเทิร์นเอง
+    public IEnumerator FinishCustomAttack(int turnNumber)
+    {
+        ClearHint();
+        if (swipeLine) swipeLine.positionCount = 0;
+        isAwaitingInput = false;
+
+        if (PlayerBattleAnimator.Instance != null && CombatManager.Instance.TurnNumber == turnNumber && !CombatManager.Instance.IsBattleOver)
+        {
+            yield return PlayerBattleAnimator.Instance.WaitForOneShot();
+        }
+
         if (CombatManager.Instance.TurnNumber == turnNumber)
         {
             CombatManager.Instance.EndCurrentTurn();
@@ -245,7 +321,7 @@ public class ParryManager : MonoBehaviour
 
     void HandleSwipeInput()
     {
-        if (Mouse.current == null || !isAwaitingInput) return; //[cite: 6]
+        if (Mouse.current == null || !isAwaitingInput || GameExitMenu.IsOpen) return; //[cite: 6]
 
         Vector2 mouseScreenPos = Mouse.current.position.ReadValue();
         Vector3 mouseWorldPos = GetWorldPosition(mouseScreenPos);
@@ -298,18 +374,7 @@ public class ParryManager : MonoBehaviour
 
     Vector2 GetDirectionFromIndex(int index)
     {
-        switch (index)
-        {
-            case 0: return Vector2.right; // ขวา
-            case 1: return Vector2.left;  // ซ้าย
-            case 2: return Vector2.down;  // ลง
-            case 3: return Vector2.up;    // ขึ้น
-            case 4: return new Vector2(1, 1).normalized;   // ขวาบน
-            case 5: return new Vector2(-1, 1).normalized;  // ซ้ายบน
-            case 6: return new Vector2(1, -1).normalized;  // ขวาล่าง
-            case 7: return new Vector2(-1, -1).normalized; // ซ้ายล่าง
-            default: return Vector2.right;
-        }
+        return ParryDirections.ToVector(index);
     }
 
     Vector3 GetWorldPosition(Vector2 screenPos)
@@ -337,6 +402,7 @@ public class ParryManager : MonoBehaviour
         isStrikeResolved = true;
         isAwaitingInput = false;
         ClearHint();
+        EndParrySlow();
 
         if (PlayerBattleAnimator.Instance != null) PlayerBattleAnimator.Instance.PlayParry();
 
@@ -401,6 +467,7 @@ public class ParryManager : MonoBehaviour
         isStrikeResolved = true;
         isAwaitingInput = false;
         ClearHint();
+        EndParrySlow();
 
         Debug.Log($"<color=red>PARRY FAILED ({reason}) - Took {incomingDamage} Damage!</color>");
         CameraShakeManager.TryShake(0.8f);

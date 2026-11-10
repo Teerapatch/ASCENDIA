@@ -18,6 +18,10 @@ public class CampManager : MonoBehaviour
     public string climbSceneName = "ClimbScene";
     public float delayBeforeLoadScene = 1.5f;
 
+    [Header("Build")]
+    [Tooltip("กด Rest แล้วถือว่าจบ Build (ขึ้นหน้าจบแทนการปีนต่อ) ปิดเมื่ออยากทดสอบเกมต่อจาก Camp")]
+    public bool endBuildOnRest = true;
+
     private GameObject currentActivePanel;
     private bool isTransitioning = false; 
 
@@ -133,6 +137,13 @@ public class CampManager : MonoBehaviour
     public void OnClickRest()
     {
         if (isTransitioning || playerData == null) return;
+
+        if (endBuildOnRest && GameExitMenu.Instance != null)
+        {
+            GameExitMenu.Instance.ShowBuildEnd();
+            return;
+        }
+
         StartCoroutine(RestAndProceedRoutine());
     }
 

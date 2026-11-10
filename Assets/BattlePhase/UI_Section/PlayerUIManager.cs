@@ -8,6 +8,9 @@ public class PlayerUIManager : MonoBehaviour
 {
     public static PlayerUIManager Instance;
 
+    // ให้ UI ของอาร์ตเล่น Effect ตอนเมนูหลักขึ้น
+    public event System.Action ActionMenuShown;
+
     [Header("Menu Panels")]
     public CanvasGroup actionMenuPanel;
     public CanvasGroup skillMenuPanel;
@@ -60,6 +63,7 @@ public class PlayerUIManager : MonoBehaviour
         HideMenu(skillMenuPanel);
         HideMenu(weaponMenuPanel);
         PlayMenuAnimation(actionMenuPanel, true);
+        ActionMenuShown?.Invoke();
     }
 
     // หน้าเลือกอาวุธ: ปุ่มละ 1 ชิ้นตามลำดับใน inventory ชิ้นที่ถืออยู่/พังแล้วกดไม่ได้
@@ -154,11 +158,23 @@ public class PlayerUIManager : MonoBehaviour
             int skillIndex = i;
 
             GameObject btnObj = Instantiate(skillButtonPrefab, skillListContainer);
+            btnObj.SetActive(true);
 
-            TextMeshProUGUI[] texts = btnObj.GetComponentsInChildren<TextMeshProUGUI>();
-            if (texts.Length > 0) texts[0].text = skill.skillName;
-            if (texts.Length > 1) texts[1].text = $"{skill.apCost} AP";
-            if (texts.Length > 2) texts[2].text = $"{skill.description}";
+            // การ์ดของอาร์ตตั้งชื่อช่องไว้ ปุ่มแบบเดิมใช้ลำดับข้อความ
+            TextMeshProUGUI nameText = FindChild<TextMeshProUGUI>(btnObj, "Name");
+            if (nameText != null)
+            {
+                nameText.text = skill.skillName;
+                SetText(btnObj, "Cost", skill.apCost.ToString());
+                SetText(btnObj, "Description", skill.description);
+            }
+            else
+            {
+                TextMeshProUGUI[] texts = btnObj.GetComponentsInChildren<TextMeshProUGUI>();
+                if (texts.Length > 0) texts[0].text = skill.skillName;
+                if (texts.Length > 1) texts[1].text = $"{skill.apCost} AP";
+                if (texts.Length > 2) texts[2].text = $"{skill.description}";
+            }
 
             Button btn = btnObj.GetComponent<Button>();
             btn.onClick.AddListener(() =>

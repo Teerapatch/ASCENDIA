@@ -23,13 +23,25 @@ public class NodeSelectionManager : MonoBehaviour
 
     [Header("Map Progression UI")]
     public RectTransform playerUIIcon;
-    public float uiPlayerMoveDuration = 1.5f;
+
+    [Header("Node Feedback")]
+    public float nodeHoverScale = 1.15f;
+    public float nodePressScale = 0.92f;
+    public float nodeChosenScale = 1.25f;
+    public float nodeRejectedScale = 0.85f;
+    [Range(0f, 1f), Tooltip("ความสว่างของ Node ตอนยังไม่ได้ชี้ (ตอนชี้ = 1)")]
+    public float nodeIdleBrightness = 0.75f;
+    [Range(0f, 1f)] public float nodeRejectedBrightness = 0.3f;
+    public Color nodeGlowColor = new Color(0.75f, 0.82f, 1f, 0.9f);
+
+    [Header("หลังเลือก Node")]
+    [Tooltip("เวลาแสดงผลการเลือกก่อนเริ่ม Fade (วินาที)")]
+    public float selectFeedbackDuration = 0.35f;
+    public float selectFadeDuration = 0.6f;
 
     [Header("Player Systems")]
     public PlayerStateManager stateManager;
     public PlayerCameraController camController;
-    public float autoClimbSpeed = 4f;
-    public float cameraBlendWaitTime = 2f;
 
     [Header("Mouse Camera Sway")]
     public float cameraSwayAmount = 5f;
@@ -41,6 +53,9 @@ public class NodeSelectionManager : MonoBehaviour
     private Quaternion originalNodeCamRot;
     private Dictionary<PathNode, Image> nodeLines = new Dictionary<PathNode, Image>();
     private Dictionary<PathNode, Image> nodeFutureLines = new Dictionary<PathNode, Image>();
+    private readonly List<NodeMapButton> nodeButtons = new List<NodeMapButton>();
+
+    public bool IsSelecting => isSelecting;
 
     private void Awake()
     {
@@ -52,6 +67,14 @@ public class NodeSelectionManager : MonoBehaviour
         if (mapUIPanel == null) mapUIPanel = GameObject.Find("MapUIPanel");
         if (nodeCam == null) { GameObject cam = GameObject.Find("NodeCam"); if (cam) nodeCam = cam; }
         if (fadeImage == null) { GameObject fade = GameObject.Find("FadeImage"); if (fade) fadeImage = fade.GetComponent<Image>(); }
+
+        // ตอนนี้ Fade เป็นทางเปลี่ยนหลักของการเลือก Node จึงต้องคลุมจอทุกสัดส่วน
+        if (fadeImage != null)
+        {
+            fadeImage.rectTransform.anchorMin = Vector2.zero;
+            fadeImage.rectTransform.anchorMax = Vector2.one;
+            fadeImage.rectTransform.sizeDelta = Vector2.zero;
+        }
 
         if (uiNodeContainer == null) { GameObject nc = GameObject.Find("UINodeContainer"); if (nc) uiNodeContainer = nc.transform; }
         if (uiLineContainer == null) { GameObject lc = GameObject.Find("UILineContainer"); if (lc) uiLineContainer = lc.transform; }
@@ -96,8 +119,6 @@ public class NodeSelectionManager : MonoBehaviour
         if (stateManager) stateManager.ChangeState(PlayerStateManager.State.NodeSelection);
         if (mapUIPanel) mapUIPanel.SetActive(true);
 
-        StartCoroutine(GenerateMapUICoroutine(playerTransform.position));
-
         if (camController) camController.enabled = false;
         Cursor.SetCursor(circleCursor, cursorHotspot, CursorMode.Auto);
         Cursor.lockState = CursorLockMode.None;
@@ -121,6 +142,9 @@ public class NodeSelectionManager : MonoBehaviour
             camController.walkCam.SetActive(false);
             camController.climbCam.SetActive(false);
         }
+
+        // ต้องหลังตั้งกล้อง เพราะเรียงปุ่มซ้าย-ขวาตามมุมของ NodeCam
+        StartCoroutine(GenerateMapUICoroutine(playerTransform.position));
     }
 
     private IEnumerator GenerateMapUICoroutine(Vector3 centerPosition)
@@ -131,21 +155,31 @@ public class NodeSelectionManager : MonoBehaviour
         {
             if (Vector3.Distance(centerPosition, n.transform.position) < 50f) currentNodes.Add(n);
         }
-        currentNodes.Sort((a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
+        // ปุ่มบนแผนที่เรียงซ้าย-ขวาตรงกับ Node ที่เห็นในฉาก
+        Vector3 screenRight = nodeCam != null ? nodeCam.transform.right : Vector3.right;
+        currentNodes.Sort((a, b) => Vector3.Dot(a.transform.position, screenRight).CompareTo(Vector3.Dot(b.transform.position, screenRight)));
 
         if (uiNodeContainer) foreach (Transform child in uiNodeContainer) Destroy(child.gameObject);
         if (uiLineContainer != null) foreach (Transform child in uiLineContainer) Destroy(child.gameObject);
 
         List<RectTransform> generatedUINodes = new List<RectTransform>();
-        nodeLines.Clear(); nodeFutureLines.Clear();
+        nodeLines.Clear(); nodeFutureLines.Clear(); nodeButtons.Clear();
 
         foreach (PathNode node in currentNodes)
         {
             if (uiNodePrefab == null || uiNodeContainer == null) break;
 
             GameObject newUI = Instantiate(uiNodePrefab, uiNodeContainer);
+            newUI.SetActive(true);
             node.uiNodeTransform = newUI.GetComponent<RectTransform>();
             generatedUINodes.Add(node.uiNodeTransform);
+
+            // ป้ายใต้ Node ของ UI อาร์ต: บอกว่า Node นี้คืออะไร
+            Transform labelUI = newUI.transform.Find("Label");
+            if (labelUI != null)
+            {
+                labelUI.GetComponent<TMPro.TMP_Text>().text = node.DisplayName;
+            }
 
             Transform auraUI = newUI.transform.Find("Aura");
             if (auraUI != null) { node.uiMapAura = auraUI.gameObject; node.uiMapAura.SetActive(false); }
@@ -155,6 +189,10 @@ public class NodeSelectionManager : MonoBehaviour
                 Image img = iconUI.GetComponent<Image>();
                 if (img != null) img.sprite = node.nodeIcon;
             }
+
+            NodeMapButton button = newUI.AddComponent<NodeMapButton>();
+            button.Setup(node, this);
+            nodeButtons.Add(button);
         }
 
         yield return null;
@@ -243,49 +281,67 @@ public class NodeSelectionManager : MonoBehaviour
             Quaternion swayRot = Quaternion.Euler(-mouseY * cameraSwayAmount, mouseX * cameraSwayAmount, 0);
             nodeCam.transform.rotation = Quaternion.Lerp(nodeCam.transform.rotation, originalNodeCamRot * swayRot, Time.deltaTime * 5f);
         }
-
-        if (Camera.main == null) return;
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit[] hits = Physics.RaycastAll(ray, 100f);
-        PathNode foundNode = null;
-        foreach (RaycastHit hit in hits)
-        {
-            PathNode node = hit.collider.GetComponent<PathNode>();
-            if (node != null) { foundNode = node; break; }
-        }
-
-        if (foundNode != null)
-        {
-            if (hoveredNode != foundNode) { if (hoveredNode) hoveredNode.SetHover(false); hoveredNode = foundNode; hoveredNode.SetHover(true); }
-            if (Input.GetMouseButtonDown(0)) StartCoroutine(ConfirmNode(hoveredNode));
-        }
-        else { ClearHover(); }
     }
 
-    private void ClearHover() { if (hoveredNode) { hoveredNode.SetHover(false); hoveredNode = null; } }
+    public void SetHoveredNode(PathNode node)
+    {
+        if (hoveredNode == node) return;
+        ClearHover();
+        hoveredNode = node;
+        hoveredNode.SetHover(true);
+        SetLineHighlight(nodeLines, hoveredNode, true);
+        SetLineHighlight(nodeFutureLines, hoveredNode, true);
+    }
 
+    public void ClearHoveredNode(PathNode node)
+    {
+        if (hoveredNode == node) ClearHover();
+    }
+
+    public void ChooseNode(PathNode node)
+    {
+        if (isSelecting) StartCoroutine(ConfirmNode(node));
+    }
+
+    private void ClearHover()
+    {
+        if (!hoveredNode) return;
+        hoveredNode.SetHover(false);
+        SetLineHighlight(nodeLines, hoveredNode, false);
+        SetLineHighlight(nodeFutureLines, hoveredNode, false);
+        hoveredNode = null;
+    }
+
+    private void SetLineHighlight(Dictionary<PathNode, Image> lines, PathNode node, bool highlighted)
+    {
+        if (!lines.TryGetValue(node, out Image line) || line == null) return;
+        line.color = highlighted ? auraLineColor : normalLineColor;
+        RectTransform rect = line.rectTransform;
+        rect.sizeDelta = new Vector2(rect.sizeDelta.x, highlighted ? lineThickness * 1.5f : lineThickness);
+    }
+
+    // เลือกจาก UI แล้วไม่ต้องเดินไปถึง Node: แสดงผลการเลือกสั้น ๆ แล้ว Fade ดำเข้าสู่ Node ทันที
     private IEnumerator ConfirmNode(PathNode selectedNode)
     {
         isSelecting = false;
-        if (stateManager) stateManager.ChangeState(PlayerStateManager.State.AutoClimbing);
+        ClearHover();
+        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
 
-        Color dimLineColor = new Color(0.2f, 0.2f, 0.2f, 0.3f); Color dimIconColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-        PathNode[] allCurrentNodes = FindObjectsByType<PathNode>(FindObjectsSortMode.None);
-        foreach (PathNode n in allCurrentNodes)
+        foreach (NodeMapButton button in nodeButtons)
         {
-            if (n != selectedNode)
-            {
-                if (nodeLines.ContainsKey(n)) nodeLines[n].color = dimLineColor;
-                if (nodeFutureLines.ContainsKey(n)) nodeFutureLines[n].color = dimLineColor;
-                if (n.uiNodeTransform != null)
-                {
-                    Image[] uiImages = n.uiNodeTransform.GetComponentsInChildren<Image>();
-                    foreach (Image img in uiImages) img.color = new Color(dimIconColor.r, dimIconColor.g, dimIconColor.b, img.color.a);
-                }
-                if (n.nodeText != null) n.nodeText.gameObject.SetActive(false);
-                StartCoroutine(ShrinkAndDestroy(n.gameObject));
-            }
+            if (button != null) button.ShowResult(button.Node == selectedNode);
         }
+
+        Color dimLineColor = new Color(0.2f, 0.2f, 0.2f, 0.3f);
+        foreach (PathNode n in FindObjectsByType<PathNode>(FindObjectsSortMode.None))
+        {
+            if (n == selectedNode) continue;
+            if (nodeLines.TryGetValue(n, out Image line) && line != null) line.color = dimLineColor;
+            if (nodeFutureLines.TryGetValue(n, out Image futureLine) && futureLine != null) futureLine.color = dimLineColor;
+            if (n.nodeText != null) n.nodeText.gameObject.SetActive(false);
+            StartCoroutine(ShrinkAndDestroy(n.gameObject));
+        }
+        SetLineHighlight(nodeFutureLines, selectedNode, true);
 
         if (playerUIIcon != null && selectedNode.uiNodeTransform != null)
         {
@@ -305,63 +361,29 @@ public class NodeSelectionManager : MonoBehaviour
             Vector3 dir = localEnd - localStart;
             float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
             dynamicAuraRect.localRotation = Quaternion.Euler(0, 0, angle);
+            dynamicAuraRect.localPosition = localStart;
 
             float t = 0;
-            while (t < uiPlayerMoveDuration)
+            while (t < selectFeedbackDuration)
             {
-                t += Time.deltaTime; float progress = t / uiPlayerMoveDuration; if (progress > 1f) progress = 1f;
+                t += Time.deltaTime;
+                float progress = Mathf.Clamp01(t / selectFeedbackDuration);
 
                 playerUIIcon.position = Vector3.Lerp(startWorld, endWorld, progress);
-
-                Vector3 currentLocal = Vector3.Lerp(localStart, localEnd, progress);
-                dynamicAuraRect.localPosition = localStart;
-                dynamicAuraRect.sizeDelta = new Vector2(Vector3.Distance(localStart, currentLocal), lineThickness);
+                dynamicAuraRect.sizeDelta = new Vector2(Vector3.Distance(localStart, localEnd) * progress, lineThickness * 1.5f);
 
                 yield return null;
             }
         }
 
-        if (mapUIPanel) mapUIPanel.SetActive(false);
-        if (nodeCam) nodeCam.SetActive(true);
-        if (camController && camController.climbCam) camController.climbCam.SetActive(false);
+        yield return StartCoroutine(FadeScreen(1f, selectFadeDuration));
 
-        Cursor.SetCursor(null, Vector2.zero, CursorMode.Auto);
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        if (mapUIPanel) mapUIPanel.SetActive(false);
 
         PathNode.RoomType nextRoomType = selectedNode.roomType;
         string nextScene = selectedNode.sceneToLoad;
-        Vector3 finalDestination = selectedNode.climbTarget.position;
-
-        // เก็บข้อมูลการต่อสู้ไว้ก่อน เพราะโหนดจะถูก Destroy ระหว่างทาง
         bool isBattleNode = selectedNode.IsBattle;
         EncounterData encounter = isBattleNode ? selectedNode.PickEncounter() : null;
-
-        if (selectedNode != null && selectedNode.gameObject != null)
-        {
-            if (selectedNode.nodeText != null) selectedNode.nodeText.gameObject.SetActive(false);
-            StartCoroutine(ShrinkAndDestroy(selectedNode.gameObject));
-        }
-
-        yield return new WaitForSeconds(cameraBlendWaitTime);
-        if (stateManager)
-        {
-            Transform player = stateManager.transform;
-            float distance = Vector3.Distance(player.position, finalDestination);
-
-            while (distance > 0.1f)
-            {
-                var climbingIK=player.GetComponentInChildren<ClimbingContactIK>();
-                Vector3 nextPosition=Vector3.MoveTowards(player.position,finalDestination,autoClimbSpeed*Time.deltaTime);
-                if(climbingIK)climbingIK.SetClimbVelocity((nextPosition-player.position)/Mathf.Max(.001f,Time.deltaTime));
-                player.position=nextPosition;
-                distance = Vector3.Distance(player.position, finalDestination);
-                yield return null;
-            }
-        }
-
-        if(stateManager){var ik=stateManager.GetComponentInChildren<ClimbingContactIK>();if(ik)ik.SetClimbVelocity(Vector3.zero);}
-        yield return StartCoroutine(FadeScreen(1f, 1f));
 
         if (GameManager.Instance != null && GameManager.Instance.playerData != null)
         {
@@ -424,7 +446,7 @@ public class NodeSelectionManager : MonoBehaviour
             camController.SwitchToClimbCam(stateManager.transform.eulerAngles.y);
             camController.enabled = true;
         }
-        // หลังเลือก Node กล้องค้างที่ NodeCam ระหว่างปีนอัตโนมัติ ต้องปิดตอนเริ่มชั้นใหม่
+        // หลังเลือก Node กล้องค้างที่ NodeCam จนกว่าจะเริ่มชั้นใหม่
         if (nodeCam) nodeCam.SetActive(false);
 
         if (stateManager) stateManager.ChangeState(PlayerStateManager.State.Climbing);

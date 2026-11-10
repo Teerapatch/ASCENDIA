@@ -98,7 +98,7 @@ public class ParryStreakUI : MonoBehaviour
     }
 
     // จุดกลางตัวจาก Mesh ของศัตรู (ข้าม UI/อนุภาคที่ติดตัวอยู่)
-    private static Vector3 TargetCenter(Transform target)
+    public static Vector3 TargetCenter(Transform target)
     {
         bool found = false;
         Bounds bounds = default;

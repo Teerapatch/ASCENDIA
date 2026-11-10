@@ -56,11 +56,13 @@ public class CombatManager : MonoBehaviour
         public string Name;
         public bool IsEnemy;
         public float SimulatedAV;
+        public Sprite Icon;
     }
 
     // 2. คลาสชั่วคราวสำหรับใช้ทดลองคำนวณในฟังก์ชัน
     private class SimNode
     {
+        public Sprite Icon;
         public string ActorID;
         public string Name;
         public bool IsEnemy;
@@ -502,7 +504,8 @@ public class CombatManager : MonoBehaviour
             Name = node.Name,
             IsEnemy = node.IsEnemy,
             Speed = node.Speed,
-            CurrentAV = node.CurrentAV
+            CurrentAV = node.CurrentAV,
+            Icon = node.WeaponRef != null ? node.WeaponRef.weaponIcon : null
         }).ToList();
 
         float totalTimePassed = 0f;
@@ -526,7 +529,8 @@ public class CombatManager : MonoBehaviour
                 UniqueID = uniqueTurnID,
                 Name = nextActor.Name,
                 IsEnemy = nextActor.IsEnemy,
-                SimulatedAV = totalTimePassed
+                SimulatedAV = totalTimePassed,
+                Icon = nextActor.Icon
             });
 
             foreach (var node in simQueue)

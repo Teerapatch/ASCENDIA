@@ -6,6 +6,8 @@ public class WeaponSlotUI : MonoBehaviour
 {
     public Image weaponImage;
     public TextMeshProUGUI durabilityText;
+    [Tooltip("ถ้าใส่ จะแยกแสดงค่าเต็มเป็น /45 และ durabilityText แสดงแค่ค่าปัจจุบัน")]
+    public TextMeshProUGUI maxDurabilityText;
 
     [Header("Durability Bar")]
     public Image durabilityFillImage; // [เพิ่มใหม่] ภาพหลอดความทนทาน
@@ -13,6 +15,7 @@ public class WeaponSlotUI : MonoBehaviour
     [Header("Colors (Persona 5 Style)")]
     public Color normalColor = Color.white;
     public Color brokenColor = new Color(1f, 0.2f, 0.2f);
+    public Color lowDurabilityColor = new Color(1f, 0.5f, 0.42f);
     public Color inactiveColor = new Color(0.7f, 0.7f, 0.7f);
 
     public Color gaugeColor = new Color(1f, 0.8f, 0.2f);
@@ -23,6 +26,10 @@ public class WeaponSlotUI : MonoBehaviour
     public float activeYOffset = 15f;
 
     private RectTransform rect;
+    private float baseScale = 1f;
+    private float baseY;
+    private int spawnFrame;
+    private bool baseCaptured;
     private float targetScale = 1f;
     private float targetY = 0f;
 
@@ -31,6 +38,8 @@ public class WeaponSlotUI : MonoBehaviour
     private void Awake()
     {
         rect = GetComponent<RectTransform>();
+        baseScale = transform.localScale.x;
+        spawnFrame = Time.frameCount;
     }
 
     public void Setup(WeaponData data, bool isActive)
@@ -40,7 +49,12 @@ public class WeaponSlotUI : MonoBehaviour
         weaponImage.sprite = data.weaponIcon;
 
         float currentDura = Mathf.Max(0, data.currentDurability);
-        durabilityText.text = $"{currentDura}/{data.maxDurability}";
+        if (maxDurabilityText != null)
+        {
+            durabilityText.text = Mathf.CeilToInt(currentDura).ToString("00");
+            maxDurabilityText.text = $"/{Mathf.CeilToInt(data.maxDurability)}";
+        }
+        else durabilityText.text = $"{currentDura}/{data.maxDurability}";
 
         if (data.maxDurability > 0)
             targetFill = currentDura / data.maxDurability;
@@ -59,7 +73,7 @@ public class WeaponSlotUI : MonoBehaviour
         else
         {
             weaponImage.color = isActive ? normalColor : inactiveColor;
-            durabilityText.color = normalColor;
+            durabilityText.color = data.maxDurability > 0 && currentDura / data.maxDurability <= 0.25f ? lowDurabilityColor : normalColor;
             if (durabilityFillImage != null) durabilityFillImage.color = isActive ? gaugeColor : inactiveColor;
         }
 
@@ -78,12 +92,21 @@ public class WeaponSlotUI : MonoBehaviour
 
     private void Update()
     {
-        float newScale = Mathf.Lerp(transform.localScale.x, targetScale, Time.deltaTime * animSpeed);
+        float newScale = Mathf.Lerp(transform.localScale.x, targetScale * baseScale, Time.deltaTime * animSpeed);
         transform.localScale = Vector3.one * newScale;
 
-        Vector2 pos = rect.anchoredPosition;
-        pos.y = Mathf.Lerp(pos.y, targetY, Time.deltaTime * animSpeed);
-        rect.anchoredPosition = pos;
+        // Layout Group จัดตำแหน่งให้ก่อน จึงจำตำแหน่งนั้นหลังผ่านไป 2 เฟรมแล้วค่อยยกจากจุดนั้น
+        if (!baseCaptured && Time.frameCount - spawnFrame >= 2)
+        {
+            baseY = rect.anchoredPosition.y;
+            baseCaptured = true;
+        }
+        if (baseCaptured)
+        {
+            Vector2 pos = rect.anchoredPosition;
+            pos.y = Mathf.Lerp(pos.y, baseY + targetY, Time.deltaTime * animSpeed);
+            rect.anchoredPosition = pos;
+        }
 
         if (durabilityFillImage != null)
         {

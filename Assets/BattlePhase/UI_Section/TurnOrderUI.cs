@@ -9,6 +9,7 @@ public class TurnOrderUI : MonoBehaviour
     [Header("Staircase Layout (ขั้นบันได)")]
     public float ySpacing = 90f;
     public float xOffsetPerItem = 25f;
+    public Vector2 startOffset = Vector2.zero;
 
     [Header("Animation Settings")]
     public Vector2 spawnOffset = new Vector2(300f, 0f);
@@ -25,7 +26,7 @@ public class TurnOrderUI : MonoBehaviour
             var pred = predictions[i];
             incomingIDs.Add(pred.UniqueID);
 
-            Vector2 targetPos = new Vector2(i * xOffsetPerItem, -i * ySpacing);
+            Vector2 targetPos = startOffset + new Vector2(i * xOffsetPerItem, -i * ySpacing);
 
             if (activePortraits.ContainsKey(pred.UniqueID))
             {
@@ -36,6 +37,7 @@ public class TurnOrderUI : MonoBehaviour
             else
             {
                 GameObject go = Instantiate(portraitPrefab, container);
+                go.SetActive(true);
                 TurnPortraitUI newPortrait = go.GetComponent<TurnPortraitUI>();
 
                 newPortrait.Setup(pred);

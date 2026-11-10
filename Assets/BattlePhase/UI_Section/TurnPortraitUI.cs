@@ -7,6 +7,9 @@ public class TurnPortraitUI : MonoBehaviour
 {
     public TextMeshProUGUI nameText;
     public Image background;
+    [Tooltip("ถ้าใส่ ผู้เล่นจะแสดงรูปอาวุธแทนชื่อ และไม่ย้อมสีพื้นหลัง")]
+    public Image iconImage;
+    public float activeScale = 1.4f;
 
     [Header("Animation")]
     public float slideSpeed = 15f;
@@ -33,6 +36,14 @@ public class TurnPortraitUI : MonoBehaviour
     {
         if (isDying) return;
         nameText.text = data.Name;
+        if (iconImage != null)
+        {
+            bool hasIcon = data.Icon != null;
+            iconImage.enabled = hasIcon;
+            if (hasIcon) iconImage.sprite = data.Icon;
+            nameText.enabled = !hasIcon;
+            return;
+        }
         background.color = data.IsEnemy ? new Color(1f, 0.4f, 0.4f) : new Color(0.4f, 0.7f, 1f);
     }
 
@@ -54,7 +65,7 @@ public class TurnPortraitUI : MonoBehaviour
         targetPosition = newPos;
 
         // คิวแรกสุด (Index 0) จะสเกลใหญ่ค้างไว้ (1.2) ส่วนคิวอื่นๆ จะหดกลับไปขนาดปกติ (1.0)
-        targetScale = (currentRank == 0) ? 1.4f : 1f;
+        targetScale = (currentRank == 0) ? activeScale : 1f;
     }
 
     public void SlideOutAndDestroy(Vector2 exitOffset)

@@ -5,11 +5,30 @@ public class HitstopManager : MonoBehaviour
 {
     public static HitstopManager Instance;
 
+    // ความเร็วเวลาที่จะกลับไปหลัง Hitstop (ParryManager ลดลงระหว่างที่ Hint ทิศทางขึ้น)
+    public static float BaseTimeScale { get; private set; } = 1f;
+    private static bool isFrozen;
+    public static bool IsFrozen => isFrozen;
+
     private Coroutine hitstopCoroutine;
 
     private void Awake()
     {
         Instance = this;
+        BaseTimeScale = 1f;
+        isFrozen = false;
+    }
+
+    private void OnDisable()
+    {
+        isFrozen = false;
+    }
+
+    // ระหว่าง Hitstop เวลายังหยุดอยู่ ค่านี้จะมีผลตอน Hitstop จบ
+    public static void SetBaseTimeScale(float scale)
+    {
+        BaseTimeScale = scale;
+        if (!isFrozen) Time.timeScale = scale;
     }
 
     /// <summary>
@@ -28,12 +47,14 @@ public class HitstopManager : MonoBehaviour
     private IEnumerator DoHitstop(float duration)
     {
         // 1. หยุดเวลาในเกมเป็น 0
+        isFrozen = true;
         Time.timeScale = 0f;
 
         // 2. รอเวลาจริง (Realtime) ตามระยะเวลาที่กำหนด
         yield return new WaitForSecondsRealtime(duration);
 
         // 3. คืนค่าเวลาเป็นปกติ
-        Time.timeScale = 1f;
+        isFrozen = false;
+        Time.timeScale = BaseTimeScale;
     }
 }

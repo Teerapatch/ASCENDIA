@@ -102,7 +102,7 @@ public class SkillQTEManager : MonoBehaviour
 
     private void Update()
     {
-        if (!isQTEActive || Keyboard.current == null) return;
+        if (!isQTEActive || Keyboard.current == null || GameExitMenu.IsOpen) return;
 
         currentAngleDistance -= activeStep.spinSpeed * Time.deltaTime;
 
