@@ -21,11 +21,19 @@ public class PlayerLedgeMantle : MonoBehaviour
     public float landingHeightTolerance = .8f;
     [Tooltip("รัศมีตรวจที่ว่างเหนือจุดยืน")]
     public float clearanceRadius = 1f;
+    [Tooltip("ยืนห่างจากขอบเข้าไปกี่หน่วย (น้อย = ขึ้นมายืนชิดขอบแบบ Genshin)")]
+    public float standInset = .9f;
+    [Tooltip("ไล่หาขอบจากหน้าผาเข้าไปลึกสุดกี่หน่วย")]
+    public float ledgeSearchDepth = 2.5f;
+    [Tooltip("ระยะก้าวของการไล่หาขอบ (เล็ก = แม่น)")]
+    public float ledgeSearchStep = .25f;
 
     [Header("ท่าขึ้นขอบ")]
     public float pullDuration = .75f;
     public float stepDuration = .6f;
     public float settleDuration = .2f;
+    [Min(.2f), Tooltip("ตัวคูณความเร็วของท่าขึ้นขอบทั้งชุด (มาก = ขึ้นไว)")]
+    public float mantleSpeed = 1.35f;
     [Tooltip("ความเร็วคลิปปีนตอนดึงตัวขึ้น")]
     public float pullClimbRate = 1.3f;
     [Tooltip("ระยะมือจากกึ่งกลาง (หน่วยอาร์ต)")]
@@ -33,6 +41,9 @@ public class PlayerLedgeMantle : MonoBehaviour
     [Tooltip("ปีนลงจากขอบ: ลงไปต่ำกว่าเท้ากี่หน่วย")]
     public float climbDownDrop = 2.5f;
     public float climbDownDuration = .5f;
+    [Tooltip("ปีนลง: พื้นอยู่ใต้เท้าไม่เกินกี่หน่วยจึงปล่อยมือลงไปยืน")]
+    public float standDownReach = .5f;
+    public float standDownDuration = .3f;
 
     private PlayerStateManager state;
     private PlayerClimbController climb;
@@ -70,59 +81,80 @@ public class PlayerLedgeMantle : MonoBehaviour
         return true;
     }
 
+    // หาขอบจริงของพื้นด้านบน: ไล่ยิงลงจากหน้าผาเข้าไปทีละนิด จุดแรกที่เจอพื้นเรียบคือขอบ แล้วบีบหาตำแหน่งขอบให้แม่น
+    // จุดยืนอยู่ถัดจากขอบเข้าไปแค่ standInset ตัวจึงขึ้นมายืนชิดขอบ ไม่กินพื้นที่ด้านใน
     private bool FindLedge(Vector3 facing, ClimbableWall wall, out Vector3 grip, out Vector3 stand)
     {
         grip = stand = Vector3.zero;
         Vector3 center = transform.position;
-        float probeTop = maxLedgeAboveCenter + 2f;
-        float probeLength = probeTop - minLedgeAboveCenter + .5f;
 
-        for (int i = 1; i <= 2; i++)
+        float from = Mathf.Max(0f, climb.surfaceOffset - .6f);
+        float to = climb.surfaceOffset + ledgeSearchDepth;
+        float step = Mathf.Max(.05f, ledgeSearchStep);
+        float lastMiss = from, edge = -1f;
+        RaycastHit top = default;
+        for (float d = from; d <= to; d += step)
         {
-            Vector3 origin = center + facing * (climb.surfaceOffset + .8f * i) + Vector3.up * probeTop;
-            if (!ClimbableWall.Raycast(origin, Vector3.down, probeLength, out RaycastHit top)) continue;
-            float above = top.point.y - center.y;
-            if (top.normal.y < minFlatNormalY || above < minLedgeAboveCenter || above > maxLedgeAboveCenter) continue;
-
-            Vector3 candidate = center + facing * (climb.surfaceOffset + standForward);
-            candidate.y = top.point.y;
-            if (!ValidateLanding(candidate, wall, out float groundY)) continue;
-
-            stand = new Vector3(candidate.x, groundY, candidate.z);
-            // ขอบจริงคือจุดที่หน้าผาตัดกับพื้นด้านบน (ยิงตรงเข้าหน้าผาใต้พื้นเล็กน้อย)
-            Vector3 faceOrigin = new Vector3(center.x, top.point.y - .4f, center.z);
-            grip = ClimbableWall.Raycast(faceOrigin, facing, climb.surfaceOffset + 6f, out RaycastHit face)
-                ? new Vector3(face.point.x, top.point.y + .05f, face.point.z) + facing * .25f
-                : top.point;
-            return true;
+            if (TopAt(center, facing, d, out top)) { edge = d; break; }
+            lastMiss = d;
         }
-        return false;
+        if (edge < 0f) return false;
+
+        for (int i = 0; i < 4 && edge - lastMiss > .02f; i++)
+        {
+            float mid = (lastMiss + edge) * .5f;
+            if (TopAt(center, facing, mid, out RaycastHit closer)) { edge = mid; top = closer; }
+            else lastMiss = mid;
+        }
+
+        Vector3 candidate = center + facing * (edge + standInset);
+        candidate.y = top.point.y;
+        if (!ValidateLanding(candidate, facing, wall, out float groundY)) return false;
+
+        stand = new Vector3(candidate.x, groundY, candidate.z);
+        Vector3 lip = center + facing * edge;
+        grip = new Vector3(lip.x, top.point.y + .05f, lip.z) + facing * .25f;
+        return true;
     }
 
-    private bool ValidateLanding(Vector3 point, ClimbableWall wall, out float groundY)
+    // มีพื้นเรียบที่เอื้อมถึง ณ ระยะ distance จากตัวหรือไม่
+    private bool TopAt(Vector3 center, Vector3 facing, float distance, out RaycastHit top)
+    {
+        float probeTop = maxLedgeAboveCenter + 1f;
+        Vector3 origin = center + facing * distance + Vector3.up * probeTop;
+        if (!ClimbableWall.Raycast(origin, Vector3.down, probeTop - minLedgeAboveCenter + .5f, out top)) return false;
+        float above = top.point.y - center.y;
+        return top.normal.y >= minFlatNormalY && above >= minLedgeAboveCenter && above <= maxLedgeAboveCenter;
+    }
+
+    // จุดยืนต้องมีพื้นจริงใต้เท้า และมีพื้นรองรับรอบ ๆ (ด้านใน ซ้าย ขวา) อย่างน้อย 2 จาก 3 จุด ด้านหลังคือขอบจึงไม่ตรวจ
+    private bool ValidateLanding(Vector3 point, Vector3 facing, ClimbableWall wall, out float groundY)
     {
         groundY = point.y;
         // ต่ำกว่าโซน Node เท่านั้น และอยู่ในความกว้างของเลน
         if (point.y + HalfHeight > wall.MaxClimbY - 1f) return false;
         if ((wall.ClampPosition(point) - point).sqrMagnitude > .01f) return false;
 
-        Vector3[] offsets = { Vector3.zero, Vector3.right, Vector3.left, Vector3.forward, Vector3.back };
+        if (!ClimbableWall.Raycast(point + Vector3.up * 2f, Vector3.down, 4f, out RaycastHit under) || under.normal.y < minFlatNormalY) return false;
+        if (Mathf.Abs(under.point.y - point.y) > landingHeightTolerance) return false;
+        groundY = under.point.y;
+
+        Vector3 right = Vector3.Cross(Vector3.up, facing);
+        float radius = landingRadius * .6f;
+        Vector3[] offsets = { facing * radius, right * radius, -right * radius };
         int good = 0;
-        float centerY = point.y;
-        for (int i = 0; i < offsets.Length; i++)
+        foreach (Vector3 offset in offsets)
         {
-            Vector3 origin = point + offsets[i] * landingRadius + Vector3.up * 2f;
-            if (!ClimbableWall.Raycast(origin, Vector3.down, 4f, out RaycastHit hit) || hit.normal.y < minFlatNormalY) continue;
-            if (i == 0) centerY = hit.point.y;
-            if (Mathf.Abs(hit.point.y - point.y) <= landingHeightTolerance) good++;
+            if (!ClimbableWall.Raycast(point + offset + Vector3.up * 2f, Vector3.down, 4f, out RaycastHit hit) || hit.normal.y < minFlatNormalY) continue;
+            if (Mathf.Abs(hit.point.y - groundY) <= landingHeightTolerance) good++;
         }
-        if (good < 4) return false;
-        groundY = centerY;
+        if (good < 2) return false;
 
         // เหนือจุดยืนต้องไม่มีหินบัง
-        Vector3 bottom = new Vector3(point.x, groundY + clearanceRadius + .3f, point.z);
-        Vector3 top = bottom + Vector3.up * Mathf.Max(0f, HalfHeight * 2f - clearanceRadius * 2f - .3f);
-        foreach (Collider c in Physics.OverlapCapsule(bottom, top, clearanceRadius, ~0, QueryTriggerInteraction.Ignore))
+        float clear = Mathf.Min(clearanceRadius, Mathf.Max(.3f, standInset));
+        Vector3 bottom = new Vector3(point.x, groundY + clear + .3f, point.z);
+        Vector3 top = bottom + Vector3.up * Mathf.Max(0f, HalfHeight * 2f - clear * 2f - .3f);
+        foreach (Collider c in Physics.OverlapCapsule(bottom, top, clear, ~0, QueryTriggerInteraction.Ignore))
         {
             if (c.CompareTag(ClimbableWall.WallTag)) return false;
         }
@@ -137,6 +169,7 @@ public class PlayerLedgeMantle : MonoBehaviour
         Vector3 right = Vector3.Cross(Vector3.up, facing);
         float half = HalfHeight;
         float visualScale = contactIK != null ? Mathf.Abs(contactIK.transform.lossyScale.y) : 3f;
+        float pullTime = pullDuration / mantleSpeed, stepTime = stepDuration / mantleSpeed, settleTime = settleDuration / mantleSpeed;
         Vector3 gripLeft = grip - right * gripHalfWidth;
         Vector3 gripRight = grip + right * gripHalfWidth;
         Quaternion startRotation = transform.rotation;
@@ -149,12 +182,12 @@ public class PlayerLedgeMantle : MonoBehaviour
 
         // 1) มือจับขอบ ดึงตัวขึ้น
         if (contactIK != null) contactIK.SetMantleAnimation(true, pullClimbRate);
-        for (float t = 0f; t < pullDuration; t += Time.deltaTime)
+        for (float t = 0f; t < pullTime; t += Time.deltaTime)
         {
-            float k = Mathf.SmoothStep(0f, 1f, t / pullDuration);
+            float k = Mathf.SmoothStep(0f, 1f, t / pullTime);
             transform.position = Vector3.Lerp(start, top, k);
             transform.rotation = Quaternion.Slerp(startRotation, endRotation, k);
-            if (handRig != null) handRig.SetMantleGrip(gripLeft, gripRight, Mathf.Clamp01(t / (pullDuration * .3f)));
+            if (handRig != null) handRig.SetMantleGrip(gripLeft, gripRight, Mathf.Clamp01(t / (pullTime * .3f)));
             yield return null;
         }
 
@@ -168,9 +201,9 @@ public class PlayerLedgeMantle : MonoBehaviour
         Vector3 arc = Vector3.Lerp(top, end, .5f) + Vector3.up * (half * .22f);
         float lift = .35f * visualScale;
 
-        for (float t = 0f; t < stepDuration; t += Time.deltaTime)
+        for (float t = 0f; t < stepTime; t += Time.deltaTime)
         {
-            float raw = t / stepDuration;
+            float raw = t / stepTime;
             float k = Mathf.SmoothStep(0f, 1f, raw);
             transform.position = Vector3.Lerp(Vector3.Lerp(top, arc, k), Vector3.Lerp(arc, end, k), k);
             if (handRig != null) handRig.SetMantleGrip(gripLeft, gripRight, Mathf.Clamp01(1f - raw / .65f));
@@ -186,14 +219,64 @@ public class PlayerLedgeMantle : MonoBehaviour
         // 3) ทรงตัว ก่อนส่งให้ท่า Idle
         transform.position = end;
         if (handRig != null) handRig.ClearMantleGrip();
-        for (float t = 0f; t < settleDuration; t += Time.deltaTime)
+        for (float t = 0f; t < settleTime; t += Time.deltaTime)
         {
-            if (contactIK != null) contactIK.SetMantleFeet(landLeft, landRight, 1f - t / settleDuration);
+            if (contactIK != null) contactIK.SetMantleFeet(landLeft, landRight, 1f - t / settleTime);
             yield return null;
         }
         if (contactIK != null) contactIK.EndMantle();
 
         if (walker != null) walker.DelayWallAttachment(.4f);
+        state.ChangeState(PlayerStateManager.State.Walking);
+        cooldownUntil = Time.time + .6f;
+        busy = false;
+    }
+
+    // เรียกตอนกำลังปีนลง: เท้าถึงพื้นเรียบที่ยืนได้ก็ปล่อยมือกลับไปยืน (ลองใต้ตัวก่อน แล้วค่อยชิดหน้าผาเข้าไป)
+    public bool TryStandDown(Vector3 facing, ClimbableWall wall)
+    {
+        if (busy || wall == null || climb == null || Time.time < cooldownUntil) return false;
+
+        float half = HalfHeight;
+        Vector3 right = Vector3.Cross(Vector3.up, facing);
+        float radius = landingRadius * .6f;
+        for (int i = 0; i < 2; i++)
+        {
+            Vector3 at = transform.position + facing * (i * climb.surfaceOffset * .5f);
+            if (!ClimbableWall.Raycast(at, Vector3.down, half + standDownReach, out RaycastHit ground) || ground.normal.y < minFlatNormalY) continue;
+
+            // รอบจุดยืนต้องมีพื้นรองรับอย่างน้อย 2 จาก 3 จุด (ด้านนอก ซ้าย ขวา)
+            int good = 0;
+            foreach (Vector3 offset in new[] { -facing * radius, right * radius, -right * radius })
+            {
+                if (ClimbableWall.Raycast(at + offset + Vector3.up, Vector3.down, half + standDownReach + 1f + landingHeightTolerance, out RaycastHit hit)
+                    && hit.normal.y >= minFlatNormalY && Mathf.Abs(hit.point.y - ground.point.y) <= landingHeightTolerance) good++;
+            }
+            if (good < 2) continue;
+
+            StartCoroutine(RunStandDown(new Vector3(at.x, ground.point.y + half, at.z)));
+            return true;
+        }
+        return false;
+    }
+
+    private IEnumerator RunStandDown(Vector3 end)
+    {
+        busy = true;
+        state.ChangeState(PlayerStateManager.State.Mantling);
+        if (contactIK != null) contactIK.SetMantleAnimation(false, 0f);
+        if (handRig != null) handRig.ClearMantleGrip();
+
+        Vector3 start = transform.position;
+        for (float t = 0f; t < standDownDuration; t += Time.deltaTime)
+        {
+            transform.position = Vector3.Lerp(start, end, Mathf.SmoothStep(0f, 1f, t / standDownDuration));
+            yield return null;
+        }
+        transform.position = end;
+
+        if (contactIK != null) contactIK.EndMantle();
+        if (walker != null) walker.DelayWallAttachment(.5f);
         state.ChangeState(PlayerStateManager.State.Walking);
         cooldownUntil = Time.time + .6f;
         busy = false;

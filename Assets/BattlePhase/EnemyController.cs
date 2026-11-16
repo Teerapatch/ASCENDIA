@@ -112,9 +112,8 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        // บอสที่มีอนิเมชันคุมเทิร์นเอง
-        GuardianBossController guardian = GetComponent<GuardianBossController>();
-        if (guardian != null && guardian.TakeTurn()) return;
+        // ศัตรูที่มีอนิเมชันคุมเทิร์นเอง
+        if (AnimationController != null && AnimationController.TakeTurn()) return;
 
         BossSummonBehavior summonBehavior = GetComponent<BossSummonBehavior>();
         if (summonBehavior != null)
@@ -188,7 +187,18 @@ public class EnemyController : MonoBehaviour
         EnterStagger();
     }
 
-    public void TakeDamage(int damage)
+    private EnemyAnimationController animationController;
+    private EnemyAnimationController AnimationController
+    {
+        get
+        {
+            if (animationController == null) animationController = GetComponent<EnemyAnimationController>();
+            return animationController;
+        }
+    }
+
+    // hitDirection = ทิศบนจอของแรงที่โดน (ศูนย์ = ไม่รู้ จะสุ่มท่าเจ็บ)
+    public void TakeDamage(int damage, Vector2 hitDirection = default)
     {
         if (IsDead) return;
         if (isStaggered) damage = Mathf.RoundToInt(damage * 1.5f);
@@ -200,13 +210,15 @@ public class EnemyController : MonoBehaviour
         DamagePopupManager.Instance.CreatePopup(transform.position, damage, isStaggered, dmgColor);
 
         CameraShakeManager.TryShake(0.3f);
+        if (AnimationController != null) AnimationController.PlayHurt(hitDirection, isStaggered ? 1.3f : 1f);
 
         if (currentHP <= 0) Die();
     }
 
-    public void TakePostureDamage(int postureDamage)
+    public void TakePostureDamage(int postureDamage, Vector2 hitDirection = default)
     {
         if (IsDead || isStaggered) return;
+        if (AnimationController != null) AnimationController.PlayHurt(hitDirection, 0.8f);
 
         // Shatter: รับดาเมจ Posture แรงขึ้นจนกว่าจะ Stagger
         postureDamage = Mathf.RoundToInt(postureDamage * (1f + Statuses.GetValue(CombatStatusType.Shatter)));

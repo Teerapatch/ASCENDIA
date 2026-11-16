@@ -62,6 +62,7 @@ public class PlayerCombatController : MonoBehaviour
         public EnemyController target;
         public int damage;
         public int posture;
+        public Vector2 direction;
     }
     private List<CapturedHit> damageCapture;
     private List<CapturedHit> pendingHits;
@@ -507,8 +508,11 @@ public class PlayerCombatController : MonoBehaviour
 
             if (!landed) hitPosition = hit.target.transform.position;
             landed = true;
-            if (damage > 0) hit.target.TakeDamage(damage);
-            if (posture > 0 && !hit.target.IsDead) hit.target.TakePostureDamage(posture);
+
+            // ท่าเจ็บของศัตรูตามทิศที่อาวุธฟันในจังหวะนี้ (อาวุธยิงใช้ทิศจากผู้เล่นไปหาเป้า)
+            Vector2 direction = battleAnimator != null ? battleAnimator.HitScreenDirection(index, hit.target.transform.position) : hit.direction;
+            if (damage > 0) hit.target.TakeDamage(damage, direction);
+            if (posture > 0 && !hit.target.IsDead) hit.target.TakePostureDamage(posture, direction);
             killed |= hit.target.IsDead;
         }
 
@@ -945,9 +949,11 @@ public class PlayerCombatController : MonoBehaviour
         }
     }
 
-    public void TakeDamage(int damage)
+    // hitDirection = ทิศบนจอของแรงที่โดน (ศูนย์ = สุ่มท่าเจ็บ)
+    public void TakeDamage(int damage, Vector2 hitDirection = default)
     {
         if (ActiveWeapon == null) return;
+        if (battleAnimator != null) battleAnimator.PlayHurt(hitDirection);
 
         ActiveWeapon.currentDurability -= damage;
         Debug.Log($"{ActiveWeapon.weaponName} took {damage} damage. Remaining: {ActiveWeapon.currentDurability}");
@@ -1001,6 +1007,9 @@ public class PlayerCombatController : MonoBehaviour
     {
         if (target == null || target.IsDead) return 0;
 
+        // ดาเมจที่ไม่ได้มาจากท่าฟัน (ยิง, สวนกลับ) ให้ศัตรูสะดุ้งไปทางที่ยิงมา
+        Vector2 hitDirection = ParryDirections.ScreenDirection(transform.position, target.transform.position, Camera.main != null ? Camera.main.transform : null);
+
         WeaponType type = sourceType ?? (ActiveWeapon != null ? ActiveWeapon.weaponType : WeaponType.Dagger);
         int finalDamage = 0;
 
@@ -1012,13 +1021,13 @@ public class PlayerCombatController : MonoBehaviour
         // ระหว่างคำนวณท่า: เก็บดาเมจไว้แบ่งลงตามจังหวะโดน
         if (damageCapture != null)
         {
-            damageCapture.Add(new CapturedHit { target = target, damage = finalDamage, posture = Mathf.RoundToInt(postureDamage) });
+            damageCapture.Add(new CapturedHit { target = target, damage = finalDamage, posture = Mathf.RoundToInt(postureDamage), direction = hitDirection });
             return finalDamage;
         }
 
-        if (damage > 0f) target.TakeDamage(finalDamage);
+        if (damage > 0f) target.TakeDamage(finalDamage, hitDirection);
 
-        if (postureDamage > 0f) target.TakePostureDamage(Mathf.RoundToInt(postureDamage));
+        if (postureDamage > 0f) target.TakePostureDamage(Mathf.RoundToInt(postureDamage), hitDirection);
         return finalDamage;
     }
 

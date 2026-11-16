@@ -12,13 +12,13 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: BladeGuard_armor
-    second: {fileID: 2100000, guid: bad6a31ebc584ca5b18a0a3bd1bc2fd6, type: 2}
+      name: BladeGuard__skin
+    second: {fileID: 2100000, guid: 6c4c80cd1bfd42a5b7f0c9a7bc9c8f7b, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: BladeGuard__skin
-    second: {fileID: 2100000, guid: 6c4c80cd1bfd42a5b7f0c9a7bc9c8f7b, type: 2}
+      name: BladeGuard_armor
+    second: {fileID: 2100000, guid: bad6a31ebc584ca5b18a0a3bd1bc2fd6, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -236,7 +236,7 @@ ModelImporter:
       cycleOffset: 0
       loop: 0
       hasAdditiveReferencePose: 0
-      loopTime: 0
+      loopTime: 1
       loopBlend: 0
       loopBlendOrientation: 0
       loopBlendPositionY: 0

@@ -151,6 +151,7 @@ public class CampManager : MonoBehaviour
     {
         isTransitioning = true;
 
+        playerData.fatigue = 0f;
         playerData.stamina = playerData.maxStamina;
         playerData.currentWeaponDUR = playerData.maxWeaponDUR;
 

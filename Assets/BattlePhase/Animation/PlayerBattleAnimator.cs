@@ -38,12 +38,23 @@ public class PlayerBattleAnimator : MonoBehaviour
     private readonly List<Transform> aimRoots = new List<Transform>();
     private WeaponType? weaponBeforeAim;
     private int moveToken;
+    private BattleClip activeClip;
+    private Transform rigParent;
+    private HitReaction reaction;
+    private const float HurtKnockback = 0.45f;
+    private const float HurtLean = 12f;
 
     private void Awake()
     {
         Instance = this;
         set = Resources.Load<BattleAnimationSet>("BattleAnimationSet");
         homeWorld = transform.position;
+
+        // Pivot สำหรับสะดุ้งตอนโดน คั่นระหว่างผู้เล่นกับโมเดลทุกอาวุธ
+        GameObject pivot = new GameObject("HurtPivot");
+        pivot.transform.SetParent(transform, false);
+        rigParent = pivot.transform;
+        reaction = pivot.AddComponent<HitReaction>();
     }
 
     private void Start()
@@ -85,7 +96,7 @@ public class PlayerBattleAnimator : MonoBehaviour
             return null;
         }
 
-        GameObject root = Instantiate(data.model, transform);
+        GameObject root = Instantiate(data.model, rigParent != null ? rigParent : transform);
         root.name = "BattleModel_" + type;
         root.transform.localPosition = set.modelLocalPosition;
         root.transform.localRotation = Quaternion.Euler(set.modelLocalEuler);
@@ -125,6 +136,7 @@ public class PlayerBattleAnimator : MonoBehaviour
         }
 
         List<float> hits = clip.hits != null && clip.hits.Count > 0 ? clip.hits : new List<float> { clip.impact };
+        activeClip = clip;
         Animator animator = current.animator;
         animator.speed = Mathf.Max(0.01f, clip.speed);
         animator.CrossFadeInFixedTime(clip.state, set.crossFade, 0, 0f);
@@ -165,7 +177,55 @@ public class PlayerBattleAnimator : MonoBehaviour
             next++;
         }
         animator.speed = 1f;
+        activeClip = null;
         animator.CrossFadeInFixedTime(current.data.idleState, set.crossFade * 1.5f, 0);
+    }
+
+    // ทิศบนจอของแรงตีในจังหวะนี้: ท่าฟันใช้ทิศที่ปลายอาวุธเคลื่อน ท่ายิงใช้ทิศจากผู้เล่นไปหาเป้า
+    public Vector2 HitScreenDirection(int hitIndex, Vector3 targetPosition)
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return Vector2.right;
+
+        if (activeClip != null && activeClip.melee && current != null && activeClip.swings != null && hitIndex < activeClip.swings.Count)
+        {
+            Vector3 world = current.root.transform.rotation * activeClip.swings[hitIndex];
+            Vector2 screen = ParryDirections.ToScreen(world, cam.transform);
+            if (screen.sqrMagnitude > 0.01f) return screen.normalized;
+        }
+        return ParryDirections.ScreenDirection(transform.position, targetPosition, cam.transform);
+    }
+
+    // จุดกลางลำตัวของโมเดลที่ถืออยู่ (เป้าของกระสุนศัตรู)
+    public Vector3 BodyCenter
+    {
+        get
+        {
+            if (current == null) return transform.position + Vector3.up * 2f;
+            bool found = false;
+            Bounds bounds = default;
+            foreach (Renderer r in current.root.GetComponentsInChildren<Renderer>())
+            {
+                if (r is ParticleSystemRenderer) continue;
+                if (!found) { bounds = r.bounds; found = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            return found ? bounds.center : transform.position + Vector3.up * 2f;
+        }
+    }
+
+    // ท่าเจ็บ: สะดุ้งตามทิศบนจอที่โดน (ศูนย์ = สุ่ม) และเล่นคลิป Hurt ถ้าอาวุธนี้มี
+    public void PlayHurt(Vector2 screenDirection)
+    {
+        if (screenDirection.sqrMagnitude < 0.001f) screenDirection = ParryDirections.ToVector(UnityEngine.Random.Range(0, 8));
+        Camera cam = Camera.main;
+        Vector3 world = cam != null
+            ? cam.transform.right * screenDirection.x + cam.transform.up * screenDirection.y
+            : new Vector3(screenDirection.x, screenDirection.y, 0f);
+        if (reaction != null) reaction.Hit(world, HurtKnockback, HurtLean);
+
+        if (current == null || aiming || activeClip != null) return;
+        if (HasState(current.data.hurtState)) PlayOneShot(current.data.hurtState);
     }
 
     private static float StateTime(Animator animator, int stateHash)
@@ -372,7 +432,7 @@ public class PlayerBattleAnimator : MonoBehaviour
         toHome = toHome.sqrMagnitude > 0.001f ? toHome.normalized : Vector3.back;
 
         // บอสมีดาบยาว Bounds จึงกว้างเกินจริง ใช้รัศมีลำตัวแทน
-        GuardianBossController boss = target.GetComponent<GuardianBossController>();
+        EnemyAnimationController boss = target.GetComponent<EnemyAnimationController>();
         float radius = boss != null ? boss.BodyRadius : 0f;
         if (radius <= 0f)
         {

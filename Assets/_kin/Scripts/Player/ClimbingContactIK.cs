@@ -22,6 +22,15 @@ public class ClimbingContactIK : MonoBehaviour
     public float bodyPitchSharpness = 8f;
     [Tooltip("ระยะฝ่าเท้าจากผิวหิน (เทียบสเกล 1)")]
     public float footClearance = .06f;
+    [Header("ท่าทางธรรมชาติ")]
+    [Tooltip("ถ่ายน้ำหนักซ้าย-ขวาตามมือที่จับหิน (ระยะ เทียบสเกล 1)")]
+    public float bodySway = .035f;
+    [Tooltip("เอียงสะโพกตามการถ่ายน้ำหนัก (องศา)")]
+    public float bodySwayRoll = 3f;
+    [Range(0f, 1f), Tooltip("หันหน้ามองไปทางที่กำลังปีน")]
+    public float lookWeight = .55f;
+    private Vector3 lookDirection;
+    private float moveBlend;
     private Vector3 surfaceNormal = Vector3.back;
     private Vector3 visualBasePosition;
     private float bodyPitch;
@@ -59,6 +68,35 @@ public class ClimbingContactIK : MonoBehaviour
     [Range(0f, 1f)] public float phaseOffset = 0f;
     [Range(0f, .8f)] public float pullRhythm = .35f;
     public void SetClimbVelocity(Vector3 velocity) { requestedVelocity = velocity; }
+    // ท่าพุ่งตัวตอนกระโดดเร่ง: progress 0..1 ตลอดการพุ่ง, ติดลบ = ไม่ได้พุ่ง
+    private Vector3 jumpWorld;
+    private float jumpProgress = -1f;
+    public void SetJump(Vector3 worldDirection, float progress)
+    {
+        bool wasJumping = jumpProgress >= 0f;
+        jumpWorld = worldDirection.sqrMagnitude > .001f ? worldDirection.normalized : Vector3.up;
+        jumpProgress = progress;
+        if (!handRig) return;
+        if (progress >= 0f && playerRoot)
+        {
+            // แขนเหยียดนำไปทางที่พุ่ง (เฉียงเข้าหาหินเล็กน้อย) แล้วคลายตอนใกล้เกาะ
+            float reach = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.08f, .3f, progress)) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.8f, 1f, progress)));
+            handRig.SetReach(jumpWorld + playerRoot.forward * .35f, reach);
+        }
+        else if (wasJumping) handRig.ClearMantleGrip();
+    }
+    // จังหวะดึงตัวตามคลิปปีน: ช่วงกลางของการจับ (phase .25/.75) ตัวขึ้นเร็ว ช่วงเปลี่ยนมือ (0/.5) ตัวช้า เฉลี่ยทั้งรอบ = 1
+    public float PullFactor
+    {
+        get
+        {
+            if (!animator || pullRhythm <= 0f || !climbingPose || holdingPose || Mathf.Abs(rate) < .05f) return 1f;
+            AnimatorStateInfo info = animator.GetCurrentAnimatorStateInfo(0);
+            if (!info.IsTag("Climbing") || animator.IsInTransition(0)) return 1f;
+            float phase = Mathf.Repeat(info.normalizedTime + phaseOffset, 1f);
+            return 1f - pullRhythm * (1f - sideBlend) * Mathf.Cos(phase * 4f * Mathf.PI);
+        }
+    }
     public float MovementMultiplier
     {
         get
@@ -116,10 +154,23 @@ public class ClimbingContactIK : MonoBehaviour
         if(!handRig) handRig = gameObject.AddComponent<ClimbingHandRig>();
         if (!state) state = GetComponentInParent<PlayerStateManager>();
         if (!playerRoot && state) playerRoot = state.transform;
+
+        // หายใจ/เอนตัว/หันหัวตอนยืนและเดิน (ตอนปีนปิดไว้ เพราะมือยึดหินด้วย IK อยู่)
+        bodyMotion = GetComponent<ProceduralBodyMotion>();
+        if (!bodyMotion && animator.isHuman && playerRoot)
+        {
+            bodyMotion = gameObject.AddComponent<ProceduralBodyMotion>();
+            bodyMotion.axes = playerRoot;
+            bodyMotion.spine = animator.GetBoneTransform(HumanBodyBones.Chest) ? animator.GetBoneTransform(HumanBodyBones.Chest) : animator.GetBoneTransform(HumanBodyBones.Spine);
+            bodyMotion.head = animator.GetBoneTransform(HumanBodyBones.Head);
+            bodyMotion.targetWeight = 0f;
+        }
     }
+    private ProceduralBodyMotion bodyMotion;
     private void LateUpdate()
     {
         if (!animator || !state || !playerRoot) return;
+        if (bodyMotion) bodyMotion.targetWeight = state.currentState == PlayerStateManager.State.Walking ? 1f : 0f;
         if (state.currentState == PlayerStateManager.State.Mantling)
         {
             HasWall = false; WallCollider = null; holdingPose = false; climbingPose = false; requestedVelocity = Vector3.zero;
@@ -163,6 +214,9 @@ public class ClimbingContactIK : MonoBehaviour
             float desiredRate = speed < .02f ? SettleRate() : Mathf.Min(maxClimbRate, speed * duration / Mathf.Max(.05f, distancePerCycle * scale));
             if (speed >= .02f && requestedVelocity.y < -.001f) desiredRate = -desiredRate;
             rate = desiredRate == 0f ? 0f : Mathf.MoveTowards(rate, desiredRate, Time.deltaTime * 5f);
+            // พุ่งตัว: มือเท้าตะกายเร็วสุด
+            // ลอยตัวอยู่: หยุดท่าตะกาย ให้ท่ากระโดด (IK) ชัด
+            if (jumpProgress >= 0f) rate = 0f;
 
         }
         else { WallCollider=null; rate = 0; ClearContacts(); }
@@ -200,6 +254,7 @@ public class ClimbingContactIK : MonoBehaviour
             animator.SetIKPositionWeight(AvatarIKGoal.LeftHand, 0); animator.SetIKPositionWeight(AvatarIKGoal.RightHand, 0);
             animator.SetIKPositionWeight(AvatarIKGoal.LeftFoot, mantleFootWeight); animator.SetIKPosition(AvatarIKGoal.LeftFoot, mantleFootLeft);
             animator.SetIKPositionWeight(AvatarIKGoal.RightFoot, mantleFootWeight); animator.SetIKPosition(AvatarIKGoal.RightFoot, mantleFootRight);
+            animator.SetLookAtWeight(0f);
             return;
         }
         float phase = Mathf.Repeat(animator.GetCurrentAnimatorStateInfo(0).normalizedTime + phaseOffset, 1f);
@@ -210,7 +265,36 @@ public class ClimbingContactIK : MonoBehaviour
         {
             float side=Vector3.Dot(requestedVelocity,playerRoot.right);
             animator.bodyRotation=Quaternion.AngleAxis(-Mathf.Sign(side)*sideBlend*9f,playerRoot.forward)*animator.bodyRotation;
+
+            // กระโดดเร่ง: ย่อตัวสวนทางก่อนถีบ แล้วพุ่งตัวยืดเหยียดออกจากหิน เอนลำตัวตามทิศ
+            if(jumpProgress>=0f)
+            {
+                float coil=Mathf.Clamp01(1f-jumpProgress/.18f);
+                float leap=Mathf.Sin(Mathf.Clamp01((jumpProgress-.1f)/.9f)*Mathf.PI);
+                animator.bodyPosition+=jumpWorld*((leap*.22f-coil*.28f)*scale)-playerRoot.forward*((leap*.2f-coil*.06f)*scale);
+                float sideways=Vector3.Dot(jumpWorld,playerRoot.right), upward=Vector3.Dot(jumpWorld,Vector3.up);
+                animator.bodyRotation=Quaternion.AngleAxis(-sideways*24f*leap,playerRoot.forward)
+                    *Quaternion.AngleAxis((upward*12f*leap)-coil*10f,playerRoot.right)*animator.bodyRotation;
+            }
+
+            // ถ่ายน้ำหนักไปทางมือที่จับหินอยู่ (ขวาช่วง 0-.5 ซ้ายช่วง .5-1) สะโพกเอียงตามเล็กน้อย
+            moveBlend=Mathf.MoveTowards(moveBlend,Mathf.Abs(rate)>.05f?1f:0f,Time.deltaTime*3f);
+            float sway=Mathf.Sin(phase*Mathf.PI*2f)*moveBlend*(1f-sideBlend)*weight;
+            animator.bodyPosition+=playerRoot.right*(sway*bodySway*scale);
+            animator.bodyRotation=Quaternion.AngleAxis(-sway*bodySwayRoll,playerRoot.forward)*animator.bodyRotation;
         }
+
+        // หันหน้ามองทางที่กำลังไป: ปีนขึ้นมองขึ้น ไต่ข้างมองข้าง หยุดแล้วมองหินตรงหน้า
+        Vector3 wantedLook=playerRoot.forward;
+        if(requestedVelocity.sqrMagnitude>.01f)wantedLook=(playerRoot.forward*.7f+requestedVelocity.normalized).normalized;
+        lookDirection=lookDirection.sqrMagnitude<.01f?wantedLook:Vector3.Slerp(lookDirection,wantedLook,1f-Mathf.Exp(-Time.deltaTime*5f));
+        Transform head=animator.GetBoneTransform(HumanBodyBones.Head);
+        if(head && climbingPose)
+        {
+            animator.SetLookAtWeight(weight*lookWeight,.1f,.9f,0f,.6f);
+            animator.SetLookAtPosition(head.position+lookDirection*(2f*scale));
+        }
+        else animator.SetLookAtWeight(0f);
         for (int i = 0; i < 4; i++)
         {
             animator.SetIKPositionWeight(goals[i], 0); animator.SetIKRotationWeight(goals[i], 0);
@@ -221,6 +305,14 @@ public class ClimbingContactIK : MonoBehaviour
                 var foot=animator.GetBoneTransform(tips[i]);var thigh=animator.GetBoneTransform(roots[i]);var knee=animator.GetBoneTransform(mids[i]);
                 float leg=Vector3.Distance(thigh.position,knee.position)+Vector3.Distance(knee.position,foot.position);
                 Vector3 footGoal=foot.position;
+                if(jumpProgress>=0f)
+                {
+                    // ขาเหยียดตามหลังตัวตอนลอย (ช่วงถีบยังย่ออยู่ตามคลิป) แล้วเก็บกลับตอนใกล้เกาะ
+                    float extend=Mathf.Sin(Mathf.Clamp01((jumpProgress-.12f)/.88f)*Mathf.PI);
+                    Vector3 trail=thigh.position-jumpWorld*leg*.92f+playerRoot.right*((i==2?-1f:1f)*leg*.14f)-playerRoot.forward*leg*.12f;
+                    animator.SetIKPositionWeight(goals[i],weight);animator.SetIKPosition(goals[i],Vector3.Lerp(footGoal,trail,extend));
+                    continue;
+                }
                 footGoal.y=Mathf.Min(footGoal.y,thigh.position.y-leg*.48f);
                 if(sideBlend>.01f)
                 {

@@ -22,6 +22,24 @@ public class PlayerCameraController : MonoBehaviour
     [Tooltip("ขยับกล้อง/ซูมอัตโนมัติให้เห็นตัวละครเต็มตัว (PlayerCameraFraming) ClimbScene ปิดไว้เพราะมุมและระยะกล้องยึดตามฉากอาร์ต ReArt")]
     public bool useAdaptiveFraming = false;
 
+    [Header("ขอบเขตกล้องตามหน้าผา (หน่วยอาร์ต)")]
+    [Tooltip("จำกัดการเลื่อนขึ้น-ลงของกล้องให้อยู่ในช่วงของหน้าผาชั้นปัจจุบัน")]
+    public bool limitToCliff = true;
+    [Tooltip("กล้องหยุดเลื่อนลงเมื่อผู้เล่นอยู่สูงจากจุดต่ำสุดไม่ถึงค่านี้ (มาก = เห็นใต้หน้าผาน้อยลง)")]
+    public float cameraBottomMargin = 10f;
+    [Tooltip("กล้องหยุดเลื่อนขึ้นเมื่อผู้เล่นอยู่ต่ำกว่าจุดสูงสุดไม่ถึงค่านี้ (มาก = เห็นเหนือหน้าผาน้อยลง)")]
+    public float cameraTopMargin = 12f;
+
+    [Header("หมอกดำที่ปลายหน้าผา")]
+    public bool edgeFog = true;
+    public Color edgeFogColor = new Color(.02f, .02f, .04f, 1f);
+    [Tooltip("หมอกล่างเริ่มต่ำกว่าจุดต่ำสุดที่ปีนได้กี่หน่วย")]
+    public float fogBottomStart = 4f;
+    [Tooltip("หมอกบนเริ่มสูงกว่าจุดสูงสุดที่ปีนได้กี่หน่วย")]
+    public float fogTopStart = 6f;
+    [Tooltip("ระยะไล่จากใสจนมืดสนิท")]
+    public float fogFade = 12f;
+
     private float lockedPan, lockedTilt;
     private Vector3 lookTargetOffset;
 
@@ -51,6 +69,7 @@ public class PlayerCameraController : MonoBehaviour
         }
         
         InstallFraming();
+        if (edgeFog) ClimbEdgeFog.Create(this);
         RestoreGameplayCamera();
     }
 
@@ -86,7 +105,18 @@ public class PlayerCameraController : MonoBehaviour
         if (lookTarget == null) return;
 
         // ให้จุดโฟกัสตามตำแหน่งผู้เล่นเสมอ
-        lookTarget.position = transform.position + lookTargetOffset;
+        Vector3 focus = transform.position + lookTargetOffset;
+
+        // กรอบต่ำสุด-สูงสุดของกล้อง: ใกล้ปลายหน้าผากล้องหยุดเลื่อน ผู้เล่นขยับไปทางขอบจอแทน
+        ClimbableWall cliff = MapGenerator.CurrentCliff;
+        if (limitToCliff && cliff != null && !float.IsInfinity(cliff.MinClimbY) && !float.IsInfinity(cliff.MaxClimbY))
+        {
+            float min = cliff.MinClimbY + cameraBottomMargin + lookTargetOffset.y;
+            float max = cliff.MaxClimbY - cameraTopMargin + lookTargetOffset.y;
+            if (max < min) min = max = (min + max) * .5f;
+            focus.y = Mathf.Clamp(focus.y, min, max);
+        }
+        lookTarget.position = focus;
 
         bool canSway = !requireRightClick || Input.GetMouseButton(1);
 

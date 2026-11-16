@@ -3,10 +3,10 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-// หน้าต่างกำหนดจังหวะและทิศ Parry ของบอส: เลื่อนดูท่าจากมุมกล้องฉากต่อสู้ แล้วกดเลือกทิศได้เลย
-public class BossParryEditor : EditorWindow
+// หน้าต่างกำหนดจังหวะและทิศ Parry ของศัตรูทุกชนิด: เลื่อนดูท่าจากมุมกล้องฉากต่อสู้ แล้วกดเลือกทิศได้เลย
+public class EnemyParryEditor : EditorWindow
 {
-    const string SetPath = "Assets/Resources/GuardianBossSet.asset";
+    const string SelectedKey = "Ascendia.EnemyParryEditor.Set";
     const float PanelWidth = 240f;
     const float TimelineHeight = 54f;
     const float MarkerRadius = 8f;
@@ -14,10 +14,12 @@ public class BossParryEditor : EditorWindow
     static readonly Color WeaponColor = new Color(1f, 0.35f, 0.3f);
     static readonly Color SwipeColor = new Color(0.35f, 0.95f, 0.45f);
 
-    BossAnimationSet set;
+    List<EnemyAnimationSet> sets = new List<EnemyAnimationSet>();
+    int setIndex;
+    EnemyAnimationSet set;
     PreviewRenderUtility preview;
     GameObject model;
-    BladeProbe probe;
+    WeaponTipProbe probe;
     Dictionary<string, AnimationClip> clips;
 
     int moveIndex;
@@ -27,20 +29,48 @@ public class BossParryEditor : EditorWindow
     double lastTick;
     bool draggingStrike;
 
-    [MenuItem("Tools/ASCENDIA/Boss Parry Editor")]
+    [MenuItem("Tools/ASCENDIA/Enemy Parry Editor")]
     static void Open()
     {
-        GetWindow<BossParryEditor>("Boss Parry");
+        GetWindow<EnemyParryEditor>("Enemy Parry");
     }
 
     void OnEnable()
     {
         minSize = new Vector2(720f, 420f);
-        set = AssetDatabase.LoadAssetAtPath<BossAnimationSet>(SetPath);
-        if (set == null || set.model == null) return;
+        sets = AssetDatabase.FindAssets("t:EnemyAnimationSet")
+            .Select(guid => AssetDatabase.LoadAssetAtPath<EnemyAnimationSet>(AssetDatabase.GUIDToAssetPath(guid)))
+            .Where(s => s != null && s.model != null).OrderBy(s => s.name).ToList();
+
+        lastTick = EditorApplication.timeSinceStartup;
+        EditorApplication.update += Tick;
+        Undo.undoRedoPerformed += Repaint;
+
+        string remembered = EditorPrefs.GetString(SelectedKey, "");
+        int index = Mathf.Max(0, sets.FindIndex(s => s.name == remembered));
+        if (sets.Count > 0) LoadSet(index);
+    }
+
+    void OnDisable()
+    {
+        EditorApplication.update -= Tick;
+        Undo.undoRedoPerformed -= Repaint;
+        UnloadSet();
+    }
+
+    void LoadSet(int index)
+    {
+        UnloadSet();
+        setIndex = Mathf.Clamp(index, 0, sets.Count - 1);
+        set = sets[setIndex];
+        EditorPrefs.SetString(SelectedKey, set.name);
 
         clips = AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GetAssetPath(set.model)).OfType<AnimationClip>()
             .Where(c => !c.name.StartsWith("__preview")).ToDictionary(c => c.name);
+        if (set.controller != null)
+        {
+            foreach (AnimationClip clip in set.controller.animationClips) clips[clip.name] = clip;
+        }
 
         preview = new PreviewRenderUtility();
         preview.camera.clearFlags = CameraClearFlags.SolidColor;
@@ -54,21 +84,21 @@ public class BossParryEditor : EditorWindow
         preview.ambientColor = new Color(0.45f, 0.45f, 0.5f);
 
         model = preview.InstantiatePrefabInScene(set.model);
-        probe = new BladeProbe(model);
+        probe = new WeaponTipProbe(model, set.weaponMeshName, set.handBone, set.hipsBone);
 
-        lastTick = EditorApplication.timeSinceStartup;
-        EditorApplication.update += Tick;
-        Undo.undoRedoPerformed += Repaint;
+        moveIndex = 0;
         SelectStrike(0);
     }
 
-    void OnDisable()
+    void UnloadSet()
     {
-        EditorApplication.update -= Tick;
-        Undo.undoRedoPerformed -= Repaint;
-        probe?.Dispose();
-        preview?.Cleanup();
         if (set != null) AssetDatabase.SaveAssetIfDirty(set);
+        probe?.Dispose();
+        probe = null;
+        preview?.Cleanup();
+        preview = null;
+        model = null;
+        set = null;
     }
 
     void Tick()
@@ -82,21 +112,21 @@ public class BossParryEditor : EditorWindow
         Repaint();
     }
 
-    List<BossMove> Moves
+    List<EnemyMove> Moves
     {
         get
         {
-            var moves = new List<BossMove>(set.basicAttacks);
-            if (set.dance != null && !string.IsNullOrEmpty(set.dance.state)) moves.Add(set.dance);
+            var moves = new List<EnemyMove>(set.basicAttacks);
+            if (set.skill != null && !string.IsNullOrEmpty(set.skill.state)) moves.Add(set.skill);
             return moves;
         }
     }
 
-    BossMove CurrentMove
+    EnemyMove CurrentMove
     {
         get
         {
-            List<BossMove> moves = Moves;
+            List<EnemyMove> moves = Moves;
             return moves.Count > 0 ? moves[Mathf.Clamp(moveIndex, 0, moves.Count - 1)] : null;
         }
     }
@@ -105,23 +135,23 @@ public class BossParryEditor : EditorWindow
     {
         get
         {
-            BossMove move = CurrentMove;
-            return move != null && clips.TryGetValue(move.state, out AnimationClip clip) ? clip : null;
+            EnemyMove move = CurrentMove;
+            return move != null && clips != null && clips.TryGetValue(move.state, out AnimationClip clip) ? clip : null;
         }
     }
 
-    BossStrike SelectedStrike
+    EnemyStrike SelectedStrike
     {
         get
         {
-            BossMove move = CurrentMove;
+            EnemyMove move = CurrentMove;
             return move != null && selected >= 0 && selected < move.strikes.Count ? move.strikes[selected] : null;
         }
     }
 
     void SelectStrike(int index)
     {
-        BossMove move = CurrentMove;
+        EnemyMove move = CurrentMove;
         if (move == null || move.strikes.Count == 0)
         {
             selected = -1;
@@ -144,22 +174,33 @@ public class BossParryEditor : EditorWindow
         AssetDatabase.SaveAssetIfDirty(set);
     }
 
-    int AutoDirection(BossStrike strike)
+    int AutoDirection(EnemyStrike strike)
     {
         return ParryDirections.FromWeaponSwing(model.transform.rotation * strike.swing, preview.camera.transform);
     }
 
-    int FinalDirection(BossStrike strike)
+    int FinalDirection(EnemyStrike strike)
     {
         return strike.direction != ParryDirections.Auto ? strike.direction : AutoDirection(strike);
     }
 
     void OnGUI()
     {
-        if (set == null || model == null)
+        if (sets.Count == 0 || set == null || model == null)
         {
-            EditorGUILayout.HelpBox("ยังไม่มี GuardianBossSet ให้สั่ง Tools/ASCENDIA/Build Boss Animator ก่อน", MessageType.Warning);
+            EditorGUILayout.HelpBox("ยังไม่มี EnemyAnimationSet ให้สั่ง Tools/ASCENDIA/Build Enemy Animators ก่อน", MessageType.Warning);
             return;
+        }
+
+        int pickedSet = GUILayout.Toolbar(setIndex, sets.Select(s => s.name).ToArray());
+        if (pickedSet != setIndex)
+        {
+            LoadSet(pickedSet);
+            return;
+        }
+        if (set.randomDirection)
+        {
+            EditorGUILayout.HelpBox("ศัตรูตัวนี้สุ่มทิศ Parry ทุกครั้ง (Random Direction) ทิศที่ตั้งในหน้านี้จะใช้เมื่อปิดตัวเลือกนั้นในตาราง ส่วนจังหวะฟันใช้เสมอ", MessageType.Info);
         }
 
         DrawMoveTabs();
@@ -180,6 +221,7 @@ public class BossParryEditor : EditorWindow
     void DrawMoveTabs()
     {
         string[] names = Moves.Select(m => m.edited ? m.state + " *" : m.state).ToArray();
+        if (names.Length == 0) return;
         int picked = GUILayout.Toolbar(Mathf.Clamp(moveIndex, 0, names.Length - 1), names);
         if (picked == moveIndex) return;
         moveIndex = picked;
@@ -198,7 +240,7 @@ public class BossParryEditor : EditorWindow
 
     void RenderPose(float aspect)
     {
-        model.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, set.previewBossYaw, 0f));
+        model.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, set.previewYaw, 0f));
         CurrentClip.SampleAnimation(model, time * CurrentClip.length);
 
         Quaternion rotation = Quaternion.Euler(set.previewCameraEuler);
@@ -209,10 +251,10 @@ public class BossParryEditor : EditorWindow
         preview.Render(true, false);
     }
 
-    // จุดเหลืองคือที่ Hint จะโผล่ ลูกศรแดงคือทิศดาบบนจอ ลูกศรเขียวคือทิศที่ผู้เล่นต้องลาก
+    // จุดเหลืองคือที่ Hint จะโผล่ (กลางตัว) ลูกศรแดงคือทิศอาวุธบนจอ ลูกศรเขียวคือทิศที่ผู้เล่นต้องลาก
     void DrawOverlay(Rect view)
     {
-        BossStrike strike = SelectedStrike;
+        EnemyStrike strike = SelectedStrike;
         if (strike == null) return;
 
         Vector3 bodyCenter = model.transform.TransformPoint(Vector3.up * (set.modelHeight * 0.5f));
@@ -226,12 +268,12 @@ public class BossParryEditor : EditorWindow
         Handles.color = Color.yellow;
         Handles.DrawWireDisc(point, Vector3.forward, 12f, 2f);
 
-        GUI.Label(new Rect(view.x + 8f, view.yMax - 24f, 400f, 20f), "จุดเหลือง = Hint   แดง = ทิศดาบ   เขียว = ทิศที่ต้องลาก", EditorStyles.whiteLabel);
+        GUI.Label(new Rect(view.x + 8f, view.yMax - 24f, 400f, 20f), "จุดเหลือง = Hint   แดง = ทิศอาวุธ   เขียว = ทิศที่ต้องลาก", EditorStyles.whiteLabel);
     }
 
     void DrawTimeline(Rect bar)
     {
-        BossMove move = CurrentMove;
+        EnemyMove move = CurrentMove;
         if (move == null) return;
 
         Rect track = new Rect(bar.x + 14f, bar.y + 12f, bar.width - 28f, bar.height - 24f);
@@ -307,15 +349,15 @@ public class BossParryEditor : EditorWindow
 
     void MoveSelectedStrike(float newTime)
     {
-        BossStrike strike = SelectedStrike;
+        EnemyStrike strike = SelectedStrike;
         if (strike == null) return;
 
         BeginChange("Move Parry Strike");
-        BossStrike sampled = probe.MakeStrike(CurrentClip, newTime);
+        EnemyStrike sampled = probe.MakeStrike(CurrentClip, newTime);
         strike.time = newTime;
         strike.swing = sampled.swing;
 
-        BossMove move = CurrentMove;
+        EnemyMove move = CurrentMove;
         move.strikes.Sort((a, b) => a.time.CompareTo(b.time));
         selected = move.strikes.IndexOf(strike);
         time = newTime;
@@ -323,7 +365,7 @@ public class BossParryEditor : EditorWindow
 
     void DrawStrikePanel()
     {
-        BossMove move = CurrentMove;
+        EnemyMove move = CurrentMove;
         if (move == null) return;
 
         GUILayout.Label(move.state + $"   {move.length:0.00} วินาที", EditorStyles.boldLabel);
@@ -339,7 +381,7 @@ public class BossParryEditor : EditorWindow
         }
 
         GUILayout.Space(10f);
-        BossStrike strike = SelectedStrike;
+        EnemyStrike strike = SelectedStrike;
         if (strike != null)
         {
             using (new GUILayout.HorizontalScope())
@@ -381,8 +423,8 @@ public class BossParryEditor : EditorWindow
     void AddStrikeAtCursor()
     {
         BeginChange("Add Parry Strike");
-        BossMove move = CurrentMove;
-        BossStrike strike = probe.MakeStrike(CurrentClip, time);
+        EnemyMove move = CurrentMove;
+        EnemyStrike strike = probe.MakeStrike(CurrentClip, time);
         move.strikes.Add(strike);
         move.strikes.Sort((a, b) => a.time.CompareTo(b.time));
         selected = move.strikes.IndexOf(strike);
@@ -400,8 +442,8 @@ public class BossParryEditor : EditorWindow
     void ResetMove()
     {
         Undo.RecordObject(set, "Reset Parry Move");
-        BossMove move = CurrentMove;
-        move.strikes = AscendiaBuildBossAnimator.MakeMove(probe, CurrentClip).strikes;
+        EnemyMove move = CurrentMove;
+        move.strikes = AscendiaBuildEnemyAnimators.MakeMove(probe, CurrentClip).strikes;
         move.edited = false;
         SelectStrike(0);
         Commit();

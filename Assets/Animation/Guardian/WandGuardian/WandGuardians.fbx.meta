@@ -7,6 +7,11 @@ ModelImporter:
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
+      name: BladeGuard_eye
+    second: {fileID: 2100000, guid: 61ba666c839444acbc5e9cd9cc41df64, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
       name: BladeGuard_skin
     second: {fileID: 2100000, guid: b3fc54b4e1e4465fa9217fbe28137970, type: 2}
   - first:
@@ -14,11 +19,6 @@ ModelImporter:
       assembly: UnityEngine.CoreModule
       name: WandGuard_armor
     second: {fileID: 2100000, guid: c891175c9191425d8cfc9762c616c938, type: 2}
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: BladeGuard_eye
-    second: {fileID: 2100000, guid: 61ba666c839444acbc5e9cd9cc41df64, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
@@ -236,7 +236,7 @@ ModelImporter:
       cycleOffset: 0
       loop: 0
       hasAdditiveReferencePose: 0
-      loopTime: 0
+      loopTime: 1
       loopBlend: 0
       loopBlendOrientation: 0
       loopBlendPositionY: 0

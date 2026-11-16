@@ -61,6 +61,14 @@ public static class ParryDirections
         return new Vector2(Vector3.Dot(worldDirection, view.right), Vector3.Dot(worldDirection, view.up));
     }
 
+    // ทิศบนจอจากจุดหนึ่งไปอีกจุด (ใช้เป็นทิศที่โดนของการยิง/กระสุน)
+    public static Vector2 ScreenDirection(Vector3 from, Vector3 to, Transform view)
+    {
+        if (view == null) return Vector2.right;
+        Vector2 direction = ToScreen(to - from, view);
+        return direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector2.right;
+    }
+
     // ผู้เล่นต้องลากสวนทิศอาวุธ: อาวุธฟาดลง ผู้เล่นลากขึ้น
     public static int FromWeaponSwing(Vector3 worldSwing, Transform view)
     {

@@ -10,6 +10,8 @@ public class ClimbableWall : MonoBehaviour
 
     [Tooltip("ราก Mesh ที่ใช้เป็นพื้นผิวปีน (ว่าง = ทั้งไทล์)")]
     public Transform surfaceRoot;
+    [Tooltip("Collider ผิวปีนที่กำหนดเอง (ลูก ClimbCollider สร้างด้วย Tools/ASCENDIA/Build Climb Colliders หรือวางเองก็ได้) มีแล้วจะไม่สร้าง MeshCollider จากหินอาร์ต")]
+    public Transform colliderRoot;
     [Tooltip("กล่องขอบเขตการปีน (วางราบกับหน้าผา) ใช้จำกัดซ้าย-ขวาและเป็นทิศที่ผู้ปีนหันเข้าหา")]
     public BoxCollider bounds;
 
@@ -32,19 +34,39 @@ public class ClimbableWall : MonoBehaviour
     private void Awake()
     {
         Transform root = surfaceRoot != null ? surfaceRoot : transform;
-        foreach (MeshFilter mf in root.GetComponentsInChildren<MeshFilter>())
-        {
-            MeshRenderer mr = mf.GetComponent<MeshRenderer>();
-            if (mf.sharedMesh == null || mr == null || !mr.enabled) continue;
 
-            MeshCollider mc = mf.GetComponent<MeshCollider>();
-            if (mc == null) mc = mf.gameObject.AddComponent<MeshCollider>();
-            mc.sharedMesh = mf.sharedMesh;
-            mf.gameObject.tag = WallTag;
+        // Collider ที่ตั้งไว้เองใน Prefab มาก่อน (ชนิดไหนก็ได้ ที่ไม่ใช่ Trigger): ใช้เป็นผิวปีนตามนั้นเลย
+        bool hasAuthored = false;
+        foreach (Transform authoredRoot in new[] { colliderRoot, root })
+        {
+            if (authoredRoot == null || hasAuthored) continue;
+            foreach (Collider authored in authoredRoot.GetComponentsInChildren<Collider>())
+            {
+                if (authored == bounds || authored.isTrigger || !authored.enabled) continue;
+                authored.gameObject.tag = WallTag;
+                hasAuthored = true;
+            }
+        }
+
+        // ไม่มี: สร้าง MeshCollider จาก Mesh ที่มองเห็นทุกชิ้น
+        if (!hasAuthored)
+        {
+            foreach (MeshFilter mf in root.GetComponentsInChildren<MeshFilter>())
+            {
+                MeshRenderer mr = mf.GetComponent<MeshRenderer>();
+                if (mf.sharedMesh == null || mr == null || !mr.enabled) continue;
+
+                MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
+                mc.sharedMesh = mf.sharedMesh;
+                mf.gameObject.tag = WallTag;
+            }
         }
 
         // กล่องขอบเขตไม่ใช่ผิวปีน: เป็น Trigger ไม่ให้ขวางตัวผู้เล่น และไม่ติดแท็ก Wall (รังสีหาผิวจะข้ามไป)
         if (bounds != null) bounds.isTrigger = true;
+
+        // แร่/ดอกไม้ของอาร์ตในหน้าผานี้กลายเป็นของเก็บ (สุ่มว่าชิ้นไหนโผล่)
+        if (GetComponent<CliffArtPickups>() == null) gameObject.AddComponent<CliffArtPickups>().Setup(this);
     }
 
     // ตัดก้าว step ให้ตำแหน่งไม่ออกนอกความกว้างของกล่อง (แกน X ของกล่อง) คืนก้าวที่ย่อแล้ว

@@ -2616,6 +2616,7 @@ MonoBehaviour:
   wallMaxNormalY: 0.6
   maxStepHeight: 1.6
   maxStepDown: 3
+  groundProbeRadius: 0.5
   moveAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!114 &864942014
 MonoBehaviour:
@@ -2663,6 +2664,12 @@ MonoBehaviour:
   upwardSpeedMultiplier: 0.3
   downwardSpeedMultiplier: 0.4
   climbAcceleration: 28.57
+  climbDeceleration: 25
+  jumpDistance: 5
+  jumpDuration: 0.35
+  jumpStaminaCost: 12
+  jumpMaxStaminaCost: 5
+  jumpCooldown: 0.45
   minSpeedMultiplier: 0.4
   followSurface: 1
   surfaceOffset: 1.714
@@ -2672,6 +2679,7 @@ MonoBehaviour:
   surfaceFollowSharpness: 10
   surfaceTurnSharpness: 8
   maxSurfaceAngle: 70
+  surfaceNormalSharpness: 12
 --- !u!114 &864942017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2700,7 +2708,7 @@ MonoBehaviour:
   walkCam: {fileID: 1849588010}
   climbCam: {fileID: 1737665397}
   lookTarget: {fileID: 1399366460}
-  cameraSwayAmount: 0
+  cameraSwayAmount: 1
   cameraSwaySpeed: 5
   mouseSensitivity: 3
   requireRightClick: 1
@@ -2708,6 +2716,14 @@ MonoBehaviour:
   fixedClimbPan: 1
   climbPan: 50
   useAdaptiveFraming: 0
+  limitToCliff: 1
+  cameraBottomMargin: 10
+  cameraTopMargin: 12
+  edgeFog: 1
+  edgeFogColor: {r: 0.02, g: 0.02, b: 0.04, a: 1}
+  fogBottomStart: 4
+  fogTopStart: 6
+  fogFade: 12
 --- !u!114 &864942019
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2789,13 +2805,19 @@ MonoBehaviour:
   landingRadius: 1.2
   landingHeightTolerance: 0.8
   clearanceRadius: 1
+  standInset: 0.9
+  ledgeSearchDepth: 2.5
+  ledgeSearchStep: 0.25
   pullDuration: 0.75
   stepDuration: 0.6
   settleDuration: 0.2
+  mantleSpeed: 1.35
   pullClimbRate: 1.3
   gripHalfWidth: 0.85
   climbDownDrop: 2.5
   climbDownDuration: 0.5
+  standDownReach: 0.5
+  standDownDuration: 0.3
 --- !u!1 &874994729
 GameObject:
   m_ObjectHideFlags: 0
@@ -5325,6 +5347,9 @@ MonoBehaviour:
   maxBodyPitch: 35
   bodyPitchSharpness: 8
   footClearance: 0.06
+  bodySway: 0.035
+  bodySwayRoll: 3
+  lookWeight: 0.55
   contactSmoothTime: 0.08
   phaseOffset: 0
   pullRhythm: 0.35
@@ -8279,7 +8304,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -12675,7 +12700,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.16393735, g: 0.19611321, b: 0.2830189, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -12790,6 +12815,7 @@ MonoBehaviour:
   metersPerFloor: 100
   barSpeed: 10
   weightColor: {r: 1, g: 0.55, b: 0.15, a: 0.85}
+  fatigueColor: {r: 0.28, g: 0.05, b: 0.08, a: 0.95}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

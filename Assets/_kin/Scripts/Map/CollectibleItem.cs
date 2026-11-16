@@ -10,6 +10,8 @@ public class CollectibleItem : MonoBehaviour
     [Header("Behavior (พฤติกรรม)")]
     [Tooltip("ติ๊กถูกถ้าเป็นสมุนไพร (เก็บปุ๊บใช้งานทันทีไม่ต้องเข้ากระเป๋า)")]
     public bool useImmediately = false; 
+    [Tooltip("สมุนไพรลดความเหนื่อยเท่าไร (คืน Stamina สูงสุด)")]
+    public float fatigueCure = 8f;
     public float staminaRestoreAmount = 10f; // ถ้าเป็นสมุนไพร จะให้ฟื้นฟูเท่าไหร่
 
     [Header("UI Prompt")]
@@ -17,7 +19,11 @@ public class CollectibleItem : MonoBehaviour
     public GameObject promptUI; 
 
     [Header("Effects")]
-    public GameObject collectEffect; 
+    public GameObject collectEffect;
+    [Tooltip("ประกายอ่อน ๆ รอบของ บอกผู้เล่นว่าเก็บได้")]
+    public bool showSparkle = true;
+    public Color gemSparkleColor = new Color(1f, .95f, .7f);
+    public Color herbSparkleColor = new Color(.65f, 1f, .7f);
 
     private bool isPlayerNearby = false;
 
@@ -25,6 +31,22 @@ public class CollectibleItem : MonoBehaviour
     {
         // เริ่มเกมมา ให้ซ่อนปุ่ม E ไว้ก่อน
         if (promptUI != null) promptUI.SetActive(false);
+
+        if (showSparkle)
+        {
+            // วางตรงกลางโมเดลที่มองเห็น (โมเดลของอาร์ตอาจอยู่เยื้องจากจุดกดเก็บ)
+            bool found = false;
+            Bounds bounds = default;
+            foreach (Renderer renderer in GetComponentsInChildren<Renderer>())
+            {
+                if (!renderer.enabled || renderer is ParticleSystemRenderer) continue;
+                if (!found) { bounds = renderer.bounds; found = true; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+            Vector3 center = found ? bounds.center : transform.position;
+            float radius = found ? Mathf.Clamp(bounds.extents.magnitude * .6f, .5f, 1.6f) : .8f;
+            SoftGlow.Sparkle(transform, center, useImmediately ? herbSparkleColor : gemSparkleColor, radius);
+        }
     }
 
     private void OnTriggerEnter(Collider other)
@@ -67,7 +89,8 @@ public class CollectibleItem : MonoBehaviour
             {
                 PlayerData data = GameManager.Instance.playerData;
                 // บวก Stamina และบังคับไม่ให้เกิน Max
-                data.stamina = Mathf.Min(data.maxStamina, data.stamina + staminaRestoreAmount);
+                data.AddFatigue(-fatigueCure);
+                data.stamina = Mathf.Min(data.EffectiveMaxStamina, data.stamina + staminaRestoreAmount);
                 
                 Debug.Log($"🌿 ใช้งาน {itemData.itemName} ทันที! (ฟื้นฟู Stamina +{staminaRestoreAmount})");
                 success = true; // ถือว่าใช้งานสำเร็จ

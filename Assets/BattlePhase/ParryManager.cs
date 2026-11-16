@@ -66,6 +66,10 @@ public class ParryManager : MonoBehaviour
     private bool isStrikeResolved = false;
     private bool isParrySlowActive = false;
 
+    // ผลของจังหวะล่าสุด ให้ศัตรูที่คุมเทิร์นเอง (เช่นกระสุน) ตัดสินใจต่อ
+    public bool LastStrikeParried { get; private set; }
+    public Vector2 LastSwipeDirection { get; private set; } = Vector2.right;
+
     private void Awake()
     {
         Instance = this;
@@ -221,6 +225,7 @@ public class ParryManager : MonoBehaviour
     public IEnumerator PlayStrike(ParryStrike strike, int turnNumber)
     {
         requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
+        LastStrikeParried = false;
         currentHintAngle = Mathf.Atan2(requiredDirection.y, requiredDirection.x) * Mathf.Rad2Deg;
 
         // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ) ช่วงท้ายโชว์ Hint จังหวะ 1 สั้น ๆ ให้ผู้เล่นเตรียมตัวก่อนบอกทิศ
@@ -403,6 +408,8 @@ public class ParryManager : MonoBehaviour
         isAwaitingInput = false;
         ClearHint();
         EndParrySlow();
+        LastStrikeParried = true;
+        LastSwipeDirection = swipeScreenDirection.sqrMagnitude > 0.0001f ? swipeScreenDirection.normalized : requiredDirection;
 
         if (PlayerBattleAnimator.Instance != null) PlayerBattleAnimator.Instance.PlayParry();
 
@@ -419,7 +426,7 @@ public class ParryManager : MonoBehaviour
         if (isSpellActive)
         {
             int smallPosture = Mathf.RoundToInt(currentPostureDamage * 0.4f);
-            attackingEnemy.TakePostureDamage(smallPosture);
+            attackingEnemy.TakePostureDamage(smallPosture, LastSwipeDirection);
 
             // แปะดีบัฟเพิ่มความเสียหายที่ศัตรูได้รับ (สมมติมีฟังก์ชัน ApplyVulnerabilityDebuff บน EnemyController)
             // attackingEnemy.ApplyVulnerabilityDebuff(1.25f, 2); // รับดาเมจเพิ่ม 25% เป็นเวลา 2 เทิร์น
@@ -431,7 +438,7 @@ public class ParryManager : MonoBehaviour
         }
         else
         {
-            attackingEnemy.TakePostureDamage(currentPostureDamage);
+            attackingEnemy.TakePostureDamage(currentPostureDamage, LastSwipeDirection);
             if (PlayerCombatController.Instance != null)
             {
                 PlayerCombatController.Instance.AddComboStack(1);
@@ -472,7 +479,8 @@ public class ParryManager : MonoBehaviour
         Debug.Log($"<color=red>PARRY FAILED ({reason}) - Took {incomingDamage} Damage!</color>");
         CameraShakeManager.TryShake(0.8f);
 
-        // รับดาเมจเข้าตัว/อาวุธผู้เล่น[cite: 6]
-        CombatManager.Instance.player.TakeDamage(incomingDamage);
+        // รับดาเมจเข้าตัว/อาวุธผู้เล่น ท่าเจ็บไปทางเดียวกับอาวุธศัตรู (สวนกับทิศที่ต้องลาก)
+        LastStrikeParried = false;
+        CombatManager.Instance.player.TakeDamage(incomingDamage, -requiredDirection);
     }
 }

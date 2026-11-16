@@ -11,6 +11,8 @@ public class PlayerPenaltySystem : MonoBehaviour
 
     private PlayerStateManager stateManager;
     private PlayerCameraController camController;
+    // เวลาที่ออกแรงต่อเนื่อง พักแล้วค่อย ๆ ลด
+    private float exertionTime;
 
     private void Awake()
     {
@@ -28,13 +30,20 @@ public class PlayerPenaltySystem : MonoBehaviour
             if (v != 0)
             {
                 DrainStamina();
+
+                // ปีนไม่หยุดนานเกิน fatigueDelay: เริ่มเหนื่อย Stamina สูงสุดค่อย ๆ ลด
+                PlayerData climbing = GameManager.Instance.playerData;
+                exertionTime += Time.deltaTime;
+                if (exertionTime > climbing.fatigueDelay) climbing.AddFatigue(climbing.fatigueRate * Time.deltaTime);
             }
+            else exertionTime = Mathf.Max(0f, exertionTime - Time.deltaTime * 2f);
         }
         else if (stateManager.currentState == PlayerStateManager.State.Walking)
         {
             // ยืน/เดินบนพื้นเรียบ: ฟื้น Stamina
             PlayerData data = GameManager.Instance.playerData;
-            data.stamina = Mathf.Min(data.maxStamina, data.stamina + data.staminaRegenOnGround * Time.deltaTime);
+            data.stamina = Mathf.Min(data.EffectiveMaxStamina, data.stamina + data.staminaRegenOnGround * Time.deltaTime);
+            exertionTime = Mathf.Max(0f, exertionTime - Time.deltaTime * 2f);
         }
     }
 
@@ -62,7 +71,8 @@ public class PlayerPenaltySystem : MonoBehaviour
         yield return StartCoroutine(FadeScreen(1f, 1f));
 
         GameManager.Instance.UsePiton();
-        GameManager.Instance.playerData.stamina = GameManager.Instance.playerData.maxStamina;
+        GameManager.Instance.playerData.stamina = GameManager.Instance.playerData.EffectiveMaxStamina;
+        exertionTime = 0f;
         
         if (pitonUI != null) 
         {

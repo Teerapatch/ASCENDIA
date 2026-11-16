@@ -10,9 +10,11 @@ public class ClimbArtUI : MonoBehaviour
     public float metersPerFloor = 100f;
     public float barSpeed = 10f;
     public Color weightColor = new Color(1f, 0.55f, 0.15f, 0.85f);
+    public Color fatigueColor = new Color(.28f, .05f, .08f, .95f);
 
     private TextMeshProUGUI heightText;
-    private Image staminaFill, weightFill;
+    private Image staminaFill, weightFill, fatigueFill;
+    private float shownFatigue;
     private RectTransform staminaRoot;
     private GameObject[] pitonLost;
     private Transform player;
@@ -34,6 +36,18 @@ public class ClimbArtUI : MonoBehaviour
         weight.transform.SetSiblingIndex(staminaFill.transform.GetSiblingIndex());
         weightFill = weight.GetComponent<Image>();
         weightFill.color = weightColor;
+
+        // ความเหนื่อยกินแถบจากปลายอีกด้าน ส่วนที่ถูกทับคือ Stamina สูงสุดที่เสียไป
+        GameObject fatigue = Instantiate(staminaFill.gameObject, stamina);
+        fatigue.name = "FatigueFill";
+        fatigue.transform.SetSiblingIndex(staminaFill.transform.GetSiblingIndex() + 1);
+        fatigueFill = fatigue.GetComponent<Image>();
+        fatigueFill.color = fatigueColor;
+        // แถบ Stamina เป็นแนวนอนเติมจากซ้าย ความเหนื่อยจึงเติมจากขวาเข้ามา
+        fatigueFill.type = Image.Type.Filled;
+        fatigueFill.fillMethod = Image.FillMethod.Horizontal;
+        fatigueFill.fillOrigin = (int)Image.OriginHorizontal.Right;
+        fatigueFill.fillAmount = 0f;
 
         BindPitons();
         BindMap();
@@ -112,6 +126,8 @@ public class ClimbArtUI : MonoBehaviour
         shownWeight = Mathf.Lerp(shownWeight, data.weight, t);
         staminaFill.fillAmount = Mathf.Clamp01(shownStamina / data.maxStamina);
         weightFill.fillAmount = Mathf.Clamp01((shownStamina + shownWeight) / data.maxStamina);
+        shownFatigue = Mathf.Lerp(shownFatigue, data.maxStamina - data.EffectiveMaxStamina, t);
+        fatigueFill.fillAmount = Mathf.Clamp01(shownFatigue / data.maxStamina);
 
         for (int i = 0; i < pitonLost.Length; i++) pitonLost[i].SetActive(i >= data.piton);
 

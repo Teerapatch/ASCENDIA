@@ -77,13 +77,25 @@ public static class AscendiaBuildBattleAnimators
                 SceneManager.MoveGameObjectToScene(instance, scene);
 
                 var impacts = new Dictionary<string, List<float>>();
+                var tracks = new Dictionary<string, Vector3[]>();
                 report.AppendLine($"== {source.name} ({clips.Count} clips)");
                 foreach (var pair in clips)
                 {
-                    impacts[pair.Key] = FindHits(instance, pair.Value, source.weaponMesh, report);
+                    impacts[pair.Key] = FindHits(instance, pair.Value, source.weaponMesh, report, tracks);
                 }
                 AimInfo aim = source.weaponMesh == "Gun" && clips.ContainsKey(AimClip) ? FindAim(instance, clips[AimClip], source.weaponMesh, impacts[AimClip], report) : null;
                 AvatarMask upperMask = aim != null ? BuildUpperMask(instance, ControllerFolder + "/GunUpper.mask") : null;
+                // ท่าเจ็บมาจาก FBX พื้นฐาน ใช้ได้ต่อเมื่อกระดูกส่วนใหญ่ตรงกับโมเดลอาวุธนี้
+                string hurtState = null;
+                AnimationClip hurt = LoadHurtClip();
+                if (hurt != null)
+                {
+                    EditorCurveBinding[] bindings = AnimationUtility.GetCurveBindings(hurt);
+                    int resolved = bindings.Count(b => string.IsNullOrEmpty(b.path) || instance.transform.Find(b.path) != null);
+                    float ratio = bindings.Length > 0 ? (float)resolved / bindings.Length : 0f;
+                    report.AppendLine($"  Hurt bindings {resolved}/{bindings.Length} ({ratio:P0})");
+                    if (ratio >= 0.8f) { clips[HurtClipName] = hurt; hurtState = HurtClipName; }
+                }
                 Object.DestroyImmediate(instance);
 
                 string controllerPath = $"{ControllerFolder}/{source.name}.controller";
@@ -93,7 +105,8 @@ public static class AscendiaBuildBattleAnimators
                     model = model,
                     controller = BuildController(controllerPath, clips),
                     idleState = IdleClip,
-                    attack = MakeClip("Attack", impacts, source.melee),
+                    hurtState = hurtState,
+                    attack = MakeClip("Attack", impacts, tracks, source.melee),
                     parries = clips.Keys.Where(k => k.StartsWith("Parry")).OrderBy(k => k).ToList()
                 };
                 if (aim != null)
@@ -113,7 +126,7 @@ public static class AscendiaBuildBattleAnimators
                 {
                     string clip = clips.ContainsKey(entry.clip) ? entry.clip : "Attack";
                     if (clip != entry.clip) report.AppendLine($"  skill {entry.skill}: missing {entry.clip}, using Attack");
-                    data.skills.Add(new BattleSkillClip { skillName = entry.skill, clip = MakeClip(clip, impacts, source.melee && entry.strike) });
+                    data.skills.Add(new BattleSkillClip { skillName = entry.skill, clip = MakeClip(clip, impacts, tracks, source.melee && entry.strike) });
                 }
                 set.weapons.Add(data);
             }
@@ -140,7 +153,15 @@ public static class AscendiaBuildBattleAnimators
         { "ExecutSkill", (new[] { 0.47f }, 1f) },
     };
 
-    static BattleClip MakeClip(string state, Dictionary<string, List<float>> found, bool melee)
+    const string HurtClipName = "Hurt";
+    const string BasicAnimPath = "Assets/Animation/Player/Basic/Player_BasicAnim_V2.fbx";
+
+    static AnimationClip LoadHurtClip()
+    {
+        return AssetDatabase.LoadAllAssetsAtPath(BasicAnimPath).OfType<AnimationClip>().FirstOrDefault(c => c.name == HurtClipName);
+    }
+
+    static BattleClip MakeClip(string state, Dictionary<string, List<float>> found, Dictionary<string, Vector3[]> tracks, bool melee)
     {
         List<float> hits = found.TryGetValue(state, out List<float> list) ? new List<float>(list) : new List<float> { 0.5f };
         float speed = 1f;
@@ -149,11 +170,22 @@ public static class AscendiaBuildBattleAnimators
             if (value.hits != null) hits = value.hits.ToList();
             speed = value.speed;
         }
-        return new BattleClip { state = state, impact = hits[0], hits = hits, speed = speed, melee = melee };
+        // ทิศที่ปลายอาวุธเคลื่อนตอนโดน ใช้กำหนดทิศท่าเจ็บของศัตรู
+        var swings = new List<Vector3>();
+        if (tracks.TryGetValue(state, out Vector3[] track) && track.Length > 2)
+        {
+            int frames = track.Length - 1;
+            foreach (float t in hits)
+            {
+                int i = Mathf.Clamp(Mathf.RoundToInt(t * frames), 1, frames - 1);
+                swings.Add((track[i + 1] - track[i - 1]).normalized);
+            }
+        }
+        return new BattleClip { state = state, impact = hits[0], hits = hits, swings = swings, speed = speed, melee = melee };
     }
 
     // จังหวะฟันแต่ละครั้ง = ช่วงที่ปลายอาวุธเคลื่อนเร็วสุด โดยต้องมีช่วงช้าลงคั่นจึงนับเป็นคนละครั้ง
-    static List<float> FindHits(GameObject instance, AnimationClip clip, string weaponMesh, StringBuilder report)
+    static List<float> FindHits(GameObject instance, AnimationClip clip, string weaponMesh, StringBuilder report, Dictionary<string, Vector3[]> tracks)
     {
         Transform hips = Find(instance, "DEF-spine");
         Transform handR = Find(instance, "DEF-hand.R");
@@ -185,6 +217,7 @@ public static class AscendiaBuildBattleAnimators
             position[i] = point - hips.position;
         }
         Object.DestroyImmediate(baked);
+        tracks[clip.name] = position;
 
         var speed = new float[frames + 1];
         for (int i = 1; i <= frames; i++) speed[i] = (position[i] - position[i - 1]).magnitude * 60f;

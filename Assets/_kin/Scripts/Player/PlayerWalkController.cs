@@ -18,6 +18,8 @@ public class PlayerWalkController : MonoBehaviour
     public float wallMaxNormalY = .6f;
     public float maxStepHeight = 1.6f;
     public float maxStepDown = 3f;
+    [Tooltip("รัศมีฝ่าเท้าที่ใช้ตรวจพื้น (ตรวจกลางตัว + 4 จุดรอบ ๆ)")]
+    public float groundProbeRadius = .5f;
 
     [Header("Input Configuration")]
     public InputActionReference moveAction; // 🌟 2. สร้างช่องรับค่า Action จาก Inspector
@@ -113,8 +115,31 @@ public class PlayerWalkController : MonoBehaviour
     private bool FindGround(Vector3 at, float half, out float groundY)
     {
         groundY = 0f;
-        if (!ClimbableWall.Raycast(at + Vector3.up * .5f, Vector3.down, .5f + half + maxStepDown, out RaycastHit hit) || hit.normal.y < walkableNormalY) return false;
-        groundY = hit.point.y;
+        float length = .5f + half + maxStepDown;
+
+        // ใต้กลางตัวเรียบพอ: ยืนตรงนั้นเลย
+        if (GroundAt(at, length, out float centerY)) { groundY = centerY; return true; }
+
+        // กลางตัวตกบนเหลี่ยมหินหรือร่องเล็ก ๆ: ถ้ารอบเท้ามีพื้นเรียบอย่างน้อย 3 จาก 4 จุดก็ยังยืนได้
+        int good = 0;
+        float sum = 0f;
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 offset = Quaternion.Euler(0f, 45f + i * 90f, 0f) * Vector3.forward * groundProbeRadius;
+            if (!GroundAt(at + offset, length, out float y)) continue;
+            sum += y;
+            good++;
+        }
+        if (good < 3) return false;
+        groundY = sum / good;
+        return true;
+    }
+
+    private bool GroundAt(Vector3 at, float length, out float y)
+    {
+        y = 0f;
+        if (!ClimbableWall.Raycast(at + Vector3.up * .5f, Vector3.down, length, out RaycastHit hit) || hit.normal.y < walkableNormalY) return false;
+        y = hit.point.y;
         return true;
     }
 

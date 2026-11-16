@@ -46,8 +46,11 @@ public class ClimbingHandRig : MonoBehaviour
     }
     bool mantleActive; Vector3 mantleLeft, mantleRight; float mantleWeight;
     // ระหว่างท่าขึ้นขอบ PlayerLedgeMantle เป็นคนกำหนดจุดจับ
-    public void SetMantleGrip(Vector3 left, Vector3 right, float weight){mantleActive=true;mantleLeft=left;mantleRight=right;mantleWeight=weight;}
-    public void ClearMantleGrip(){mantleActive=false;mantleWeight=0;}
+    public void SetMantleGrip(Vector3 left, Vector3 right, float weight){reaching=false;mantleActive=true;mantleLeft=left;mantleRight=right;mantleWeight=weight;}
+    public void ClearMantleGrip(){mantleActive=false;mantleWeight=0;reaching=false;}
+    // กระโดดเร่ง: ปล่อยมือจากหินแล้วเหยียดแขนทั้งสองไปทาง direction
+    bool reaching; Vector3 reachDirection;
+    public void SetReach(Vector3 direction, float weight){mantleActive=true;reaching=true;reachDirection=direction.normalized;mantleWeight=weight;}
     float traversePhase;
     void Update()
     {
@@ -58,7 +61,7 @@ public class ClimbingHandRig : MonoBehaviour
             {
                 var h=hands[i];
                 h.length=Vector3.Distance(h.shoulder.position,h.elbow.position)+Vector3.Distance(h.elbow.position,h.wrist.position);
-                h.target.position=i==0?mantleLeft:mantleRight;
+                h.target.position=reaching?h.shoulder.position+reachDirection*h.length*.93f:(i==0?mantleLeft:mantleRight);
                 h.hint.position=h.shoulder.position+source.playerRoot.right*(i==0?-.35f:.35f)*h.length-source.playerRoot.forward*h.length*.25f;
                 h.constraint.weight=Mathf.MoveTowards(h.constraint.weight,mantleWeight,Time.deltaTime*8);
                 h.planted=false;

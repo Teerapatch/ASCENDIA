@@ -12,6 +12,8 @@ public class BattleClip
     public float impact = 0.5f;
     [Tooltip("จังหวะที่อาวุธโดนแต่ละครั้ง (สัดส่วนของคลิป) ดาเมจจะถูกแบ่งตามจำนวนนี้")]
     public List<float> hits = new List<float>();
+    [Tooltip("ทิศที่ปลายอาวุธเคลื่อนในแต่ละจังหวะโดน (พื้นที่ของโมเดล) ใช้กำหนดทิศท่าเจ็บของศัตรู")]
+    public List<Vector3> swings = new List<Vector3>();
     [Tooltip("ความเร็วเล่นคลิป")]
     public float speed = 1f;
     [Tooltip("พุ่งเข้าไปตีถึงตัวศัตรู")]
@@ -35,6 +37,8 @@ public class BattleWeaponAnimation
     public BattleClip attack;
     public List<BattleSkillClip> skills = new List<BattleSkillClip>();
     public List<string> parries = new List<string>();
+    [Tooltip("ท่าเจ็บ (จาก Player_BasicAnim_V2 ถ้ากระดูกตรงกัน) เว้นว่าง = สะดุ้งอย่างเดียว")]
+    public string hurtState;
 
     [Header("Free Aim (เว้นว่าง = อาวุธนี้ไม่มีท่าเล็ง)")]
     public string aimState;

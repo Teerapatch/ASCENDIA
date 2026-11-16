@@ -19,6 +19,25 @@ public class PlayerData : ScriptableObject
     [Tooltip("ฟื้น Stamina ต่อวินาทีตอนยืน/เดินบนพื้นเรียบ")]
     public float staminaRegenOnGround = 20f;
 
+    [Header("ความเหนื่อย (ใช้ Stamina ต่อเนื่องนานแล้ว Stamina สูงสุดลดลง)")]
+    [Tooltip("Stamina สูงสุดที่ถูกความเหนื่อยกินไปตอนนี้")]
+    public float fatigue = 0f;
+    [Tooltip("ออกแรงต่อเนื่องเกินกี่วินาทีจึงเริ่มเหนื่อย")]
+    public float fatigueDelay = 4f;
+    [Tooltip("เหนื่อยแล้ว Stamina สูงสุดลดวินาทีละเท่าไร")]
+    public float fatigueRate = 2f;
+    [Range(0f, .9f), Tooltip("ความเหนื่อยกิน Stamina สูงสุดได้มากสุดกี่ส่วน")]
+    public float maxFatigueRatio = .5f;
+
+    // Stamina สูงสุดที่ใช้ได้จริงตอนนี้
+    public float EffectiveMaxStamina => maxStamina - Mathf.Clamp(fatigue, 0f, maxStamina * maxFatigueRatio);
+
+    public void AddFatigue(float amount)
+    {
+        fatigue = Mathf.Clamp(fatigue + amount, 0f, maxStamina * maxFatigueRatio);
+        stamina = Mathf.Min(stamina, EffectiveMaxStamina);
+    }
+
     [Header("Weapon System (DUR)")]
     public float maxWeaponDUR = 100f;
     public float currentWeaponDUR = 100f;
@@ -124,6 +143,7 @@ public class PlayerData : ScriptableObject
 
     public void ResetData()
     {
+        fatigue = 0f;
         stamina = maxStamina;
         inventorySlots.Clear();
         gemStone = 0;

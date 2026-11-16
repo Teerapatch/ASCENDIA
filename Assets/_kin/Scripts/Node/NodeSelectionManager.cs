@@ -539,6 +539,7 @@ public class NodeSelectionManager : MonoBehaviour
                 if (GameManager.Instance != null && GameManager.Instance.playerData != null)
                 {
                     PlayerData data = GameManager.Instance.playerData;
+                    data.fatigue = 0f; // พักแล้วหายเหนื่อย
                     data.stamina = Mathf.Min(data.maxStamina, data.stamina + node.staminaRestore);
                     Debug.Log($"🔥 [Trigger: Rest] พักผ่อนฟื้นฟู Stamina +{node.staminaRestore}");
                 }
