@@ -190,6 +190,7 @@ public class ParryManager : MonoBehaviour
     public void StartParrySequence(EnemyAttackPattern pattern, EnemyController attacker)
     {
         attackingEnemy = attacker;
+        FrameAttacker(attacker);
         StartCoroutine(PlaySequenceRoutine(pattern));
     }
 
@@ -289,6 +290,16 @@ public class ParryManager : MonoBehaviour
     public void BeginCustomAttack(EnemyController attacker)
     {
         attackingEnemy = attacker;
+        FrameAttacker(attacker);
+    }
+
+    // เทิร์นศัตรู: กล้องถ่ายผ่านไหล่ผู้เล่นไปหาตัวที่กำลังโจมตี
+    private static void FrameAttacker(EnemyController attacker)
+    {
+        if (attacker != null && BattleCameraController.Instance != null) BattleCameraController.Instance.FrameEnemyTurn(attacker.transform);
+        // ผู้เล่นหันหน้าเข้าหาศัตรูตัวที่กำลังจะโจมตี เตรียม Parry
+        if (attacker != null && PlayerBattleAnimator.Instance != null) PlayerBattleAnimator.Instance.FaceTarget(attacker.transform, 0.35f);
+        ParryImpactFX.ResetStreak(); // นับ PARRY xN ใหม่ทุกการโจมตีของศัตรู
     }
 
     public bool IsTurnValid(int turnNumber)
@@ -421,7 +432,6 @@ public class ParryManager : MonoBehaviour
         // Parry สำเร็จ: กล้องกระแทกตามทิศที่ลาก พร้อมเลนส์กระตุก
         Vector2 impactDirection = swipeScreenDirection.sqrMagnitude > 0.0001f ? swipeScreenDirection.normalized : Vector2.right;
         CameraShakeManager.Impact(2.2f, impactDirection);
-        if (BattleCameraController.Instance != null) BattleCameraController.Instance.Punch(5f);
 
         if (isSpellActive)
         {
@@ -463,10 +473,8 @@ public class ParryManager : MonoBehaviour
             ParryStreakUI.Instance.Play(attackingEnemy.transform, streakDir);
         }
 
-        if (HitstopManager.Instance != null)
-        {
-            HitstopManager.Instance.Freeze(0.15f);
-        }
+        // หยุดเวลา/สโลว์, แฟลช, วงแหวน, เส้นความเร็ว, PARRY!, Post FX และกล้องพุ่ง+เอียง (ParryImpactFX)
+        ParryImpactFX.Play(HintPosition(), LastSwipeDirection);
     }
 
     void FailStrike(string reason)
@@ -477,6 +485,7 @@ public class ParryManager : MonoBehaviour
         EndParrySlow();
 
         Debug.Log($"<color=red>PARRY FAILED ({reason}) - Took {incomingDamage} Damage!</color>");
+        ParryImpactFX.ResetStreak();
         CameraShakeManager.TryShake(0.8f);
 
         // รับดาเมจเข้าตัว/อาวุธผู้เล่น ท่าเจ็บไปทางเดียวกับอาวุธศัตรู (สวนกับทิศที่ต้องลาก)

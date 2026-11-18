@@ -39,6 +39,8 @@ public class SkillLoadoutPanel : MonoBehaviour
     public Color accentColor = new Color(1f, 0.84f, 0.35f);
     public Color textColor = Color.white;
     public Color mutedColor = new Color(0.72f, 0.74f, 0.8f);
+    public Color cardLockedColor = new Color(0.09f, 0.1f, 0.13f, 1f);
+    public Color lockedTextColor = new Color(0.45f, 0.47f, 0.52f);
 
     [Header("Animation")]
     public float fadeDuration = 0.15f;
@@ -140,6 +142,12 @@ public class SkillLoadoutPanel : MonoBehaviour
     {
         List<WeaponSkill> equipped = playerData.GetEquippedSkills(currentWeapon);
 
+        if (!currentWeapon.IsSkillUnlocked(skill))
+        {
+            ShowMessage($"Unlocks at Lv.{currentWeapon.SkillUnlockLevel(skill)}. Upgrade the weapon at the Forge.");
+            return;
+        }
+
         if (equipped.Contains(skill))
         {
             equipped.Remove(skill);
@@ -191,7 +199,7 @@ public class SkillLoadoutPanel : MonoBehaviour
         if (summaryText != null)
         {
             List<string> names = equipped.ConvertAll(s => s.skillName);
-            summaryText.text = $"Equipped {equipped.Count}/{WeaponData.MaxEquippedSkills}   |   " +
+            summaryText.text = $"Lv.{currentWeapon.currentLevel}   Unlocked {currentWeapon.GetUnlockedSkills().Count}/{currentWeapon.skillPool.FindAll(s => s != null).Count}   |   Equipped {equipped.Count}/{WeaponData.MaxEquippedSkills}   |   " +
                                (names.Count > 0 ? string.Join(",  ", names) : "<color=#FF8888>No skills equipped</color>");
         }
     }
@@ -224,6 +232,21 @@ public class SkillLoadoutPanel : MonoBehaviour
             card.stateText.text = isEquipped ? "EQUIPPED  (click to remove)" : "Click to equip";
             card.stateText.color = isEquipped ? accentColor : mutedColor;
             card.stateText.fontStyle = isEquipped ? FontStyles.Bold : FontStyles.Italic;
+        }
+
+        // ยังไม่ปลดล็อก: การ์ดมืด บอกเลเวลที่ต้องถึง
+        if (!currentWeapon.IsSkillUnlocked(skill))
+        {
+            if (card.background != null) card.background.color = cardLockedColor;
+            if (card.titleText != null) card.titleText.color = lockedTextColor;
+            if (card.infoText != null) card.infoText.color = lockedTextColor;
+            if (card.descriptionText != null) card.descriptionText.color = lockedTextColor;
+            if (card.stateText != null)
+            {
+                card.stateText.text = $"LOCKED  (Forge to Lv.{currentWeapon.SkillUnlockLevel(skill)})";
+                card.stateText.color = lockedTextColor;
+                card.stateText.fontStyle = FontStyles.Bold;
+            }
         }
 
         if (card.button != null)

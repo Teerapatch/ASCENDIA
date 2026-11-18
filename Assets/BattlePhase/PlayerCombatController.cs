@@ -38,6 +38,8 @@ public class PlayerCombatController : MonoBehaviour
     public GameObject crosshairUI;
     public LayerMask enemyLayer;
     private bool isAiming = false;
+    // Spell เล็งเพื่อเก็บธาตุ ไม่ชักปืน
+    private bool gunAimActive = false;
     private Camera mainCam;
 
     [Header("Target & Skill Selection")]
@@ -617,7 +619,12 @@ public class PlayerCombatController : MonoBehaviour
         ActiveWeapon = weaponData;
 
         currentWeaponIndex = inventoryWeapons.IndexOf(weaponData);
-        if (battleAnimator != null) battleAnimator.SetWeapon(ActiveWeapon.weaponType);
+        if (battleAnimator != null)
+        {
+            battleAnimator.SetWeapon(ActiveWeapon.weaponType);
+            // เทิร์นศัตรูหันไปหาตัวที่โจมตี กลับมาหันท่าประจำของฉากตอนถึงเทิร์นเรา
+            battleAnimator.ResetFacing(0.3f);
+        }
 
         actionState = PlayerActionState.ChoosingAction;
         UpdateAPUI();
@@ -692,7 +699,10 @@ public class PlayerCombatController : MonoBehaviour
         }
 
         currentAP -= switchWeaponAPCost;
+        WeaponData previous = ActiveWeapon;
         ApplyActiveWeapon(weaponIndex, duringOwnTurn: true);
+        // หน้า Turn Order: เทิร์นปัจจุบันเปลี่ยนเป็นของอาวุธที่เพิ่งสลับมา
+        if (CombatManager.Instance != null) CombatManager.Instance.SwapActiveWeaponTurn(previous, ActiveWeapon);
         ShowPopup($"SWITCH  -{switchWeaponAPCost} AP", new Color(0.6f, 0.9f, 1f));
         Debug.Log($"Switched to {ActiveWeapon.weaponName} (-{switchWeaponAPCost} AP)");
 
@@ -769,7 +779,8 @@ public class PlayerCombatController : MonoBehaviour
     {
         isAiming = true;
         if (crosshairUI != null) crosshairUI.SetActive(true);
-        if (battleAnimator != null) battleAnimator.BeginAim();
+        gunAimActive = ActiveWeapon == null || ActiveWeapon.weaponType != WeaponType.Spell;
+        if (gunAimActive && battleAnimator != null) battleAnimator.BeginAim();
         if (BattleCameraController.Instance != null) BattleCameraController.Instance.SetAimZoom(true);
         if (PlayerUIManager.Instance != null) PlayerUIManager.Instance.HideAllMenus();
 
@@ -786,7 +797,9 @@ public class PlayerCombatController : MonoBehaviour
     {
         isAiming = false;
         if (crosshairUI != null) crosshairUI.SetActive(false);
-        if (battleAnimator != null) battleAnimator.EndAim();
+        if (gunAimActive && battleAnimator != null) battleAnimator.EndAim();
+        gunAimActive = false;
+        if (SpellOrbManager.Instance != null) SpellOrbManager.Instance.Highlight(null);
         if (BattleCameraController.Instance != null) BattleCameraController.Instance.SetAimZoom(false);
 
         // ยิงตัวสุดท้ายตายแล้ว ไม่ต้องเปิดเมนูกลับมา (ช่วงหน่วงก่อนโชว์หน้าสรุปผล)
@@ -807,8 +820,14 @@ public class PlayerCombatController : MonoBehaviour
         Vector2 mousePos = Mouse.current.position.ReadValue();
         if (crosshairUI != null) crosshairUI.transform.position = mousePos;
 
+        // Spell: ลูกแก้วใต้เมาส์ขยายขึ้น บอกว่าคลิกแล้วจะเก็บลูกไหน
+        if (!gunAimActive && SpellOrbManager.Instance != null)
+        {
+            SpellOrbManager.Instance.Highlight(hasHarvestedThisTurn ? null : SpellOrbManager.Instance.FindOrbAt(mousePos, mainCam));
+        }
+
         // จุดเล็ง: โดนศัตรูก็เล็งที่ตัว ไม่โดนก็เล็งที่ระนาบแถวศัตรู
-        if (battleAnimator != null && mainCam != null)
+        if (gunAimActive && battleAnimator != null && mainCam != null)
         {
             Ray aimRay = mainCam.ScreenPointToRay(mousePos);
             Vector3 aimPoint = aimRay.GetPoint(40f);
@@ -826,38 +845,16 @@ public class PlayerCombatController : MonoBehaviour
 
     void ExecuteFreeAimShoot(Vector2 screenPos)
     {
+        // Spell ยิงไม่ได้ ใช้ Free Aim เก็บธาตุแทน (ไม่ใช้ AP จึงต้องเช็กก่อนเรื่อง AP)
+        if (ActiveWeapon != null && ActiveWeapon.weaponType == WeaponType.Spell)
+        {
+            HarvestElementOrb(screenPos);
+            return;
+        }
+
         if (currentAP < 1) return;
 
         Ray ray = mainCam.ScreenPointToRay(screenPos);
-
-        if (ActiveWeapon != null && ActiveWeapon.weaponType == WeaponType.Spell)
-        {
-            if (hasHarvestedThisTurn)
-            {
-                Debug.Log("<color=red>Spell Free-Aim has already been used to harvest this turn!</color>");
-                return;
-            }
-
-            if (Physics.Raycast(ray, out RaycastHit harvestHit, 1000f))
-            {
-                FloatingElementOrb orb = harvestHit.collider.GetComponent<FloatingElementOrb>();
-                if (orb != null)
-                {
-                    // เก็บธาตุเข้า Slot
-                    AddElement(orb.elementType);
-                    orb.Harvest();
-
-                    hasHarvestedThisTurn = true; // ใช้สิทธิ์หมดแล้วในเทิร์นนี้
-                    ExitAimMode();
-                }
-                else
-                {
-                    Debug.Log("Free-Aim Spell: No elemental orb hit!");
-                }
-            }
-            UpdateAPUI();
-            return; // จบการทำงานของ Spell Free-Aim ไม่ให้ไปทำดาเมจใส่ศัตรู
-        }
 
         if (Physics.Raycast(ray, out RaycastHit hit, 1000f, enemyLayer))
         {
@@ -913,6 +910,30 @@ public class PlayerCombatController : MonoBehaviour
             }
         }
         UpdateAPUI();
+    }
+
+    // เก็บลูกแก้วธาตุที่ใกล้เมาส์ที่สุด ได้ 1 ลูกต่อเทิร์น
+    private void HarvestElementOrb(Vector2 screenPos)
+    {
+        if (hasHarvestedThisTurn)
+        {
+            ShowPopup("ALREADY HARVESTED", new Color(1f, 0.6f, 0.6f));
+            return;
+        }
+
+        FloatingElementOrb orb = SpellOrbManager.Instance != null ? SpellOrbManager.Instance.FindOrbAt(screenPos, mainCam) : null;
+        if (orb == null)
+        {
+            Debug.Log("Free-Aim Spell: No elemental orb under the cursor!");
+            return;
+        }
+
+        AddElement(orb.elementType);
+        ShowPopup($"+{orb.elementType}", ElementTypes.GetColor(orb.elementType));
+        orb.Harvest();
+        hasHarvestedThisTurn = true; // ใช้สิทธิ์หมดแล้วในเทิร์นนี้
+        UpdateAPUI();
+        ExitAimMode();
     }
 
     public void RestoreAP(int amount) { currentAP = Mathf.Min(currentAP + amount, maxAP); }

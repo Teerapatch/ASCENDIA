@@ -9992,7 +9992,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f2f13da5a129eda40ad1bd73f621cfc6, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.537300
+      value: 0.5373
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f2f13da5a129eda40ad1bd73f621cfc6, type: 3}
       propertyPath: m_LocalRotation.z
@@ -10004,7 +10004,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f2f13da5a129eda40ad1bd73f621cfc6, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 65.000000
+      value: 65
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f2f13da5a129eda40ad1bd73f621cfc6, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -11662,6 +11662,13 @@ MonoBehaviour:
   spawnRadius: 5
   heightMin: 1
   heightMax: 4
+  spawnBetweenFighters: 1
+  heightAboveGround: {x: 4, y: 9}
+  sideSpread: 9
+  minSeparation: 3
+  orbWorldSize: 1.4
+  pickRadius: 0.06
+  hoverScale: 1.35
 --- !u!1 &956942481
 GameObject:
   m_ObjectHideFlags: 0
@@ -12769,12 +12776,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1155139380}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0.38268343, z: 0, w: 0.92387956}
-  m_LocalPosition: {x: 81.5, y: 14.4, z: 62.8}
+  m_LocalRotation: {x: -0.07237466, y: -0.17604774, z: -0.0013460424, w: 0.9817165}
+  m_LocalPosition: {x: -37.000965, y: 24.357708, z: 125.834305}
   m_LocalScale: {x: 10, y: 10, z: 10}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2130668855}
   m_LocalEulerAnglesHint: {x: 0, y: 45, z: 0}
 --- !u!1 &1186547308
 GameObject:
@@ -18416,7 +18423,7 @@ MonoBehaviour:
   baseInventoryWeapons:
   - {fileID: 11400000, guid: b157a3436ed34094da748b980763a7e0, type: 2}
   - {fileID: 11400000, guid: c5e169c3b683e4e45b20d307a95a2f82, type: 2}
-  - {fileID: 11400000, guid: 471d8b947d88bbd4fa97545db55b9371, type: 2}
+  - {fileID: 11400000, guid: 3d867244cc8e5364d9d1cb1e6b03c07a, type: 2}
   currentWeaponIndex: 0
   ActiveWeapon: {fileID: 0}
   switchWeaponAPCost: 1
@@ -23714,7 +23721,8 @@ Transform:
   m_LocalPosition: {x: -19.15, y: 9.16, z: -24.6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1155139382}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 15, y: 65, z: 0}
 --- !u!114 &2130668856
@@ -23834,6 +23842,36 @@ MonoBehaviour:
   rangedCameraSide: 5
   rangedCameraHeight: 2.2
   actionTransition: 0.1
+  actionPushIn: 0.12
+  actionPushTime: 1.4
+  cameraOnRightShoulder: 1
+  frameLookShift: 1.2
+  meleeBehindBack: 5.5
+  meleeBehindSide: 1.4
+  meleeBehindHeight: 2.4
+  meleeBehindLookAlong: 0.55
+  meleeFollowSmoothTime: 0.12
+  overviewOverShoulder: 0
+  shoulderBack: 6
+  shoulderSide: 2.6
+  shoulderHeight: 2.2
+  shoulderLookHeight: 1.6
+  shoulderLookAlong: 0.6
+  enemyTurnBack: 5
+  enemyTurnSide: 2.2
+  enemyTurnHeight: 2
+  enemyTurnLookAlong: 0.75
+  followSmoothTime: 0.45
+  idleOrbitDegrees: 3
+  idleOrbitPeriod: 11
+  handheldPosition: 0.06
+  handheldRotation: 0.45
+  handheldSpeed: 0.35
+  breathingFov: 0.6
+  attachBattleUIToCamera: 1
+  parryKickRoll: 5
+  parryKickPush: 0.9
+  parryKickTime: 0.5
 --- !u!1 &2132769246
 GameObject:
   m_ObjectHideFlags: 0
@@ -36197,6 +36235,5 @@ SceneRoots:
   - {fileID: 363965282}
   - {fileID: 1267759754}
   - {fileID: 969722015}
-  - {fileID: 1155139382}
   - {fileID: 7400000001}
   - {fileID: 7500000001}

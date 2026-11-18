@@ -35,7 +35,28 @@ public class ForgeManager : MonoBehaviour
 
     private void OnEnable()
     {
+        // ข้อความสเตตัสยาวขึ้น (Durability, Posture, สกิลถัดไป) ย่อฟอนต์อัตโนมัติไม่ให้ล้นกรอบ
+        if (statsText != null && !statsText.enableAutoSizing)
+        {
+            statsText.fontSizeMax = statsText.fontSize;
+            statsText.fontSizeMin = Mathf.Min(14f, statsText.fontSize);
+            statsText.enableAutoSizing = true;
+        }
         InitializeBlueprintList();
+    }
+
+    private static string SkillNames(System.Collections.Generic.List<WeaponSkill> skills)
+    {
+        return string.Join(", ", skills.ConvertAll(s => s.skillName));
+    }
+
+    // บรรทัดสกิล: สกิลที่จะได้ตอนอัปเลเวลนี้ หรือสกิลถัดไปที่รออยู่
+    private string SkillLine(WeaponData weapon)
+    {
+        WeaponSkill gained = weapon.SkillUnlockedAt(weapon.currentLevel + 1);
+        if (gained != null) return $"\n<color=#7FD4FF>NEW SKILL: {gained.skillName}</color>";
+        WeaponSkill next = weapon.NextSkillToUnlock(out int level);
+        return next != null ? $"\n<color=#9AA0AA>Next skill at Lv.{level}: {next.skillName}</color>" : "";
     }
 
     private int GetUnlockedWeaponCount()
@@ -131,28 +152,36 @@ public class ForgeManager : MonoBehaviour
         monsterPartCostText.text = $"{playerData.monsterPart} / {reqMonster}";
         monsterPartCostText.color = hasEnoughMonster ? Color.white : Color.red;
 
-        bool isMaxLevel = currentWeapon.currentLevel >= currentWeapon.maxLevel;
+        bool isMaxLevel = currentWeapon.IsMaxLevel;
+        int unlockedSkills = currentWeapon.GetUnlockedSkills().Count;
+        int totalSkills = currentWeapon.skillPool.FindAll(s => s != null).Count;
 
         // 🌟 แยกแสดงผลตามสถานะของอาวุธ
         if (!currentWeapon.isUnlocked)
         {
             // ยังไม่ได้คราฟต์
             statsText.text = $"<color=#FFD700>Lv.0 ➔ Lv.1 (CRAFT TO BIND)</color>\n" +
-                             $"ATK: {currentWeapon.baseDamage}\n" +
-                             $"AP (Speed): {currentWeapon.speed}";
-                             
+                             $"ATK: {currentWeapon.GetDamageAt(1)}\n" +
+                             $"Speed: {currentWeapon.GetSpeedAt(1)}\n" +
+                             $"DUR: {currentWeapon.GetDurabilityAt(1)}\n" +
+                             $"<color=#7FD4FF>Skills: {SkillNames(currentWeapon.GetUnlockedSkills())}</color>";
+
             actionButtonText.text = "Craft Weapon";
             actionButton.interactable = hasEnoughGem && hasEnoughMonster; // ต้องมีของพอถึงจะกดได้
         }
         else if (isMaxLevel)
         {
             // เลเวลตัน
-            statsText.text = $"<color=#FFD700>MAX LEVEL (Lv.{currentWeapon.maxLevel})</color>\n" +
-                             $"ATK: {currentWeapon.GetCurrentDamage()}\n" +
-                             $"AP (Speed): {currentWeapon.GetCurrentSpeed()}";
-                             
+            int level = currentWeapon.currentLevel;
+            statsText.text = $"<color=#FFD700>MAX LEVEL (Lv.{currentWeapon.MaxLevel})</color>\n" +
+                             $"ATK: {currentWeapon.GetDamageAt(level)}\n" +
+                             $"Speed: {currentWeapon.GetSpeedAt(level)}\n" +
+                             $"DUR: {currentWeapon.GetDurabilityAt(level)}\n" +
+                             $"Posture: x{currentWeapon.GetPostureAt(level):0.00}\n" +
+                             $"<color=#7FD4FF>Skills: {unlockedSkills}/{totalSkills} unlocked</color>";
+
             actionButtonText.text = "Max Level Reached";
-            actionButton.interactable = false; 
+            actionButton.interactable = false;
             gemStoneCostText.text = "- / -";
             monsterPartCostText.text = "- / -";
             gemStoneCostText.color = Color.white;
@@ -160,15 +189,14 @@ public class ForgeManager : MonoBehaviour
         }
         else
         {
-            // กำลังอัปเกรด (โชว์พรีวิวสเตตัสแบบรวบตึง)
-            float curDmg = currentWeapon.GetCurrentDamage();
-            float nextDmg = currentWeapon.GetNextLevelDamage();
-            float curSpeed = currentWeapon.GetCurrentSpeed();
-            float nextSpeed = currentWeapon.GetNextLevelSpeed();
-
-            statsText.text = $"<color=#FFD700>Lv.{currentWeapon.currentLevel} ➔ Lv.{currentWeapon.currentLevel + 1}</color>\n" +
-                             $"ATK: {curDmg} ➔ <color=#00FF00>{nextDmg}</color>\n" +
-                             $"AP (Speed): {curSpeed} ➔ <color=#00FF00>{nextSpeed}</color>";
+            // กำลังอัปเกรด (โชว์พรีวิวสเตตัสทุกตัว และสกิลที่จะได้)
+            int level = currentWeapon.currentLevel;
+            statsText.text = $"<color=#FFD700>Lv.{level} ➔ Lv.{level + 1}</color>   <color=#9AA0AA>Skills {unlockedSkills}/{totalSkills}</color>\n" +
+                             $"ATK: {currentWeapon.GetDamageAt(level)} ➔ <color=#00FF00>{currentWeapon.GetDamageAt(level + 1)}</color>\n" +
+                             $"Speed: {currentWeapon.GetSpeedAt(level)} ➔ <color=#00FF00>{currentWeapon.GetSpeedAt(level + 1)}</color>\n" +
+                             $"DUR: {currentWeapon.GetDurabilityAt(level)} ➔ <color=#00FF00>{currentWeapon.GetDurabilityAt(level + 1)}</color>\n" +
+                             $"Posture: x{currentWeapon.GetPostureAt(level):0.00} ➔ <color=#00FF00>x{currentWeapon.GetPostureAt(level + 1):0.00}</color>" +
+                             SkillLine(currentWeapon);
 
             actionButtonText.text = "Upgrade";
             actionButton.interactable = hasEnoughGem && hasEnoughMonster;
@@ -178,7 +206,7 @@ public class ForgeManager : MonoBehaviour
     public void OnActionBtnClicked()
     {
         if (currentWeapon == null) return;
-        if (currentWeapon.isUnlocked && currentWeapon.currentLevel >= currentWeapon.maxLevel) return;
+        if (currentWeapon.isUnlocked && currentWeapon.IsMaxLevel) return;
 
         int reqGem = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelGemCost() : currentWeapon.gemStoneCost;
         int reqMonster = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelMonsterPartCost() : currentWeapon.monsterPartCost;
@@ -208,7 +236,25 @@ public class ForgeManager : MonoBehaviour
         {
             // 🌟 2. จ่ายของเพื่ออัปเกรด
             currentWeapon.currentLevel++;
-            if (campManager != null) campManager.ShowSystemMessage($"{currentWeapon.weaponName} upgraded to Lv.{currentWeapon.currentLevel}!");
+            WeaponSkill gained = currentWeapon.SkillUnlockedAt(currentWeapon.currentLevel);
+            if (gained != null)
+            {
+                // ช่องสกิลยังไม่เต็ม: ใส่สกิลใหม่ให้เลย (ถอด/สลับได้ที่หน้า Skills)
+                List<WeaponSkill> equipped = playerData.GetEquippedSkills(currentWeapon);
+                if (!equipped.Contains(gained) && equipped.Count < WeaponData.MaxEquippedSkills)
+                {
+                    equipped.Add(gained);
+                    List<WeaponSkill> pool = currentWeapon.skillPool;
+                    equipped.Sort((x, y) => pool.IndexOf(x).CompareTo(pool.IndexOf(y)));
+                    playerData.SetEquippedSkills(currentWeapon, equipped);
+                }
+            }
+            if (campManager != null)
+            {
+                campManager.ShowSystemMessage(gained != null
+                    ? $"{currentWeapon.weaponName} upgraded to Lv.{currentWeapon.currentLevel}! New skill: {gained.skillName}"
+                    : $"{currentWeapon.weaponName} upgraded to Lv.{currentWeapon.currentLevel}!");
+            }
         }
 
         if (successEffect != null) successEffect.Play();

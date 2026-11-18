@@ -376,6 +376,24 @@ public class CombatManager : MonoBehaviour
         NextTurn();
     }
 
+    // สลับอาวุธกลางเทิร์น: อาวุธใหม่รับเทิร์นนี้ไปแทน อาวุธเดิมได้คิวเดิมของอาวุธใหม่ จำนวนเทิร์นรวมจึงเท่าเดิม
+    public void SwapActiveWeaponTurn(WeaponData from, WeaponData to)
+    {
+        if (turnQueue.Count > 0 && !turnQueue[0].IsEnemy && turnQueue[0].WeaponRef == from)
+        {
+            TurnNode fromNode = turnQueue[0];
+            TurnNode toNode = turnQueue.Find(node => !node.IsEnemy && node.WeaponRef == to);
+            if (toNode != null)
+            {
+                fromNode.CurrentAV = toNode.CurrentAV;
+                toNode.CurrentAV = 0f;
+                turnQueue.Remove(toNode);
+                turnQueue.Insert(0, toNode);
+            }
+        }
+        RefreshTurnOrderUI();
+    }
+
     public void RefreshTurnOrderUI()
     {
         if (turnOrderUI != null) turnOrderUI.UpdateUI(PredictNextTurns(PredictedTurnCount));

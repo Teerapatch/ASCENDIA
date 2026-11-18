@@ -19,6 +19,9 @@ public class PlayerBattleAnimator : MonoBehaviour
     private BattleAnimationSet set;
     private readonly Dictionary<WeaponType, Rig> rigs = new Dictionary<WeaponType, Rig>();
     private Rig current;
+
+    // ตำแหน่งโมเดลที่เห็นจริง (โมเดลถูกเลื่อนออกจาก Player_Holder ตาม modelLocalPosition กล้องจึงต้องใช้ค่านี้)
+    public Vector3 ModelPosition => current != null && current.root != null ? current.root.transform.position : transform.position;
     private Vector3 homeWorld;
     private int parryIndex;
     private Coroutine faceRoutine;
@@ -474,32 +477,34 @@ public class PlayerBattleAnimator : MonoBehaviour
     }
 
     // หันโมเดลหาเป้าหมาย (หมุนเฉพาะโมเดล เพราะ UI เมนูเป็นลูกของ Player_Holder)
-    public void FaceTarget(Transform target)
+    public void FaceTarget(Transform target, float duration = 0.15f)
     {
         if (current == null || target == null) return;
         Vector3 direction = target.position - current.root.transform.position;
         direction.y = 0f;
-        if (direction.sqrMagnitude > 0.001f) StartFacing(Quaternion.LookRotation(direction, current.root.transform.up));
+        if (direction.sqrMagnitude > 0.001f) StartFacing(Quaternion.LookRotation(direction, current.root.transform.up), duration);
     }
 
-    public void ResetFacing()
+    public void ResetFacing(float duration = 0.15f)
     {
         if (current == null || set == null) return;
-        StartFacing(transform.rotation * Quaternion.Euler(set.modelLocalEuler));
+        StartFacing(transform.rotation * Quaternion.Euler(set.modelLocalEuler), duration);
     }
 
-    private void StartFacing(Quaternion rotation)
+    private void StartFacing(Quaternion rotation, float duration)
     {
         if (faceRoutine != null) StopCoroutine(faceRoutine);
-        faceRoutine = StartCoroutine(TurnTo(current.root.transform, rotation));
+        faceRoutine = StartCoroutine(TurnTo(current.root.transform, rotation, duration));
     }
 
-    private static IEnumerator TurnTo(Transform model, Quaternion rotation)
+    // หมุนแบบเร่ง-ผ่อน (SmoothStep) ไม่กระชากตอนเริ่ม/จบ
+    private static IEnumerator TurnTo(Transform model, Quaternion rotation, float duration)
     {
         Quaternion from = model.rotation;
-        for (float t = 0f; t < 0.15f; t += Time.deltaTime)
+        duration = Mathf.Max(0.01f, duration);
+        for (float t = 0f; t < duration; t += Time.deltaTime)
         {
-            model.rotation = Quaternion.Slerp(from, rotation, t / 0.15f);
+            model.rotation = Quaternion.Slerp(from, rotation, Mathf.SmoothStep(0f, 1f, t / duration));
             yield return null;
         }
         model.rotation = rotation;

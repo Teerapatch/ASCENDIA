@@ -111,7 +111,7 @@ public class PlayerData : ScriptableObject
         WeaponSkillLoadout loadout = skillLoadouts.Find(l => l.weapon == weapon);
         if (loadout == null) return weapon.GetDefaultSkills();
 
-        List<WeaponSkill> valid = loadout.skills.FindAll(s => s != null && weapon.skillPool.Contains(s));
+        List<WeaponSkill> valid = loadout.skills.FindAll(s => s != null && weapon.IsSkillUnlocked(s));
         return valid.GetRange(0, Mathf.Min(WeaponData.MaxEquippedSkills, valid.Count));
     }
 
