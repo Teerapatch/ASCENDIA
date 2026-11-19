@@ -54,6 +54,21 @@ public class GameExitMenu : MonoBehaviour
         Open(endWindow);
     }
 
+    // จบเกม (เช่น ล้าตายตอนไม่มี Piton): ใช้หน้าจบ Build เดิม แค่เปลี่ยนหัวข้อและข้อความ (ฟอนต์ไม่มีภาษาไทย ใช้อังกฤษ)
+    public void ShowGameOver(string title, string message)
+    {
+        SetEndText("Title", title);
+        SetEndText("Message", message);
+        ShowBuildEnd();
+    }
+
+    private void SetEndText(string child, string text)
+    {
+        Transform target = endWindow.transform.Find(child);
+        TMPro.TMP_Text label = target != null ? target.GetComponentInChildren<TMPro.TMP_Text>(true) : null;
+        if (label != null && !string.IsNullOrEmpty(text)) label.text = text;
+    }
+
     private void Update()
     {
         if (!buildEnded && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)

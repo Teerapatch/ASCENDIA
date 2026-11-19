@@ -55,7 +55,10 @@ public class PlayerData : ScriptableObject
     public float baseWalkSpeed = 5f;
 
     [Header("Lives")]
+    [Tooltip("Piton ที่เหลือ: ใช้ฟื้น Stamina ตอนหมดกลางกำแพง (และเสียเมื่อแพ้การต่อสู้) มีจำกัดทั้งเกม ไม่มีที่ไหนเติมให้ รวมถึง Camp")]
     public int piton = 3;
+    [Tooltip("จำนวน Piton ตอนเริ่มเกมใหม่ (ResetData)")]
+    public int startingPitons = 3;
 
     [Header("Progression")]
     public int currentFloor = 1;
@@ -148,7 +151,7 @@ public class PlayerData : ScriptableObject
         inventorySlots.Clear();
         gemStone = 0;
         weight = 0f;
-        piton = 3;
+        piton = startingPitons; // ตั้งครั้งเดียวตอนเริ่มเกม ไม่มีการเติมระหว่างเล่น
         currentFloor = 1;
         currentWeaponDUR = maxWeaponDUR;
         currentCampLevel = 1;

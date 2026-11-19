@@ -1935,7 +1935,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 45}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 88.3}
+  m_AnchoredPosition: {x: 0, y: 88.299995}
   m_SizeDelta: {x: 35, y: 35}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &211402306
@@ -17791,7 +17791,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 65, y: 61.629}
+  m_AnchoredPosition: {x: 65, y: 61.628998}
   m_SizeDelta: {x: 259, y: 75}
   m_Pivot: {x: 0, y: 0}
 --- !u!114 &1933315502
@@ -23846,6 +23846,7 @@ MonoBehaviour:
   actionPushTime: 1.4
   cameraOnRightShoulder: 1
   frameLookShift: 1.2
+  centerAttackFraming: 1
   meleeBehindBack: 5.5
   meleeBehindSide: 1.4
   meleeBehindHeight: 2.4
@@ -23868,6 +23869,13 @@ MonoBehaviour:
   handheldRotation: 0.45
   handheldSpeed: 0.35
   breathingFov: 0.6
+  blendOverview: 0.5
+  blendEnemyTurn: 0.45
+  blendMelee: 0.28
+  blendRanged: 0.38
+  blendMenuMin: 0.35
+  blendSnappiness: 0.65
+  livelinessChangeSpeed: 1.5
   attachBattleUIToCamera: 1
   parryKickRoll: 5
   parryKickPush: 0.9

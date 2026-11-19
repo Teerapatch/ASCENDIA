@@ -7,12 +7,19 @@ public class PlayerPenaltySystem : MonoBehaviour
 {
     [Header("UI References")]
     public Image fadeImage;
-    public PitonUIController pitonUI; 
+    public PitonUIController pitonUI;
+
+    [Header("Piton (ตัวช่วยตอน Stamina หมด)")]
+    [Tooltip("Stamina หมดกลางกำแพงแล้วเสีย Piton 1 อัน ฟื้น Stamina เต็ม (เพดานที่ลดจากความล้ายังอยู่) / ไม่มี Piton เหลือ = ล้าตาย จบเกม")]
+    public float pitonFadeDuration = 0.6f;
+    public string exhaustedTitle = "EXHAUSTED";
+    [TextArea] public string exhaustedMessage = "Your stamina ran out and no pitons were left.\nThe climb ends here.";
 
     private PlayerStateManager stateManager;
     private PlayerCameraController camController;
     // เวลาที่ออกแรงต่อเนื่อง พักแล้วค่อย ๆ ลด
     private float exertionTime;
+    private bool handlingExhaustion;
 
     private void Awake()
     {
@@ -23,7 +30,7 @@ public class PlayerPenaltySystem : MonoBehaviour
     private void Update()
     {
         if (GameManager.Instance == null) return;
-        
+
         if (stateManager.currentState == PlayerStateManager.State.Climbing)
         {
             float v = Input.GetAxisRaw("Vertical");
@@ -50,7 +57,7 @@ public class PlayerPenaltySystem : MonoBehaviour
     private void DrainStamina()
     {
         PlayerData data = GameManager.Instance.playerData;
-        
+
         // ดึงค่า baseStaminaDrain จากไฟล์ PlayerData แทนของเดิม
         float weightModifier = data.weight * 0.1f;
         float drain = (data.baseStaminaDrain + weightModifier) * Time.deltaTime;
@@ -60,47 +67,46 @@ public class PlayerPenaltySystem : MonoBehaviour
         if (data.stamina <= 0)
         {
             data.stamina = 0;
-            StartCoroutine(HandleDeathPenalty());
+            if (!handlingExhaustion) StartCoroutine(HandleExhaustion());
         }
     }
 
-    private IEnumerator HandleDeathPenalty()
+    // Stamina หมดกลางกำแพง: มี Piton -> ตอกหมุดพัก เสีย 1 อัน ฟื้น Stamina เต็มเพดานปัจจุบัน แล้วปีนต่อจากจุดเดิม
+    // ไม่มี Piton เหลือ -> ล้าตาย จบเกม (Piton มีจำกัดทั้งเกม หาเพิ่มหรือฟื้นที่ Camp ไม่ได้)
+    private IEnumerator HandleExhaustion()
     {
+        handlingExhaustion = true;
         stateManager.ChangeState(PlayerStateManager.State.Penalty);
+        PlayerData data = GameManager.Instance.playerData;
 
-        yield return StartCoroutine(FadeScreen(1f, 1f));
+        if (data.piton <= 0)
+        {
+            Debug.Log("💀 GAME OVER - Stamina หมดและไม่มี Piton เหลือ ล้าตาย!");
+            yield return StartCoroutine(FadeScreen(1f, 1.5f));
+            if (GameExitMenu.Instance != null) GameExitMenu.Instance.ShowGameOver(exhaustedTitle, exhaustedMessage);
+            yield break; // ค้างอยู่ในสถานะ Penalty ผู้เล่นขยับไม่ได้อีก
+        }
+
+        yield return StartCoroutine(FadeScreen(1f, pitonFadeDuration));
 
         GameManager.Instance.UsePiton();
-        GameManager.Instance.playerData.stamina = GameManager.Instance.playerData.EffectiveMaxStamina;
+        data.stamina = data.EffectiveMaxStamina; // ฟื้นเต็ม แต่ไม่คืนส่วนที่หายไปจากความล้า (fatigue)
         exertionTime = 0f;
-        
-        if (pitonUI != null) 
-        {
-            pitonUI.ShowLostPitonAlert(GameManager.Instance.playerData.piton);
-        }
+        Debug.Log($"🪝 Stamina หมด! ใช้ Piton 1 อัน ฟื้น Stamina เป็น {data.stamina:0} (เหลือ Piton {data.piton})");
 
-        yield return new WaitForSeconds(0.5f);
+        if (pitonUI != null) pitonUI.ShowLostPitonAlert(data.piton);
 
-        yield return StartCoroutine(FadeScreen(0f, 1f));
+        yield return new WaitForSeconds(0.4f);
+        yield return StartCoroutine(FadeScreen(0f, pitonFadeDuration));
 
-        if (GameManager.Instance.playerData.piton <= 0)
-        {
-            Debug.Log("💀 GAME OVER - หมุดหมด!");
-            // ไม่มีพื้นให้เดินแล้ว (ทุกชั้นเริ่มบนหน้าผา): กลับไปจุดเริ่มปีนของหน้าผาชั้นนี้
-            ClimbableWall cliff = MapGenerator.CurrentCliff;
-            if (cliff != null && cliff.climbStart != null) transform.position = cliff.climbStart.position;
-            stateManager.ChangeState(PlayerStateManager.State.Climbing);
-        }
-        else
-        {
-            stateManager.ChangeState(PlayerStateManager.State.Climbing);
-        }
+        stateManager.ChangeState(PlayerStateManager.State.Climbing);
+        handlingExhaustion = false;
     }
 
     private IEnumerator FadeScreen(float targetAlpha, float duration)
     {
         if (fadeImage == null) yield break;
-        
+
         Color color = fadeImage.color;
         float startAlpha = color.a;
         float time = 0;
