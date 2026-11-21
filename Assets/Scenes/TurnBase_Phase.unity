@@ -10026,6 +10026,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: POSE_ATTACK
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: f2f13da5a129eda40ad1bd73f621cfc6, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1630794972795428178, guid: f2f13da5a129eda40ad1bd73f621cfc6, type: 3}
       propertyPath: m_CastShadows
       value: 1
@@ -35286,11 +35290,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7451580647337886716, guid: e2b2ec873a3c2d1409f021398576300b, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 4.667
+      value: 4.68
       objectReference: {fileID: 0}
     - target: {fileID: 7451580647337886716, guid: e2b2ec873a3c2d1409f021398576300b, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.0000007336
+      value: -0.03
       objectReference: {fileID: 0}
     - target: {fileID: 7565873943474760712, guid: e2b2ec873a3c2d1409f021398576300b, type: 3}
       propertyPath: ShapeModule.m_Scale.x
