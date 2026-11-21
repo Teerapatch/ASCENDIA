@@ -55,6 +55,9 @@ public class BattleArtUI : MonoBehaviour
         PlayerUIManager menus = FindAnyObjectByType<PlayerUIManager>(FindObjectsInactive.Include);
         if (player == null || menus == null) return;
 
+        // อาร์ต ReArt v2 เปิด Raycast Target ทุกภาพ ภาพใหญ่จะบังปุ่ม ปิดหมดก่อน ปุ่มที่ผูกจะเปิดของตัวเอง
+        foreach (Graphic graphic in GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
+
         // Turn Order, Passive และช่องอาวุธอยู่บน Canvas ปกติ (BattleHUD) แยกจาก BattleUI ที่เป็น World Space
         GameObject hudObject = GameObject.Find("BattleHUD");
         hud = hudObject != null ? hudObject.transform : transform;
@@ -66,7 +69,15 @@ public class BattleArtUI : MonoBehaviour
         BindTurnOrder();
         BindPassive();
 
-        hudGroup = gameObject.AddComponent<CanvasGroup>();
+        // ชิ้นใหม่ของ UI ชุด ReArt v2 (ถ้ามี)
+        BindQTE();
+        BindAnnouncement();
+        BindCrosshair();
+        BindEnemyHUD();
+
+        // UI ชุดเก่าเป็น World Space วางหน้ากล้องภาพรวม จึงต้องจางออกเมื่อกล้องย้าย
+        // ชุดใหม่ (ReArt v2) เป็น Overlay รวม HUD ไว้ด้วยกัน ต้องแสดงตลอด (เมนูคำสั่งซ่อนเองผ่าน PlayerUIManager)
+        if (GetComponent<Canvas>().renderMode == RenderMode.WorldSpace) hudGroup = gameObject.AddComponent<CanvasGroup>();
     }
 
     private void BindActions(PlayerUIManager menus)
@@ -119,6 +130,14 @@ public class BattleArtUI : MonoBehaviour
 
     private void BindSkills(PlayerUIManager menus)
     {
+        // ชุด v2: การ์ดสกิล Skills_Ex อยู่บน BattleUI (Overlay) ใช้แทน SkillsUI แบบ World Space ชุดเก่า
+        Transform example = transform.Find("Skills_Ex");
+        if (example != null)
+        {
+            BindSkillCards(menus, example);
+            return;
+        }
+
         Transform canvasRoot = player.transform.Find("SkillsUI");
         Transform pose = player.transform.Find("POSE_ATTACK");
 
@@ -151,6 +170,130 @@ public class BattleArtUI : MonoBehaviour
         menus.skillMenuPanel = grid.gameObject.AddComponent<CanvasGroup>();
         menus.skillListContainer = grid;
         menus.skillButtonPrefab = template.gameObject;
+    }
+
+    [Header("การ์ดสกิล (ReArt v2)")]
+    [Tooltip("ตำแหน่งกองการ์ดบนจอ (อ้างอิง 1920x1080 จากมุมซ้ายล่าง)")]
+    public Vector2 skillCardsPosition = new Vector2(430f, 640f);
+    [Tooltip("ระยะห่างระหว่างการ์ดแต่ละใบ (เลื่อนลงและเยื้องขวาเล็กน้อยแบบพู่กัน)")]
+    public Vector2 skillCardStep = new Vector2(40f, -210f);
+    public float skillCardScale = 0.42f;
+
+    private void BindSkillCards(PlayerUIManager menus, Transform example)
+    {
+        // กองการ์ดใหม่ วางตำแหน่งแต่ละใบเอง (การ์ดอาร์ตมี Rect ใหญ่กว่าภาพ ใช้ LayoutGroup ไม่ได้)
+        RectTransform list = new GameObject("Skills_List", typeof(RectTransform)).GetComponent<RectTransform>();
+        list.SetParent(transform, false);
+        list.anchorMin = list.anchorMax = Vector2.zero;
+        list.pivot = new Vector2(0.5f, 0.5f);
+        list.anchoredPosition = skillCardsPosition;
+        list.sizeDelta = Vector2.zero;
+        SkillCardStack stack = list.gameObject.AddComponent<SkillCardStack>();
+        stack.step = skillCardStep;
+
+        Transform template = example;
+        template.SetParent(transform, false);
+        template.gameObject.SetActive(false);
+        RectTransform templateRect = (RectTransform)template;
+        templateRect.anchorMin = templateRect.anchorMax = new Vector2(0.5f, 0.5f);
+        templateRect.anchoredPosition = Vector2.zero;
+        templateRect.localScale = Vector3.one * skillCardScale;
+        Rename(template, "Image (1)/Text (TMP) (2)", "Cost");
+        Rename(template, "Text (TMP) (4)", "Name");
+        Rename(template, "Text (TMP) (5)", "Description");
+
+        Image frame = template.GetComponent<Image>();
+        if (frame == null) frame = template.GetComponentInChildren<Image>(true);
+        frame.raycastTarget = true;
+        Button button = template.gameObject.AddComponent<Button>();
+        button.transition = Selectable.Transition.None;
+        button.targetGraphic = frame;
+        template.gameObject.AddComponent<ArtButtonHover>();
+
+        if (menus.skillMenuPanel != null) menus.skillMenuPanel.gameObject.SetActive(false);
+        Transform oldSkills = player.transform.Find("SkillsUI");
+        if (oldSkills != null) oldSkills.gameObject.SetActive(false);
+
+        menus.skillMenuPanel = list.gameObject.AddComponent<CanvasGroup>();
+        menus.skillListContainer = list;
+        menus.skillButtonPrefab = template.gameObject;
+    }
+
+    private static void Rename(Transform root, string path, string name)
+    {
+        Transform target = root.Find(path);
+        if (target != null) target.name = name;
+    }
+
+    // QTE วงแหวนชุดใหม่: Bar = ส่วนโค้งที่ต้องกด (Radial), SlideCheck = เข็มที่หมุน
+    private void BindQTE()
+    {
+        Transform frame = transform.Find("QTE_Frame");
+        SkillQTEManager qte = FindAnyObjectByType<SkillQTEManager>(FindObjectsInactive.Include);
+        if (frame == null || qte == null) return;
+
+        // วงแหวนเก่าเป็นลูกของตัว Manager เอง (ตัว Manager ต้องเปิดอยู่ให้ Update ทำงาน) ซ่อนแค่ภาพเดิม
+        if (qte.qteCanvasPanel == qte.gameObject)
+            foreach (Transform child in qte.transform) child.gameObject.SetActive(false);
+        else if (qte.qteCanvasPanel != null) qte.qteCanvasPanel.SetActive(false);
+
+        qte.mainCanvas = GetComponent<Canvas>();
+        qte.qteCanvasPanel = frame.gameObject;
+        qte.indicatorUI = (RectTransform)frame.Find("SlideCheck");
+        qte.indicatorTip = qte.indicatorUI.childCount > 0 ? qte.indicatorUI.GetChild(0) : qte.indicatorUI;
+        qte.hitZoneUI = (RectTransform)frame.Find("Bar");
+        qte.Bg_Circle = (RectTransform)frame.Find("Back");
+        qte.Bg_Diamond = (RectTransform)frame.Find("Glow");
+        qte.successArc = frame.Find("Bar").GetComponent<Image>();
+        frame.gameObject.SetActive(false);
+    }
+
+    // ป้ายแจ้งเหตุการณ์ (เทิร์นศัตรู, เวฟใหม่, บอสเรียกลูกน้อง) ใช้กรอบ LogAction ด้านบนแทนป้ายดำเดิม
+    private void BindAnnouncement()
+    {
+        Transform log = transform.Find("LogAction");
+        if (log == null) return;
+
+        TurnAnnouncementUI old = FindAnyObjectByType<TurnAnnouncementUI>(FindObjectsInactive.Include);
+        if (old != null) old.gameObject.SetActive(false); // ปิดก่อน Awake ของมันจะทำงาน Instance จึงเป็นตัวใหม่
+
+        TextMeshProUGUI text = log.GetComponentInChildren<TextMeshProUGUI>(true);
+        TurnAnnouncementUI announcement = log.gameObject.AddComponent<TurnAnnouncementUI>();
+        announcement.announcementText = text;
+        if (old != null)
+        {
+            announcement.fadeSpeed = old.fadeSpeed;
+            announcement.displayDuration = old.displayDuration;
+        }
+        if (text != null)
+        {
+            // ข้อความประกาศมี 2 บรรทัด (เช่น ชื่อศัตรู + กำลังโจมตี) ขยายกล่องและย่อตัวอักษรอัตโนมัติ
+            text.rectTransform.sizeDelta = new Vector2(420f, 60f);
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 8f;
+            text.fontSizeMax = 18f;
+            text.alignment = TextAlignmentOptions.Center;
+        }
+    }
+
+    private void BindCrosshair()
+    {
+        Transform aim = transform.Find("Aim");
+        if (aim == null) return;
+        if (player.crosshairUI != null && player.crosshairUI != aim.gameObject) player.crosshairUI.SetActive(false);
+        player.crosshairUI = aim.gameObject;
+        aim.gameObject.SetActive(false);
+        foreach (Graphic graphic in aim.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
+    }
+
+    // หลอดเลือด/Stagger ของศัตรูแบบใหม่ ลอยเหนือศัตรูแต่ละตัวบน Overlay
+    private void BindEnemyHUD()
+    {
+        Transform template = transform.Find("EnemyHUD");
+        if (template == null) return;
+        EnemyHUDOverlay overlay = gameObject.AddComponent<EnemyHUDOverlay>();
+        overlay.template = (RectTransform)template;
+        template.gameObject.SetActive(false);
     }
 
     private void BindWeapons()

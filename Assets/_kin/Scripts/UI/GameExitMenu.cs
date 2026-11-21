@@ -92,7 +92,8 @@ public class GameExitMenu : MonoBehaviour
 
     private static bool IsEscapeUsedByBattle()
     {
-        return PlayerCombatController.Instance != null && PlayerCombatController.Instance.IsChoosingFromMenu;
+        // หน้าย่อยของ Camp ชุดใหม่ใช้ Esc เป็นปุ่มกลับหน้าหลัก
+        return (PlayerCombatController.Instance != null && PlayerCombatController.Instance.IsChoosingFromMenu) || CampReArtUI.IsSubPageOpen;
     }
 
     private void Open(GameObject window)

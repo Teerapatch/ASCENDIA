@@ -205,61 +205,77 @@ public class ForgeManager : MonoBehaviour
 
     public void OnActionBtnClicked()
     {
-        if (currentWeapon == null) return;
-        if (currentWeapon.isUnlocked && currentWeapon.IsMaxLevel) return;
+        string message = ForgeWeapon(currentWeapon);
+        if (message == null) return;
+        if (campManager != null) campManager.ShowSystemMessage(message);
+        if (successEffect != null) successEffect.Play();
 
-        int reqGem = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelGemCost() : currentWeapon.gemStoneCost;
-        int reqMonster = currentWeapon.isUnlocked ? currentWeapon.GetNextLevelMonsterPartCost() : currentWeapon.monsterPartCost;
+        InitializeBlueprintList();
+        RefreshForgeUI();
+    }
 
+    public int CraftedWeaponCount() => GetUnlockedWeaponCount();
+
+    // ต้องใช้วัตถุดิบเท่าไรสำหรับการกดครั้งถัดไป (คราฟต์ = ราคาฐาน, อัปเกรด = ราคาเลเวลถัดไป)
+    public static void Cost(WeaponData weapon, out int gem, out int monster)
+    {
+        gem = weapon.isUnlocked ? weapon.GetNextLevelGemCost() : weapon.gemStoneCost;
+        monster = weapon.isUnlocked ? weapon.GetNextLevelMonsterPartCost() : weapon.monsterPartCost;
+    }
+
+    public bool CanForge(WeaponData weapon)
+    {
+        if (weapon == null || playerData == null) return false;
+        if (weapon.isUnlocked && weapon.IsMaxLevel) return false;
+        if (!weapon.isUnlocked && !playerData.CanCraftNewWeapon(GetUnlockedWeaponCount())) return false;
+        Cost(weapon, out int gem, out int monster);
+        return playerData.gemStone >= gem && playerData.monsterPart >= monster;
+    }
+
+    // คราฟต์หรืออัปเกรดหนึ่งครั้ง (ใช้ร่วมกับหน้า Forge ชุดใหม่ CampReArtUI) คืนข้อความผลลัพธ์ หรือ null ถ้าทำไม่ได้
+    public string ForgeWeapon(WeaponData weapon)
+    {
+        if (!CanForge(weapon)) return null;
+
+        Cost(weapon, out int reqGem, out int reqMonster);
         playerData.gemStone -= reqGem;
         playerData.monsterPart -= reqMonster;
 
-        if (!currentWeapon.isUnlocked)
+        if (!weapon.isUnlocked)
         {
             // 🌟 1. จ่ายของเพื่อคราฟต์
-            currentWeapon.isUnlocked = true;
-            currentWeapon.currentLevel = 1;
-            
+            weapon.isUnlocked = true;
+            weapon.currentLevel = 1;
+
             // นำเข้า Loadout อัตโนมัติ
             for (int i = 0; i < playerData.activeLoadout.Length; i++)
             {
-                if (playerData.activeLoadout[i] == null)
+                if (playerData.activeLoadout[i] == null && playerData.IsLoadoutSlotUnlocked(i))
                 {
-                    playerData.activeLoadout[i] = currentWeapon;
+                    playerData.activeLoadout[i] = weapon;
                     break;
                 }
             }
-
-            if (campManager != null) campManager.ShowSystemMessage($"Crafted & Bound: {currentWeapon.weaponName}!");
+            return $"Crafted & Bound: {weapon.weaponName}!";
         }
-        else
+
+        // 🌟 2. จ่ายของเพื่ออัปเกรด
+        weapon.currentLevel++;
+        WeaponSkill gained = weapon.SkillUnlockedAt(weapon.currentLevel);
+        if (gained != null)
         {
-            // 🌟 2. จ่ายของเพื่ออัปเกรด
-            currentWeapon.currentLevel++;
-            WeaponSkill gained = currentWeapon.SkillUnlockedAt(currentWeapon.currentLevel);
-            if (gained != null)
+            // ช่องสกิลยังไม่เต็ม: ใส่สกิลใหม่ให้เลย (ถอด/สลับได้ที่หน้า Skills)
+            List<WeaponSkill> equipped = playerData.GetEquippedSkills(weapon);
+            if (!equipped.Contains(gained) && equipped.Count < WeaponData.MaxEquippedSkills)
             {
-                // ช่องสกิลยังไม่เต็ม: ใส่สกิลใหม่ให้เลย (ถอด/สลับได้ที่หน้า Skills)
-                List<WeaponSkill> equipped = playerData.GetEquippedSkills(currentWeapon);
-                if (!equipped.Contains(gained) && equipped.Count < WeaponData.MaxEquippedSkills)
-                {
-                    equipped.Add(gained);
-                    List<WeaponSkill> pool = currentWeapon.skillPool;
-                    equipped.Sort((x, y) => pool.IndexOf(x).CompareTo(pool.IndexOf(y)));
-                    playerData.SetEquippedSkills(currentWeapon, equipped);
-                }
-            }
-            if (campManager != null)
-            {
-                campManager.ShowSystemMessage(gained != null
-                    ? $"{currentWeapon.weaponName} upgraded to Lv.{currentWeapon.currentLevel}! New skill: {gained.skillName}"
-                    : $"{currentWeapon.weaponName} upgraded to Lv.{currentWeapon.currentLevel}!");
+                equipped.Add(gained);
+                List<WeaponSkill> pool = weapon.skillPool;
+                equipped.Sort((x, y) => pool.IndexOf(x).CompareTo(pool.IndexOf(y)));
+                playerData.SetEquippedSkills(weapon, equipped);
             }
         }
-
-        if (successEffect != null) successEffect.Play();
-        
-        InitializeBlueprintList();
-        RefreshForgeUI();
+        return gained != null
+            ? $"{weapon.weaponName} upgraded to Lv.{weapon.currentLevel}! New skill: {gained.skillName}"
+            : $"{weapon.weaponName} upgraded to Lv.{weapon.currentLevel}!";
     }
 }

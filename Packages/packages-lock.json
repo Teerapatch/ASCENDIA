@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "com.besty.unity-skills": {
-      "version": "https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity",
+      "version": "https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity#v3.0.2",
       "depth": 0,
       "source": "git",
       "dependencies": {
@@ -10,7 +10,7 @@
         "com.unity.timeline": "1.7.7",
         "com.unity.ugui": "1.0.0"
       },
-      "hash": "995daa09b54baae1e43050c5ca020482faa53456"
+      "hash": "d79eaea23f016210bdc3ec5350dcf8066bbad38b"
     },
     "com.coffee.ui-effect": {
       "version": "https://github.com/mob-sakai/UIEffect.git?path=Packages/src",

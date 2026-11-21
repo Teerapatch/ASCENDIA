@@ -68,6 +68,10 @@ public class PlayerData : ScriptableObject
     [Tooltip("กำหนดว่าช่วง Camp Level ที่เท่าไหร่คือช่วงสุดท้ายที่จะเจอบอสใหญ่ (เช่น ตั้งไว้ 4 = แคมป์ 1-3 จะเจอโหนด Camp ส่วนช่วงที่ 4 ตอนจบจะเจอโหนด Boss อันเดียว)")]
     public int finalCampLevel = 4;
 
+    [Header("Weapons")]
+    [Tooltip("อาวุธทุกชิ้นในเกม: ResetData คืนทุกชิ้นเป็นยังไม่คราฟต์ เลเวล 1 (สถานะคราฟต์/เลเวลเก็บอยู่ในไฟล์ WeaponData จึงค้างข้ามการเล่นถ้าไม่รีเซ็ต)")]
+    public List<WeaponData> allWeapons = new List<WeaponData>();
+
     [Header("Active Loadout")]
     public WeaponData[] activeLoadout = new WeaponData[4];
     public int unlockedWeaponSlots = 1;
@@ -95,13 +99,28 @@ public class PlayerData : ScriptableObject
     // craftedCount = จำนวนอาวุธที่คราฟต์ไปแล้ว
     public bool CanCraftNewWeapon(int craftedCount) => !limitWeaponsByCampLevel || craftedCount < currentCampLevel;
 
-    // อาวุธที่ใส่อยู่ใน Loadout (ข้ามช่องว่างและช่องที่ยังล็อก) ใช้ส่งเข้าฉากต่อสู้
+    // เอาอาวุธที่ยังไม่ได้คราฟต์ออกจาก Loadout (อาวุธที่ยังไม่มีใส่ไม่ได้) คืน true ถ้ามีการเปลี่ยน
+    public bool RemoveUncraftedFromLoadout()
+    {
+        bool changed = false;
+        for (int i = 0; i < activeLoadout.Length; i++)
+        {
+            if (activeLoadout[i] != null && !activeLoadout[i].isUnlocked)
+            {
+                activeLoadout[i] = null;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    // อาวุธที่ใส่อยู่ใน Loadout (ข้ามช่องว่าง ช่องที่ยังล็อก และอาวุธที่ยังไม่ได้คราฟต์) ใช้ส่งเข้าฉากต่อสู้
     public List<WeaponData> GetEquippedWeapons()
     {
         List<WeaponData> equipped = new List<WeaponData>();
         for (int i = 0; i < activeLoadout.Length; i++)
         {
-            if (activeLoadout[i] != null && IsLoadoutSlotUnlocked(i)) equipped.Add(activeLoadout[i]);
+            if (activeLoadout[i] != null && activeLoadout[i].isUnlocked && IsLoadoutSlotUnlocked(i)) equipped.Add(activeLoadout[i]);
         }
         return equipped;
     }
@@ -158,6 +177,11 @@ public class PlayerData : ScriptableObject
         unlockedWeaponSlots = 1;
         activeLoadout = new WeaponData[4];
         skillLoadouts.Clear();
+        // เริ่มรันใหม่: อาวุธทุกชิ้นกลับเป็นยังไม่คราฟต์ ต้องไปคราฟต์ที่ Forge ใหม่
+        foreach (WeaponData weapon in allWeapons)
+        {
+            if (weapon != null) weapon.ResetWeaponStatus();
+        }
         currentWeaponInHand = null;
     }
 

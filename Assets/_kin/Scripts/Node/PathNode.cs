@@ -74,6 +74,24 @@ public class PathNode : MonoBehaviour
         }
     }
 
+    // คำอธิบายบนการ์ดเลือกเส้นทาง (UI ReArt v2) ฟอนต์ไม่มีภาษาไทยจึงเป็นอังกฤษ
+    public string Description
+    {
+        get
+        {
+            switch (roomType)
+            {
+                case RoomType.Battle: return "Encounter with Mystery Guardians.";
+                case RoomType.MiniBoss: return "A stronger guardian blocks the way.";
+                case RoomType.Boss: return "The guardian of the summit awaits.";
+                case RoomType.Ore: return "Mine Path, you can get more ores with this path.";
+                case RoomType.Rest: return "A safe ledge to catch your breath.";
+                case RoomType.Camp: return "Set up camp to rest and forge.";
+                default: return "Random Path you can encounter with battle, ore, etc.";
+            }
+        }
+    }
+
     public EncounterData PickEncounter()
     {
         List<EncounterData> valid = encounterPool.FindAll(e => e != null);

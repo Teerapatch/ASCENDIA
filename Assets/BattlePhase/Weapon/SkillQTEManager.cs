@@ -19,6 +19,17 @@ public class SkillQTEManager : MonoBehaviour
     public RectTransform Bg_Diamond;
     public Transform indicatorTip;
 
+    [Header("วงแหวนแบบส่วนโค้ง (ReArt v2: Bar เป็น Radial Fill)")]
+    [Tooltip("ถ้าใส่ จะตัดสินด้วยมุมเข็มแทนการชนกล่อง และวาดส่วนโค้งนี้ให้ตรงกับช่วงที่กดผ่าน")]
+    public UnityEngine.UI.Image successArc;
+    [Tooltip("ความกว้างช่วงที่กดผ่าน (องศา) กึ่งกลางอยู่ด้านบน ที่เข็มหมุนครบรอบพอดี")]
+    public float successArcDegrees = 60f;
+    public Color successColor = new Color(0.55f, 1f, 0.75f, 1f);
+    public Color failColor = new Color(1f, 0.35f, 0.35f, 1f);
+
+    private Color arcBaseColor;
+    private Coroutine flashRoutine;
+
     private List<QTEStep> currentSteps;
     private int currentStepIndex = 0;
     private int successCount = 0;
@@ -37,6 +48,8 @@ public class SkillQTEManager : MonoBehaviour
 
     private void Start()
     {
+        SetupSuccessArc();
+
         if (mainCanvas != null && mainCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
             uiCamera = mainCanvas.worldCamera;
         else
@@ -116,17 +129,61 @@ public class SkillQTEManager : MonoBehaviour
             CheckHit();
         }
 
-        if (currentAngleDistance < -30f)
+        if (currentAngleDistance < -Mathf.Max(30f, successArcDegrees * 0.5f))
         {
+            FlashArc(failColor);
             Debug.Log($"<color=red>QTE ฮิตที่ {currentStepIndex + 1} : FAILED! (ไม่ได้กด/ปล่อยเลยเป้า)</color>");
             ProceedToNextStep();
         }
     }
 
+    // ส่วนโค้ง Radial เริ่มจากด้านบนหมุนตามเข็มนาฬิกา หมุนกลับครึ่งหนึ่งให้กึ่งกลางอยู่ด้านบน (ตรงกับมุม 0 ของเข็ม)
+    private void SetupSuccessArc()
+    {
+        if (successArc == null) return;
+        arcBaseColor = successArc.color;
+        successArc.type = UnityEngine.UI.Image.Type.Filled;
+        successArc.fillMethod = UnityEngine.UI.Image.FillMethod.Radial360;
+        successArc.fillOrigin = (int)UnityEngine.UI.Image.Origin360.Top;
+        successArc.fillClockwise = true;
+        successArc.fillAmount = Mathf.Clamp01(successArcDegrees / 360f);
+        successArc.rectTransform.localRotation = Quaternion.Euler(0f, 0f, successArcDegrees * 0.5f);
+    }
+
+    private bool IsNeedleInArc()
+    {
+        // เข็มเริ่มที่ startingAngle (เช่น 360) หมุนลดลง ช่วงกดผ่านคือรอบ ๆ 0
+        return Mathf.Abs(currentAngleDistance) <= successArcDegrees * 0.5f;
+    }
+
+    private void FlashArc(Color color)
+    {
+        if (successArc == null) return;
+        if (flashRoutine != null) StopCoroutine(flashRoutine);
+        flashRoutine = StartCoroutine(FlashArcRoutine(color));
+    }
+
+    private IEnumerator FlashArcRoutine(Color color)
+    {
+        for (float t = 0f; t < 0.25f; t += Time.unscaledDeltaTime)
+        {
+            successArc.color = Color.Lerp(color, arcBaseColor, t / 0.25f);
+            yield return null;
+        }
+        successArc.color = arcBaseColor;
+        flashRoutine = null;
+    }
+
     private void CheckHit()
     {
-        Vector2 tipScreenPos = RectTransformUtility.WorldToScreenPoint(uiCamera, indicatorTip.position);
-        bool isHit = RectTransformUtility.RectangleContainsScreenPoint(hitZoneUI, tipScreenPos, uiCamera);
+        bool isHit;
+        if (successArc != null) isHit = IsNeedleInArc();
+        else
+        {
+            Vector2 tipScreenPos = RectTransformUtility.WorldToScreenPoint(uiCamera, indicatorTip.position);
+            isHit = RectTransformUtility.RectangleContainsScreenPoint(hitZoneUI, tipScreenPos, uiCamera);
+        }
+        FlashArc(isHit ? successColor : failColor);
 
         if (isHit)
         {

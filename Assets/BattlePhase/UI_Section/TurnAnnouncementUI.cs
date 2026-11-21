@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using UnityEngine;
 using TMPro;
 
@@ -15,11 +15,14 @@ public class TurnAnnouncementUI : MonoBehaviour
     public Vector3 popScale = new Vector3(1.2f, 1.2f, 1.2f);
 
     private CanvasGroup canvasGroup;
+    // ขนาดตั้งต้นของป้าย (กรอบ LogAction ของอาร์ตย่อไว้ 0.45) เด้งรอบค่านี้ ไม่ใช่ 1
+    private Vector3 baseScale = Vector3.one;
 
     private void Awake()
     {
         Instance = this;
         canvasGroup = GetComponent<CanvasGroup>();
+        baseScale = transform.localScale;
         canvasGroup.alpha = 0f;
         canvasGroup.interactable = false;
         canvasGroup.blocksRaycasts = false;
@@ -36,17 +39,17 @@ public class TurnAnnouncementUI : MonoBehaviour
         announcementText.text = message;
 
         // เซ็ตขนาดเริ่มต้นให้ใหญ่กว่าปกตินิดนึงเพื่อทำ Pop Effect
-        transform.localScale = popScale;
+        transform.localScale = Vector3.Scale(baseScale, popScale);
 
         // 1. เฟดเข้าอย่างรวดเร็ว
         while (canvasGroup.alpha < 0.99f)
         {
             canvasGroup.alpha = Mathf.Lerp(canvasGroup.alpha, 1f, Time.deltaTime * fadeSpeed);
-            transform.localScale = Vector3.Lerp(transform.localScale, Vector3.one, Time.deltaTime * fadeSpeed);
+            transform.localScale = Vector3.Lerp(transform.localScale, baseScale, Time.deltaTime * fadeSpeed);
             yield return null;
         }
         canvasGroup.alpha = 1f;
-        transform.localScale = Vector3.one;
+        transform.localScale = baseScale;
 
         // 2. ค้างข้อความไว้ให้ผู้เล่นเตรียมตัว
         yield return new WaitForSeconds(displayDuration);

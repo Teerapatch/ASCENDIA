@@ -57,6 +57,17 @@ public class NodeSelectionManager : MonoBehaviour
 
     public bool IsSelecting => isSelecting;
 
+    [Header("เลือกเส้นทางแบบการ์ด (UI ReArt v2: NodePath_RE_UI)")]
+    [Tooltip("ใส่แล้วใช้การ์ด + ปุ่ม Confirm แทนแผนที่ Node")]
+    public GameObject cardTemplate;
+    public Transform cardContainer;
+    public Button confirmButton;
+    [Tooltip("มุมเอียงของการ์ดแต่ละช่องตามที่อาร์ตวางไว้ (องศา)")]
+    public float[] cardTilts = new float[0];
+
+    private PathNode selectedCardNode;
+    private readonly List<NodeCardButton> nodeCards = new List<NodeCardButton>();
+
     private void Awake()
     {
         Instance = this;
@@ -144,7 +155,71 @@ public class NodeSelectionManager : MonoBehaviour
         }
 
         // ต้องหลังตั้งกล้อง เพราะเรียงปุ่มซ้าย-ขวาตามมุมของ NodeCam
-        StartCoroutine(GenerateMapUICoroutine(playerTransform.position));
+        if (cardTemplate != null && cardContainer != null) BuildCards(playerTransform.position);
+        else StartCoroutine(GenerateMapUICoroutine(playerTransform.position));
+    }
+
+    private List<PathNode> NodesAround(Vector3 centerPosition)
+    {
+        List<PathNode> currentNodes = new List<PathNode>();
+        foreach (PathNode n in FindObjectsByType<PathNode>(FindObjectsSortMode.None))
+        {
+            if (Vector3.Distance(centerPosition, n.transform.position) < 50f) currentNodes.Add(n);
+        }
+        Vector3 screenRight = nodeCam != null ? nodeCam.transform.right : Vector3.right;
+        currentNodes.Sort((a, b) => Vector3.Dot(a.transform.position, screenRight).CompareTo(Vector3.Dot(b.transform.position, screenRight)));
+        return currentNodes;
+    }
+
+    // การ์ดหนึ่งใบต่อทางเลือก: คลิกเพื่อเลือก (มีเครื่องหมาย Selected) แล้วกด Confirm เพื่อไปต่อ
+    private void BuildCards(Vector3 centerPosition)
+    {
+        foreach (Transform child in cardContainer) Destroy(child.gameObject);
+        nodeCards.Clear();
+        nodeButtons.Clear();
+        selectedCardNode = null;
+
+        foreach (PathNode node in NodesAround(centerPosition))
+        {
+            GameObject card = Instantiate(cardTemplate, cardContainer);
+            card.SetActive(true);
+            Transform frame = card.transform.Find("CardFrame");
+            if (frame != null && cardTilts.Length > 0) frame.localRotation = Quaternion.Euler(0f, 0f, cardTilts[nodeCards.Count % cardTilts.Length]);
+            NodeCardButton button = card.AddComponent<NodeCardButton>();
+            button.Setup(node, this);
+            nodeCards.Add(button);
+        }
+
+        if (confirmButton != null)
+        {
+            confirmButton.onClick.RemoveListener(ConfirmSelectedCard);
+            confirmButton.onClick.AddListener(ConfirmSelectedCard);
+        }
+        RefreshConfirm();
+    }
+
+    public void SelectCard(PathNode node)
+    {
+        if (!isSelecting) return;
+        selectedCardNode = node;
+        foreach (NodeCardButton card in nodeCards) if (card != null) card.SetSelected(card.Node == node);
+        SetHoveredNode(node); // ไฮไลต์ Node ในฉากด้วย
+        RefreshConfirm();
+    }
+
+    private void RefreshConfirm()
+    {
+        if (confirmButton == null) return;
+        bool ready = selectedCardNode != null;
+        confirmButton.interactable = ready;
+        CanvasGroup group = confirmButton.GetComponent<CanvasGroup>();
+        if (group == null) group = confirmButton.gameObject.AddComponent<CanvasGroup>();
+        group.alpha = ready ? 1f : 0.45f;
+    }
+
+    private void ConfirmSelectedCard()
+    {
+        if (selectedCardNode != null) ChooseNode(selectedCardNode);
     }
 
     private IEnumerator GenerateMapUICoroutine(Vector3 centerPosition)
@@ -331,6 +406,11 @@ public class NodeSelectionManager : MonoBehaviour
         {
             if (button != null) button.ShowResult(button.Node == selectedNode);
         }
+        foreach (NodeCardButton card in nodeCards)
+        {
+            if (card != null) card.ShowResult(card.Node == selectedNode);
+        }
+        if (nodeCards.Count > 0) yield return new WaitForSeconds(selectFeedbackDuration);
 
         Color dimLineColor = new Color(0.2f, 0.2f, 0.2f, 0.3f);
         foreach (PathNode n in FindObjectsByType<PathNode>(FindObjectsSortMode.None))

@@ -16,18 +16,25 @@ public class ClimbArtUI : MonoBehaviour
     private Image staminaFill, weightFill, fatigueFill;
     private float shownFatigue;
     private RectTransform staminaRoot;
+    private Vector3 staminaBaseScale = Vector3.one * 0.5f;
     private GameObject[] pitonLost;
     private Transform player;
     private float shownStamina = -1f, shownWeight, lastStamina;
 
     private void Awake()
     {
-        Transform height = transform.Find("Height");
+        // อาร์ต ReArt v2 เปิด Raycast Target ทุกภาพ HUD นี้ไม่มีอะไรให้กด ปิดหมดไม่ให้บังการคลิก
+        foreach (Graphic graphic in GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
+
+        // ชุด v2 ห่อ Height ไว้ใน "Height (1)" ตัวเลขอยู่ชั้นเดียวกับกรอบ
+        Transform height = transform.Find("Height (1)");
+        if (height == null) height = transform.Find("Height");
         heightText = height.Find("Text (TMP)").GetComponent<TextMeshProUGUI>();
         height.Find("Text (TMP) (1)").GetComponent<TextMeshProUGUI>().text = "M";
 
         Transform stamina = transform.Find("Stamina");
         staminaRoot = (RectTransform)stamina;
+        staminaBaseScale = staminaRoot.localScale;
         staminaFill = stamina.Find("Image (2)").GetComponent<Image>();
 
         // น้ำหนักกระเป๋าแสดงเป็นแถบสีส้มต่อจาก Stamina เหมือนเดิม จึงต้องอยู่ใต้แถบ Stamina
@@ -84,6 +91,14 @@ public class ClimbArtUI : MonoBehaviour
         NodeSelectionManager nodes = FindAnyObjectByType<NodeSelectionManager>(FindObjectsInactive.Include);
         if (nodes == null) return;
 
+        // ชุด v2: เลือกเส้นทางด้วยการ์ดบน Canvas NodePath_RE_UI (แผนที่ NodePath เดิมถูกปิดในอาร์ต)
+        GameObject cards = GameObject.Find("NodePath_RE_UI");
+        if (cards != null)
+        {
+            BindCards(nodes, cards.transform);
+            return;
+        }
+
         Transform path = transform.Find("NodePath");
         Image mock = path.GetComponent<Image>();
         if (mock != null) mock.enabled = false;
@@ -105,6 +120,43 @@ public class ClimbArtUI : MonoBehaviour
         nodes.auraLineColor = new Color(0.82f, 0.82f, 0.95f, 1f);
     }
 
+    private static void BindCards(NodeSelectionManager nodes, Transform root)
+    {
+        // กรอบเต็มจอ (bg, border, Frame) ของอาร์ตเปิด Raycast ไว้ จะกินคลิกการ์ด ปิดหมดแล้วเปิดเฉพาะการ์ดกับปุ่ม Confirm
+        foreach (Graphic graphic in root.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
+
+        Transform grid = root.Find("Card_Grid");
+        var tilts = new System.Collections.Generic.List<float>();
+        foreach (Transform sample in grid)
+        {
+            Transform frame = sample.Find("CardFrame");
+            if (frame != null) tilts.Add(frame.localEulerAngles.z);
+        }
+        nodes.cardTilts = tilts.ToArray();
+
+        Transform template = grid.GetChild(0);
+        template.SetParent(root, false);
+        template.gameObject.SetActive(false);
+        foreach (Transform sample in grid) Destroy(sample.gameObject);
+
+        Transform confirm = root.Find("ConfirmButton");
+        Image confirmImage = confirm.GetComponent<Image>();
+        confirmImage.raycastTarget = true;
+        Button button = confirm.GetComponent<Button>();
+        if (button == null) button = confirm.gameObject.AddComponent<Button>();
+        button.targetGraphic = confirmImage;
+        ColorBlock colors = button.colors;
+        colors.highlightedColor = new Color(1f, 0.95f, 0.8f, 1f);
+        colors.pressedColor = new Color(0.75f, 0.75f, 0.85f, 1f);
+        colors.disabledColor = new Color(0.6f, 0.6f, 0.6f, 1f);
+        button.colors = colors;
+
+        nodes.mapUIPanel = root.gameObject;
+        nodes.cardTemplate = template.gameObject;
+        nodes.cardContainer = grid;
+        nodes.confirmButton = button;
+    }
+
     private void Update()
     {
         if (GameManager.Instance == null || GameManager.Instance.playerData == null) return;
@@ -117,9 +169,9 @@ public class ClimbArtUI : MonoBehaviour
         }
 
         // ได้ Stamina ทีเดียวเยอะ ๆ (สมุนไพร/พัก) ให้แถบเด้ง
-        if (data.stamina > lastStamina + 2f) staminaRoot.localScale = Vector3.one * 0.56f;
+        if (data.stamina > lastStamina + 2f) staminaRoot.localScale = staminaBaseScale * 1.12f;
         lastStamina = data.stamina;
-        staminaRoot.localScale = Vector3.Lerp(staminaRoot.localScale, Vector3.one * 0.5f, Time.deltaTime * 12f);
+        staminaRoot.localScale = Vector3.Lerp(staminaRoot.localScale, staminaBaseScale, Time.deltaTime * 12f);
 
         float t = 1f - Mathf.Exp(-barSpeed * Time.deltaTime);
         shownStamina = Mathf.Lerp(shownStamina, data.stamina, t);

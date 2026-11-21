@@ -74,6 +74,8 @@ public class PlaytestLoopDirector : MonoBehaviour
         for (int i = 0; i < startingLoadout.Count && i < data.activeLoadout.Length; i++)
         {
             data.activeLoadout[i] = startingLoadout[i];
+            // ResetData คืนอาวุธทุกชิ้นเป็นยังไม่คราฟต์ อาวุธเริ่มต้นของ Playtest ถือว่าคราฟต์แล้ว (ไม่งั้นไม่ถูกส่งเข้าฉากต่อสู้)
+            if (startingLoadout[i] != null) startingLoadout[i].isUnlocked = true;
         }
 
         Debug.Log($"<color=cyan>[Playtest] เริ่ม Loop: {data.maxFloorBeforeCamp} ชั้นก่อนถึง Camp</color>");
