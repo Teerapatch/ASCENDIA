@@ -13,7 +13,7 @@ public class CombatManager : MonoBehaviour
 
     // AV (Action Value) = ActionGauge / Speed  ใคร AV น้อยสุดได้เล่นก่อน
     private const float ActionGauge = 10000f;
-    private const int PredictedTurnCount = 6;
+    private const int PredictedTurnCount = 4;
 
     public CombatState currentState;
     public bool isTransitioningWave = false;

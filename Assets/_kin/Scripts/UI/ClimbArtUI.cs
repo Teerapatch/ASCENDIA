@@ -20,6 +20,9 @@ public class ClimbArtUI : MonoBehaviour
     private GameObject[] pitonLost;
     private Transform player;
     private float shownStamina = -1f, shownWeight, lastStamina;
+    private int shownMeters = -1;
+    private float heightPunch;
+    private Vector3 heightBaseScale = Vector3.one;
 
     private void Awake()
     {
@@ -31,6 +34,7 @@ public class ClimbArtUI : MonoBehaviour
         if (height == null) height = transform.Find("Height");
         heightText = height.Find("Text (TMP)").GetComponent<TextMeshProUGUI>();
         height.Find("Text (TMP) (1)").GetComponent<TextMeshProUGUI>().text = "M";
+        heightBaseScale = heightText.transform.localScale;
 
         Transform stamina = transform.Find("Stamina");
         staminaRoot = (RectTransform)stamina;
@@ -183,12 +187,24 @@ public class ClimbArtUI : MonoBehaviour
 
         for (int i = 0; i < pitonLost.Length; i++) pitonLost[i].SetActive(i >= data.piton);
 
+        // ความสูงสะสมทั้งรัน: หน้าผาละ metersPerFloor (ปีนถึงยอด = ครบ 100 m แล้วได้เลือกเส้นทาง)
+        // ใช้ floorsClimbed ที่ไม่รีเซ็ตตอนเข้า Camp ความสูงจึงขึ้นต่อเนื่อง และบันทึกไว้ใน PlayerData ทุกเฟรม
         ClimbableWall wall = MapGenerator.CurrentCliff;
         if (wall != null && player != null)
         {
-            float progress = Mathf.InverseLerp(wall.MinClimbY, wall.MaxClimbY, player.position.y);
-            int meters = Mathf.RoundToInt((Mathf.Max(1, data.currentFloor) - 1 + progress) * metersPerFloor);
+            float progress = NodeSelectionManager.FloorProgress(wall, player.position.y);
+            data.heightMeters = (data.floorsClimbed + progress) * metersPerFloor;
+            data.bestHeightMeters = Mathf.Max(data.bestHeightMeters, data.heightMeters);
+        }
+        int meters = Mathf.RoundToInt(data.heightMeters);
+        if (meters != shownMeters)
+        {
+            // ข้ามหลักร้อย (ครบอีก 100 m) ตัวเลขเด้ง
+            if (shownMeters >= 0 && meters / 100 > shownMeters / 100) heightPunch = 1f;
+            shownMeters = meters;
             heightText.text = meters.ToString("0000");
         }
+        heightPunch = Mathf.MoveTowards(heightPunch, 0f, Time.deltaTime * 2.5f);
+        heightText.transform.localScale = heightBaseScale * (1f + heightPunch * 0.35f);
     }
 }

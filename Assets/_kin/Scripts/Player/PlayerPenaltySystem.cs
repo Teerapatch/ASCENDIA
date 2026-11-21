@@ -33,7 +33,7 @@ public class PlayerPenaltySystem : MonoBehaviour
 
         if (stateManager.currentState == PlayerStateManager.State.Climbing)
         {
-            float v = Input.GetAxisRaw("Vertical");
+            float v = PlayerStateManager.InputLocked ? 0f : Input.GetAxisRaw("Vertical");
             if (v != 0)
             {
                 DrainStamina();
@@ -94,18 +94,21 @@ public class PlayerPenaltySystem : MonoBehaviour
         exertionTime = 0f;
         Debug.Log($"🪝 Stamina หมด! ใช้ Piton 1 อัน ฟื้น Stamina เป็น {data.stamina:0} (เหลือ Piton {data.piton})");
 
-        if (pitonUI != null) pitonUI.ShowLostPitonAlert(data.piton);
+        // UI ผิดพลาดต้องไม่ทำให้ Coroutine นี้หยุดกลางทาง (ไม่งั้นค้างอยู่ในสถานะ Penalty บังคับตัวละครต่อไม่ได้)
+        try { if (pitonUI != null) pitonUI.ShowLostPitonAlert(data.piton); }
+        catch (System.Exception e) { Debug.LogException(e); }
 
         yield return new WaitForSeconds(0.4f);
         yield return StartCoroutine(FadeScreen(0f, pitonFadeDuration));
 
-        stateManager.ChangeState(PlayerStateManager.State.Climbing);
+        if (stateManager.currentState == PlayerStateManager.State.Penalty) stateManager.ChangeState(PlayerStateManager.State.Climbing);
         handlingExhaustion = false;
     }
 
     private IEnumerator FadeScreen(float targetAlpha, float duration)
     {
-        if (fadeImage == null) yield break;
+        // FadeImage เดิมอยู่ใน Canvas ของ HUD เก่าที่ถูกปิด (มองไม่เห็น) ใช้ภาพดำ Overlay ของ ScreenFader แทน
+        if (fadeImage == null || !fadeImage.isActiveAndEnabled) fadeImage = ScreenFader.Image;
 
         Color color = fadeImage.color;
         float startAlpha = color.a;

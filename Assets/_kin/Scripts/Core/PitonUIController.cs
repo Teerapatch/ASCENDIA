@@ -49,11 +49,16 @@ public class PitonUIController : MonoBehaviour
 
     public void ShowLostPitonAlert(int currentPitons)
     {
-        if (currentPitons >= 0 && currentPitons < pitonIcons.Length)
-        {
-            int lostIndex = currentPitons;
-            StartCoroutine(AnimateLostPiton(pitonIcons[lostIndex], originalScales[lostIndex]));
-        }
+        if (pitonIcons == null || currentPitons < 0 || currentPitons >= pitonIcons.Length) return;
+        Image icon = pitonIcons[currentPitons];
+        if (icon == null) return;
+
+        // ClimbArtUI เปลี่ยน pitonIcons เป็นไอคอนของอาร์ตแล้วซ่อน HUD เก่า (ที่มี Component นี้อยู่) ไว้
+        // Start จึงไม่เคยทำงาน (originalScales ยังว่าง) และเริ่ม Coroutine บนวัตถุที่ปิดอยู่ไม่ได้
+        Vector3 baseScale = originalScales != null && currentPitons < originalScales.Length && originalScales[currentPitons] != Vector3.zero
+            ? originalScales[currentPitons] : icon.transform.localScale;
+        if (isActiveAndEnabled) StartCoroutine(AnimateLostPiton(icon, baseScale));
+        else icon.color = inactiveColor;
     }
 
     private IEnumerator AnimateLostPiton(Image icon, Vector3 baseScale)

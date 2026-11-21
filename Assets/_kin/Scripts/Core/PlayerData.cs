@@ -63,6 +63,12 @@ public class PlayerData : ScriptableObject
     [Header("Progression")]
     public int currentFloor = 1;
     public int maxFloorBeforeCamp = 10;
+    [Tooltip("จำนวนหน้าผา (ชั้น) ที่ปีนผ่านมาทั้งรัน ไม่รีเซ็ตตอนเข้า Camp (currentFloor รีเซ็ต) ใช้คิดความสูงสะสม")]
+    public int floorsClimbed = 0;
+    [Tooltip("ความสูงสะสมของรันนี้ (เมตร) อัปเดตตลอดตอนปีน ข้ามฉากได้ (ต่อสู้ / Camp)")]
+    public float heightMeters = 0f;
+    [Tooltip("ความสูงมากที่สุดที่เคยถึงในรันนี้ (เมตร)")]
+    public float bestHeightMeters = 0f;
     public int currentCampLevel = 1;
 
     [Tooltip("กำหนดว่าช่วง Camp Level ที่เท่าไหร่คือช่วงสุดท้ายที่จะเจอบอสใหญ่ (เช่น ตั้งไว้ 4 = แคมป์ 1-3 จะเจอโหนด Camp ส่วนช่วงที่ 4 ตอนจบจะเจอโหนด Boss อันเดียว)")]
@@ -172,6 +178,9 @@ public class PlayerData : ScriptableObject
         weight = 0f;
         piton = startingPitons; // ตั้งครั้งเดียวตอนเริ่มเกม ไม่มีการเติมระหว่างเล่น
         currentFloor = 1;
+        floorsClimbed = 0;
+        heightMeters = 0f;
+        bestHeightMeters = 0f;
         currentWeaponDUR = maxWeaponDUR;
         currentCampLevel = 1;
         unlockedWeaponSlots = 1;

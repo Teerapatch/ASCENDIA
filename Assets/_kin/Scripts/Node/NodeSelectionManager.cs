@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using Unity.Cinemachine;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -65,27 +66,53 @@ public class NodeSelectionManager : MonoBehaviour
     [Tooltip("มุมเอียงของการ์ดแต่ละช่องตามที่อาร์ตวางไว้ (องศา)")]
     public float[] cardTilts = new float[0];
 
+    [Header("เลือกเส้นทางทุก 100 m")]
+    [Tooltip("เปิด = ปีนถึงยอดหน้าผาของชั้นนี้ (ความสูงครบอีก 100 m) แล้วการ์ดเลือกเส้นทางขึ้นเอง แทน Trigger (NodeSelectionZone) บนผา")]
+    public bool selectByHeight = true;
+    [Tooltip("ห่างจากยอดที่ปีนได้ (MaxClimbY) ไม่เกินเท่านี้ (หน่วยฉาก) ถือว่าถึงแล้ว")]
+    public float reachTolerance = 0.3f;
+    [Tooltip("ซ่อน Node 3D (ไอคอน/ป้ายบนหน้าผา) ใช้การ์ดอย่างเดียว")]
+    public bool hideNodesInScene = true;
+
+    [Header("หลังเลือก: เปลี่ยนหน้าผาแบบไร้รอยต่อ")]
+    [Tooltip("ระหว่างจอดำ รอให้หน้าผาใหม่สร้างเสร็จ ผู้เล่นเกาะผนัง และกล้องเข้าที่ (วินาที)")]
+    public float floorSettleTime = 0.35f;
+    [Tooltip("เวลาค่อย ๆ เปิดจอหลังโหลดหน้าผาใหม่เสร็จ")]
+    public float floorFadeInDuration = 0.6f;
+    [Tooltip("เวลาที่การ์ดค่อย ๆ หายไปหลังเปิดจอแล้ว จากนั้นค่อยให้ผู้เล่นบังคับได้")]
+    public float cardCloseDuration = 0.45f;
+
+    [Header("Juice ของการ์ด")]
+    public float panelFadeTime = 0.3f;
+    public float cardIntroDelay = 0.15f;
+    public float cardIntroStagger = 0.11f;
+
     private PathNode selectedCardNode;
     private readonly List<NodeCardButton> nodeCards = new List<NodeCardButton>();
+    // ระหว่างเลือกแล้วกำลังเปลี่ยนชั้น (ผู้เล่นยังอยู่ที่ยอด) ห้ามเปิดการ์ดซ้ำ จนกว่า ApplyFloorStartState
+    private bool floorFinished;
+    private Coroutine panelRoutine;
+
+    private bool CardMode => cardTemplate != null && cardContainer != null;
+
+    // ความคืบหน้าของหน้าผาชั้นนี้ 0 (จุดเริ่ม) ถึง 1 (ยอดที่ปีนได้ = ครบ 100 m)
+    public static float FloorProgress(ClimbableWall wall, float y)
+    {
+        return wall != null ? Mathf.InverseLerp(wall.MinClimbY, wall.MaxClimbY, y) : 0f;
+    }
 
     private void Awake()
     {
         Instance = this;
+        PlayerStateManager.InputLocked = false; // เผื่อฉากถูกโหลดใหม่ระหว่างล็อก
     }
 
     private void Start()
     {
         if (mapUIPanel == null) mapUIPanel = GameObject.Find("MapUIPanel");
         if (nodeCam == null) { GameObject cam = GameObject.Find("NodeCam"); if (cam) nodeCam = cam; }
-        if (fadeImage == null) { GameObject fade = GameObject.Find("FadeImage"); if (fade) fadeImage = fade.GetComponent<Image>(); }
-
-        // ตอนนี้ Fade เป็นทางเปลี่ยนหลักของการเลือก Node จึงต้องคลุมจอทุกสัดส่วน
-        if (fadeImage != null)
-        {
-            fadeImage.rectTransform.anchorMin = Vector2.zero;
-            fadeImage.rectTransform.anchorMax = Vector2.one;
-            fadeImage.rectTransform.sizeDelta = Vector2.zero;
-        }
+        // FadeImage เดิมอยู่ใน Canvas ของ HUD เก่าที่ถูกปิด (มองไม่เห็น) ใช้ภาพดำ Overlay ของ ScreenFader แทน
+        fadeImage = ScreenFader.Image;
 
         if (uiNodeContainer == null) { GameObject nc = GameObject.Find("UINodeContainer"); if (nc) uiNodeContainer = nc.transform; }
         if (uiLineContainer == null) { GameObject lc = GameObject.Find("UILineContainer"); if (lc) uiLineContainer = lc.transform; }
@@ -112,6 +139,9 @@ public class NodeSelectionManager : MonoBehaviour
     {
         if (BattleSession.TryConsumeResult(out BattleResult battleResult))
         {
+            // กลับมาจากการต่อสู้: เริ่มจากจอดำ ตั้งหน้าผา/กล้องให้เสร็จก่อนค่อยเปิดจอ
+            fadeImage = ScreenFader.Image;
+            ScreenFader.SetAlpha(1f);
             StartCoroutine(ResumeAfterBattle(battleResult));
         }
     }
@@ -135,7 +165,8 @@ public class NodeSelectionManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        if (nodeCam != null)
+        // โหมดการ์ด: Node บนผาถูกซ่อนแล้ว คงกล้องปีนไว้ (หยุดตามผู้เล่น) ไม่ตัดไป NodeCam
+        if (nodeCam != null && !CardMode)
         {
             // แต่ละหน้าผาสูงไม่เท่ากัน: วางกล้องตาม Marker ของหน้าผาชั้นนี้
             ClimbableWall cliff = MapGenerator.CurrentCliff;
@@ -148,14 +179,19 @@ public class NodeSelectionManager : MonoBehaviour
             nodeCam.SetActive(true);
         }
 
-        if (camController)
+        if (camController && !CardMode)
         {
             camController.walkCam.SetActive(false);
             camController.climbCam.SetActive(false);
         }
 
         // ต้องหลังตั้งกล้อง เพราะเรียงปุ่มซ้าย-ขวาตามมุมของ NodeCam
-        if (cardTemplate != null && cardContainer != null) BuildCards(playerTransform.position);
+        if (CardMode)
+        {
+            BuildCards(playerTransform.position);
+            if (panelRoutine != null) StopCoroutine(panelRoutine);
+            panelRoutine = StartCoroutine(PanelIntro());
+        }
         else StartCoroutine(GenerateMapUICoroutine(playerTransform.position));
     }
 
@@ -187,6 +223,7 @@ public class NodeSelectionManager : MonoBehaviour
             if (frame != null && cardTilts.Length > 0) frame.localRotation = Quaternion.Euler(0f, 0f, cardTilts[nodeCards.Count % cardTilts.Length]);
             NodeCardButton button = card.AddComponent<NodeCardButton>();
             button.Setup(node, this);
+            button.PlayIntro(cardIntroDelay + nodeCards.Count * cardIntroStagger);
             nodeCards.Add(button);
         }
 
@@ -202,7 +239,12 @@ public class NodeSelectionManager : MonoBehaviour
     {
         if (!isSelecting) return;
         selectedCardNode = node;
-        foreach (NodeCardButton card in nodeCards) if (card != null) card.SetSelected(card.Node == node);
+        foreach (NodeCardButton card in nodeCards)
+        {
+            if (card == null) continue;
+            card.SetSelected(card.Node == node);
+            card.SetDimmed(node != null && card.Node != node); // ใบที่ไม่ได้เลือกจางลง ใบที่เลือกเด่นขึ้น
+        }
         SetHoveredNode(node); // ไฮไลต์ Node ในฉากด้วย
         RefreshConfirm();
     }
@@ -211,6 +253,7 @@ public class NodeSelectionManager : MonoBehaviour
     {
         if (confirmButton == null) return;
         bool ready = selectedCardNode != null;
+        if (ready && !confirmButton.interactable) StartCoroutine(Punch(confirmButton.transform, 0.18f));
         confirmButton.interactable = ready;
         CanvasGroup group = confirmButton.GetComponent<CanvasGroup>();
         if (group == null) group = confirmButton.gameObject.AddComponent<CanvasGroup>();
@@ -346,6 +389,7 @@ public class NodeSelectionManager : MonoBehaviour
 
     private void Update()
     {
+        if (!isSelecting) CheckHeightMilestone();
         if (!isSelecting) return;
         Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
 
@@ -356,6 +400,52 @@ public class NodeSelectionManager : MonoBehaviour
             Quaternion swayRot = Quaternion.Euler(-mouseY * cameraSwayAmount, mouseX * cameraSwayAmount, 0);
             nodeCam.transform.rotation = Quaternion.Lerp(nodeCam.transform.rotation, originalNodeCamRot * swayRot, Time.deltaTime * 5f);
         }
+    }
+
+    // ปีนถึงยอดหน้าผาของชั้นนี้ = ความสูงครบอีก 100 m: เปิดการ์ดเลือกเส้นทาง
+    private void CheckHeightMilestone()
+    {
+        if (!selectByHeight || floorFinished || stateManager == null) return;
+        if (GameExitMenu.IsOpen) return;
+        PlayerStateManager.State state = stateManager.currentState;
+        if (state != PlayerStateManager.State.Climbing && state != PlayerStateManager.State.Walking && state != PlayerStateManager.State.Mantling) return;
+        ClimbableWall wall = MapGenerator.CurrentCliff;
+        if (wall == null || stateManager.transform.position.y < wall.MaxClimbY - reachTolerance) return;
+
+        floorFinished = true;
+        StartSelection(stateManager.transform);
+    }
+
+    // หน้าต่างเลือกเส้นทางโผล่: พื้นหลังค่อย ๆ ปรากฏ หัวข้อเลื่อนลงมา การ์ดลอยขึ้นทีละใบ (การ์ดเล่นเองใน NodeCardButton)
+    private IEnumerator PanelIntro()
+    {
+        if (mapUIPanel == null) yield break;
+        CanvasGroup group = mapUIPanel.GetComponent<CanvasGroup>();
+        if (group == null) group = mapUIPanel.AddComponent<CanvasGroup>();
+        RectTransform head = mapUIPanel.transform.Find("Head") as RectTransform;
+        Vector2 headPos = head != null ? head.anchoredPosition : Vector2.zero;
+        for (float t = 0f; t < panelFadeTime; t += Time.unscaledDeltaTime)
+        {
+            float k = t / panelFadeTime;
+            group.alpha = k;
+            if (head != null) head.anchoredPosition = headPos + Vector2.up * 80f * (1f - k) * (1f - k);
+            yield return null;
+        }
+        group.alpha = 1f;
+        if (head != null) head.anchoredPosition = headPos;
+        panelRoutine = null;
+    }
+
+    private static IEnumerator Punch(Transform target, float amount)
+    {
+        Vector3 baseScale = target.localScale;
+        for (float t = 0f; t < 0.3f; t += Time.unscaledDeltaTime)
+        {
+            float k = t / 0.3f;
+            target.localScale = baseScale * (1f + amount * Mathf.Sin(k * Mathf.PI) * (1f - k));
+            yield return null;
+        }
+        target.localScale = baseScale;
     }
 
     public void SetHoveredNode(PathNode node)
@@ -456,18 +546,23 @@ public class NodeSelectionManager : MonoBehaviour
             }
         }
 
-        yield return StartCoroutine(FadeScreen(1f, selectFadeDuration));
-
-        if (mapUIPanel) mapUIPanel.SetActive(false);
-
         PathNode.RoomType nextRoomType = selectedNode.roomType;
         string nextScene = selectedNode.sceneToLoad;
         bool isBattleNode = selectedNode.IsBattle;
+        bool staysInScene = !isBattleNode && !(nextRoomType == PathNode.RoomType.Camp && !string.IsNullOrEmpty(nextScene));
+
+        // จอดำ: การ์ดอยู่บน Canvas Overlay จึงยังเห็นอยู่เหนือความมืด (FadeImage อยู่บน Canvas แบบ Camera)
+        if (staysInScene && CardMode) PlayerStateManager.InputLocked = true;
+        yield return StartCoroutine(FadeScreen(1f, selectFadeDuration));
+
+        // ออกจากฉาก (ต่อสู้ / Camp) ปิดการ์ดเลย ส่วนหน้าผาถัดไปในฉากนี้ให้การ์ดค่อย ๆ หายหลังเปิดจอ
+        if (mapUIPanel && !(staysInScene && CardMode)) mapUIPanel.SetActive(false);
         EncounterData encounter = isBattleNode ? selectedNode.PickEncounter() : null;
 
         if (GameManager.Instance != null && GameManager.Instance.playerData != null)
         {
             GameManager.Instance.playerData.currentFloor++;
+            GameManager.Instance.playerData.floorsClimbed++; // ความสูงสะสม ไม่รีเซ็ตตอนเข้า Camp
         }
 
         TriggerNodeEncounter(selectedNode);
@@ -502,20 +597,69 @@ public class NodeSelectionManager : MonoBehaviour
         }
         else
         {
+            // ไร้รอยต่อ: ระหว่างจอดำสร้างหน้าผาใหม่ วางผู้เล่นบนผนัง และตัดกล้องให้เข้าที่ให้เสร็จก่อน
+            // แล้วค่อยเปิดจอ (การ์ดยังค้างอยู่) -> การ์ดค่อย ๆ หายไป -> ปลดล็อกให้เล่นต่อ
+            PlayerStateManager.InputLocked = true;
             if (RoomManager.Instance != null && stateManager != null)
             {
                 RoomManager.Instance.LoadNewRoom(PathNode.RoomType.Normal, stateManager.transform);
             }
 
             ApplyFloorStartState();
+            yield return StartCoroutine(SettleNewFloor());
 
-            yield return StartCoroutine(FadeScreen(0f, 1f));
+            yield return StartCoroutine(FadeScreen(0f, floorFadeInDuration));
+            yield return StartCoroutine(CloseCardPanel());
+            PlayerStateManager.InputLocked = false;
         }
+    }
+
+    // รอให้หน้าผาใหม่พร้อม: ห้องเก่าถูกลบ Start ของห้องใหม่ทำงาน (Node, ของเก็บ, Collider) ผู้เล่นเกาะผิวหิน
+    // กล้องตามผู้เล่นมีหน่วง ถ้าไม่ตัดจะเห็นกล้องเลื่อนลงมาจากยอดหน้าผาเก่าตอนเปิดจอ จึงตัดให้ถึงที่ทุกเฟรมระหว่างรอ
+    private IEnumerator SettleNewFloor()
+    {
+        yield return null;
+        Physics.SyncTransforms();
+        for (float t = 0f; t < floorSettleTime; t += Time.unscaledDeltaTime)
+        {
+            SnapCameras();
+            yield return null;
+        }
+        SnapCameras();
+        yield return null;
+    }
+
+    private static void SnapCameras()
+    {
+        foreach (CinemachineVirtualCameraBase cam in FindObjectsByType<CinemachineVirtualCameraBase>(FindObjectsSortMode.None))
+        {
+            cam.PreviousStateIsValid = false;
+        }
+    }
+
+    // การ์ดค่อย ๆ หายไปหลังเปิดจอ (ใบที่เลือกยังเด่นอยู่จนจางหมด) แล้วปิดหน้าต่าง
+    private IEnumerator CloseCardPanel()
+    {
+        if (mapUIPanel == null || !mapUIPanel.activeSelf) yield break;
+        CanvasGroup group = mapUIPanel.GetComponent<CanvasGroup>();
+        if (group == null) group = mapUIPanel.AddComponent<CanvasGroup>();
+        group.interactable = false;
+        float from = group.alpha;
+        for (float t = 0f; t < cardCloseDuration; t += Time.unscaledDeltaTime)
+        {
+            float k = t / cardCloseDuration;
+            group.alpha = from * (1f - k * k * (3f - 2f * k));
+            yield return null;
+        }
+        mapUIPanel.SetActive(false);
+        group.alpha = 1f;
+        group.interactable = true;
     }
 
     // ตั้งกล้อง/สถานะผู้เล่นให้ตรงกับชั้นปัจจุบัน (ชั้น 1 = เดินบนพื้น, ชั้นอื่น = เกาะกำแพง)
     public void ApplyFloorStartState()
     {
+        floorFinished = false;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
@@ -546,10 +690,13 @@ public class NodeSelectionManager : MonoBehaviour
         }
 
         ApplyBattleResult(result);
+        PlayerStateManager.InputLocked = true;
         ApplyFloorStartState();
+        yield return StartCoroutine(SettleNewFloor()); // ตั้งหน้าผาและกล้องให้นิ่งก่อนเปิดจอ
 
         // ก่อนเข้าฉากต่อสู้จอถูก Fade เป็นสีดำไว้ (โหมด Additive ยังค้างอยู่) ค่อยๆ เปิดกลับ
         yield return StartCoroutine(FadeScreen(0f, 1f));
+        PlayerStateManager.InputLocked = false;
     }
 
     private void ApplyBattleResult(BattleResult result)
@@ -647,7 +794,7 @@ public class NodeSelectionManager : MonoBehaviour
 
     private IEnumerator FadeScreen(float targetAlpha, float duration)
     {
-        if (fadeImage == null) yield break;
+        if (fadeImage == null) fadeImage = ScreenFader.Image;
         Color color = fadeImage.color; float startAlpha = color.a; float time = 0;
         while (time < duration)
         {

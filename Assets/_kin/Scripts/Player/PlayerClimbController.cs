@@ -121,6 +121,7 @@ public class PlayerClimbController : MonoBehaviour
     // รับทั้ง Move Action (รวมจอย) และ WASD/ลูกศรผ่าน Input System
     public Vector2 ReadClimbInput()
     {
+        if (PlayerStateManager.InputLocked) return Vector2.zero;
         PlayerWalkController walk = GetComponent<PlayerWalkController>();
         Vector2 input = walk != null && walk.moveAction != null ? walk.moveAction.action.ReadValue<Vector2>() : Vector2.zero;
         Keyboard keyboard = Keyboard.current;
@@ -164,7 +165,7 @@ public class PlayerClimbController : MonoBehaviour
 
         // กระโดดเร่ง: กด Spacebar พุ่งไปตามผิวหินระยะหนึ่ง แลกกับ Stamina และความเหนื่อย
         PlayerData playerData = GameManager.Instance.playerData;
-        if (jumpTime < 0f && Time.time >= nextJumpAt && !GameExitMenu.IsOpen && playerData != null
+        if (jumpTime < 0f && Time.time >= nextJumpAt && !GameExitMenu.IsOpen && !PlayerStateManager.InputLocked && playerData != null
             && Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame && playerData.stamina > jumpStaminaCost)
         {
             playerData.stamina -= jumpStaminaCost;

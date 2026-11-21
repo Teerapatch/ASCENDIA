@@ -107,6 +107,18 @@ public class PathNode : MonoBehaviour
         if (aura3D != null) { nodeAura3D = aura3D.gameObject; nodeAura3D.SetActive(false); }
 
         if (nodeText != null) { nodeText.text = nodeName; nodeText.color = normalColor; }
+
+        if (NodeSelectionManager.Instance != null && NodeSelectionManager.Instance.hideNodesInScene) HideVisuals();
+    }
+
+    // เลือกเส้นทางด้วยการ์ดแล้ว ไม่ต้องเห็น Node บนหน้าผา: ซ่อนทุกอย่างที่มองเห็น/ชนได้ แต่ยังเก็บข้อมูลของ Node (ประเภท, Encounter) ไว้ให้การ์ดใช้
+    public void HideVisuals()
+    {
+        foreach (Renderer r in GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+        foreach (Canvas c in GetComponentsInChildren<Canvas>(true)) c.enabled = false;
+        foreach (Light l in GetComponentsInChildren<Light>(true)) l.enabled = false;
+        foreach (Collider c in GetComponentsInChildren<Collider>(true)) c.enabled = false;
+        foreach (ParticleSystem p in GetComponentsInChildren<ParticleSystem>(true)) p.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
     }
 
     private void Update()
