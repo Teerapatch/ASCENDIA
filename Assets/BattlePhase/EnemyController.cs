@@ -84,6 +84,8 @@ public class EnemyController : MonoBehaviour
         currentHP = maxHP;
         currentPosture = maxPosture;
         isMarkedByGun = false;
+        // ดาวหมุน + ตัวโยกมึน ๆ ตอนติด Stagger
+        if (GetComponent<StaggerFX>() == null) gameObject.AddComponent<StaggerFX>();
     }
 
     public void StartTurn()

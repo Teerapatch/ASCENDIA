@@ -135,6 +135,17 @@ public class TempGameFlowUI : MonoBehaviour
     {
         lastOutcome = summary.outcome;
 
+        // หน้าจบชุดใหม่ (BattleResult_UI ในฉาก) ถ้ามีใช้ตัวนี้แทน Panel เดิม
+        if (BattleResultScreen.Instance != null)
+        {
+            string penalty = BattleSession.Current != null ? BattleSession.Current.defeatPenaltyText : null;
+            continueButtonText = BattleResultScreen.Instance.Show(summary, penalty, BattleSession.IsActive ? continueLabel.ToUpper() : "RETRY", OnClickRestart);
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            if (BattleSession.IsActive && autoReturnDelay > 0f) StartCoroutine(AutoReturnRoutine());
+            return;
+        }
+
         GameObject panel = summary.outcome == BattleOutcome.Victory ? victoryPanel : gameOverPanel;
         panel.SetActive(true);
 
@@ -181,7 +192,8 @@ public class TempGameFlowUI : MonoBehaviour
         float remaining = autoReturnDelay;
         while (remaining > 0f && !isReturning)
         {
-            if (continueButtonText != null) continueButtonText.text = $"{continueLabel} ({Mathf.CeilToInt(remaining)})";
+            string label = BattleResultScreen.Instance != null ? continueLabel.ToUpper() : continueLabel;
+            if (continueButtonText != null) continueButtonText.text = $"{label} ({Mathf.CeilToInt(remaining)})";
             yield return new WaitForSecondsRealtime(0.1f);
             remaining -= 0.1f;
         }

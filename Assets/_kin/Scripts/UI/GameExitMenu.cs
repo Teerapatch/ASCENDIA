@@ -42,6 +42,11 @@ public class GameExitMenu : MonoBehaviour
         quitButton.onClick.AddListener(QuitGame);
         endQuitButton.onClick.AddListener(QuitGame);
 
+        // ปุ่ม SETTINGS ในหน้าต่างพัก (Prefab: QuitWindow/Btn_Settings ถ้ามี) เปิดหน้า Settings ซ้อนด้านบน
+        Transform settings = quitWindow.transform.Find("Btn_Settings");
+        Button settingsButton = settings != null ? settings.GetComponent<Button>() : null;
+        if (settingsButton != null) settingsButton.onClick.AddListener(() => SettingsMenu.Open());
+
         quitWindow.SetActive(false);
         endWindow.SetActive(false);
         group.alpha = 0f;
@@ -71,7 +76,9 @@ public class GameExitMenu : MonoBehaviour
 
     private void Update()
     {
-        if (!buildEnded && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+        // Esc ระหว่างเปิด Settings = ปิด Settings อย่างเดียว (เฟรมที่มันเพิ่งปิดก็ไม่นับ)
+        bool settingsUsedEscape = SettingsMenu.IsOpen || SettingsMenu.LastClosedFrame == Time.frameCount;
+        if (!buildEnded && !settingsUsedEscape && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             if (isOpen) Close();
             else if (!IsEscapeUsedByBattle()) Open(quitWindow);

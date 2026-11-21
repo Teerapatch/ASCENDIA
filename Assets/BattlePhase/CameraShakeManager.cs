@@ -70,7 +70,9 @@ public class CameraShakeManager : MonoBehaviour
     private void LateUpdate()
     {
         if (pendingForce <= 0f) return;
-        if (impulseSource != null) impulseSource.GenerateImpulseWithVelocity(pendingDirection.normalized * (pendingForce * strengthMultiplier));
+        // GameSettings.CameraShake = ความแรงการสั่นที่ผู้เล่นตั้งในหน้า Settings (0 = ปิด)
+        float scale = strengthMultiplier * GameSettings.CameraShake;
+        if (impulseSource != null && scale > 0f) impulseSource.GenerateImpulseWithVelocity(pendingDirection.normalized * (pendingForce * scale));
         pendingForce = 0f;
     }
 }
