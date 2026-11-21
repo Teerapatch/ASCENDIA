@@ -79,7 +79,9 @@ public class PlayerData : ScriptableObject
     public List<WeaponData> allWeapons = new List<WeaponData>();
 
     [Header("Active Loadout")]
-    public WeaponData[] activeLoadout = new WeaponData[4];
+    public WeaponData[] activeLoadout = new WeaponData[LoadoutSize];
+    // จำนวนช่อง Loadout ของเกม (ห้ามอิงความยาวของ activeLoadout ตรง ๆ: ไฟล์ asset อาจถูกบันทึกไว้สั้นกว่านี้)
+    public const int LoadoutSize = 4;
     public int unlockedWeaponSlots = 1;
 
     [Header("Weapon Gating")]
@@ -97,13 +99,24 @@ public class PlayerData : ScriptableObject
 
     // จำนวนช่อง Loadout ที่ใช้ได้ (ทุกที่ที่เช็คช่องล็อกต้องถามจากตรงนี้)
     public int UnlockedLoadoutSlots => limitWeaponsByCampLevel
-        ? Mathf.Clamp(currentCampLevel, 0, activeLoadout.Length)
-        : activeLoadout.Length;
+        ? Mathf.Clamp(currentCampLevel, 0, LoadoutSize)
+        : LoadoutSize;
 
     public bool IsLoadoutSlotUnlocked(int slotIndex) => slotIndex < UnlockedLoadoutSlots;
 
     // craftedCount = จำนวนอาวุธที่คราฟต์ไปแล้ว
     public bool CanCraftNewWeapon(int craftedCount) => !limitWeaponsByCampLevel || craftedCount < currentCampLevel;
+
+    // ให้ activeLoadout มีครบ LoadoutSize ช่องเสมอ (เก็บอาวุธเดิมไว้)
+    // MainPlayerData.asset เคยถูกบันทึกไว้แค่ 1 ช่อง และเปิด CampScene ตรง ๆ ไม่ผ่าน ResetData ช่อง 2-4 เลยล็อกตลอด
+    public void EnsureLoadoutSize()
+    {
+        if (activeLoadout == null) activeLoadout = new WeaponData[LoadoutSize];
+        else if (activeLoadout.Length != LoadoutSize) System.Array.Resize(ref activeLoadout, LoadoutSize);
+    }
+
+    private void OnEnable() => EnsureLoadoutSize();
+    private void OnValidate() => EnsureLoadoutSize();
 
     // เอาอาวุธที่ยังไม่ได้คราฟต์ออกจาก Loadout (อาวุธที่ยังไม่มีใส่ไม่ได้) คืน true ถ้ามีการเปลี่ยน
     public bool RemoveUncraftedFromLoadout()
@@ -184,7 +197,7 @@ public class PlayerData : ScriptableObject
         currentWeaponDUR = maxWeaponDUR;
         currentCampLevel = 1;
         unlockedWeaponSlots = 1;
-        activeLoadout = new WeaponData[4];
+        activeLoadout = new WeaponData[LoadoutSize];
         skillLoadouts.Clear();
         // เริ่มรันใหม่: อาวุธทุกชิ้นกลับเป็นยังไม่คราฟต์ ต้องไปคราฟต์ที่ Forge ใหม่
         foreach (WeaponData weapon in allWeapons)

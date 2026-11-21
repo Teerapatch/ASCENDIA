@@ -48,7 +48,7 @@ public class CampReArtUI : MonoBehaviour
     private TMP_Text loadoutTabLabel, skillsTabLabel, slotCountText, inventoryHint;
     private readonly List<SlotView> loadoutSlots = new List<SlotView>();
     private RectTransform inventoryGrid;
-    private GameObject inventoryTemplate, lockTemplate;
+    private GameObject inventoryTemplate, lockTemplate, equippedTemplate;
     private int selectedLoadoutSlot;
 
     // ---------- Skills
@@ -110,6 +110,7 @@ public class CampReArtUI : MonoBehaviour
         data = camp != null && camp.playerData != null ? camp.playerData
              : GameManager.Instance != null ? GameManager.Instance.playerData
              : forge != null ? forge.playerData : null;
+        if (data != null) data.EnsureLoadoutSize();
     }
 
     private void OnDestroy()
@@ -135,23 +136,47 @@ public class CampReArtUI : MonoBehaviour
 
         if (camp.systemMessageText != null)
         {
-            GameObject canvasObject = new GameObject("CampMessageCanvas", typeof(Canvas), typeof(CanvasScaler));
-            Canvas canvas = canvasObject.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 50;
-            CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
-            RectTransform text = camp.systemMessageText.rectTransform;
-            text.SetParent(canvasObject.transform, false);
-            text.anchorMin = text.anchorMax = new Vector2(0.5f, 0f);
-            text.pivot = new Vector2(0.5f, 0f);
-            text.anchoredPosition = new Vector2(0f, 60f);
-            text.sizeDelta = new Vector2(1400f, 80f);
-            text.localScale = Vector3.one;
+            // ใช้ CampMessageCanvas ที่วางไว้ใน Hierarchy ถ้ามี (Tools/ASCENDIA/Bake Runtime UI) จัดตำแหน่งข้อความที่ตัวมันได้
+            GameObject baked = null;
+            foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+                if (root.name == "CampMessageCanvas") baked = root;
+            TextMeshProUGUI bakedText = baked != null ? baked.GetComponentInChildren<TextMeshProUGUI>(true) : null;
+            if (bakedText != null)
+            {
+                camp.systemMessageText.gameObject.SetActive(false);
+                camp.systemMessageText = bakedText;
+            }
+            else
+            {
+                // ไม่มีในฉาก: ย้ายข้อความเดิมขึ้น Canvas Overlay ของตัวเอง ให้อยู่บนหน้าใหม่
+                RectTransform canvas = CreateMessageCanvas();
+                PlaceMessageText(camp.systemMessageText.rectTransform, canvas);
+            }
             camp.systemMessageText.raycastTarget = false;
         }
+    }
+
+    public static RectTransform CreateMessageCanvas()
+    {
+        GameObject canvasObject = new GameObject("CampMessageCanvas", typeof(Canvas), typeof(CanvasScaler));
+        Canvas canvas = canvasObject.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 50;
+        CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight = 0.5f;
+        return (RectTransform)canvasObject.transform;
+    }
+
+    public static void PlaceMessageText(RectTransform text, Transform canvas)
+    {
+        text.SetParent(canvas, false);
+        text.anchorMin = text.anchorMax = new Vector2(0.5f, 0f);
+        text.pivot = new Vector2(0.5f, 0f);
+        text.anchoredPosition = new Vector2(0f, 60f);
+        text.sizeDelta = new Vector2(1400f, 80f);
+        text.localScale = Vector3.one;
     }
 
     // ---------------------------------------------------------------- หน้าหลัก
@@ -352,6 +377,17 @@ public class CampReArtUI : MonoBehaviour
             if (addTemplate != null) addTemplate.SetActive(false);
             if (lockTemplate != null) lockTemplate.SetActive(false);
 
+            // ป้าย E (ใช้อยู่) ของอาวุธในแถวล่าง: ยืมเครื่องหมาย Equipped จากช่องสกิลช่องแรกของหน้า Skills
+            Transform firstCells = skillGrid != null && skillGrid.childCount > 0 ? FindPrefix(skillGrid.GetChild(0), "Skills_Grid") : null;
+            Transform equippedMark = firstCells != null && firstCells.childCount > 0 ? FindPrefix(firstCells.GetChild(0), "Equipped") : null;
+            if (equippedMark != null)
+            {
+                equippedTemplate = Instantiate(equippedMark.gameObject, page);
+                equippedTemplate.name = "EquippedTemplate";
+                SetText(equippedTemplate.GetComponentInChildren<TMP_Text>(true), "E");
+                equippedTemplate.SetActive(false);
+            }
+
             List<RectTransform> slots = Normalize(grid, 4);
             for (int i = 0; i < slots.Count; i++)
             {
@@ -405,6 +441,12 @@ public class CampReArtUI : MonoBehaviour
             Message("This slot is still locked.");
             return;
         }
+        // กดช่องที่เลือกอยู่แล้วซ้ำ (มีอาวุธ) = ถอดอาวุธนั้นออก
+        if (index == selectedLoadoutSlot && data.activeLoadout[index] != null)
+        {
+            PutAway(data.activeLoadout[index]);
+            return;
+        }
         selectedLoadoutSlot = index;
         RefreshLoadout();
     }
@@ -433,10 +475,7 @@ public class CampReArtUI : MonoBehaviour
             if (slot.pop != null) slot.pop.Selected = i == selectedLoadoutSlot;
         }
         SetText(slotCountText, $"SLOT ({equipped}/{data.UnlockedLoadoutSlots})");
-        WeaponData current = selectedLoadoutSlot < data.activeLoadout.Length ? data.activeLoadout[selectedLoadoutSlot] : null;
-        SetText(inventoryHint, current != null
-            ? $"SLOT {selectedLoadoutSlot + 1}: {current.weaponName.ToUpper()}  -  click it again to remove"
-            : $"SLOT {selectedLoadoutSlot + 1}: EMPTY  -  pick a weapon");
+        SetText(inventoryHint, "Click a weapon to equip it or put it away");
         BuildInventory();
     }
 
@@ -457,12 +496,25 @@ public class CampReArtUI : MonoBehaviour
             }
             bool inLoadout = System.Array.IndexOf(data.activeLoadout, weapon) >= 0;
             CanvasGroup group = item.AddComponent<CanvasGroup>();
-            group.alpha = inLoadout ? 0.55f : 1f;
-            // ยังไม่ได้คราฟต์ = ล็อก: กุญแจกลางไอคอน ใส่ลงช่องไม่ได้ (กดแล้วบอกให้ไปคราฟต์ที่ Forge)
+            // ใช้อยู่ = เต็ม + ป้าย E, คราฟต์แล้วแต่ไม่ได้ใช้ = จางเล็กน้อย, ยังไม่คราฟต์ = จาง + กุญแจ
+            group.alpha = !weapon.isUnlocked || inLoadout ? 1f : 0.7f;
             if (!weapon.isUnlocked) AddLockMark(icon != null ? icon.transform : item.transform);
+            else if (inLoadout && equippedTemplate != null)
+            {
+                GameObject badge = Instantiate(equippedTemplate, item.transform);
+                badge.name = "Equipped";
+                badge.SetActive(true);
+                RectTransform rect = (RectTransform)badge.transform;
+                rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+                rect.pivot = new Vector2(1f, 1f);
+                rect.anchoredPosition = new Vector2(-6f, -6f);
+                rect.SetAsLastSibling();
+            }
+            // กล่องแรกของอาร์ต (แม่แบบ) ปิด Image ไว้ ภาพที่ปิดอยู่รับคลิกไม่ได้ เลยกดอาวุธแถวล่างไม่ติด: เปิดให้เหมือนอีก 3 กล่อง
             Image hit = item.GetComponent<Image>();
+            if (hit != null) hit.enabled = true;
             WeaponData chosen = weapon;
-            UIHoverPop pop = UIHoverPop.Add(hit != null ? hit.gameObject : item, () => AssignWeapon(chosen), item.transform);
+            UIHoverPop pop = UIHoverPop.Add(hit != null ? hit.gameObject : item, () => ToggleWeapon(chosen), item.transform);
             if (!weapon.isUnlocked) pop.hoverScale = pop.pressScale = 1f;
         }
     }
@@ -479,8 +531,10 @@ public class CampReArtUI : MonoBehaviour
         rect.SetAsLastSibling();
     }
 
-    // ใส่อาวุธลงช่องที่เลือก: อยู่อีกช่องอยู่แล้วก็สลับกัน, กดอาวุธเดิมของช่องนั้นซ้ำ = ถอดออก (ต้องเหลืออย่างน้อย 1 ชิ้น)
-    private void AssignWeapon(WeaponData weapon)
+    // กดอาวุธในแถวล่าง = สลับว่าจะใช้หรือไม่ใช้
+    //  - ใช้อยู่ -> ถอดออก (ต้องเหลืออย่างน้อย 1 ชิ้น)
+    //  - ยังไม่ใช้ -> ใส่ช่องที่เลือก (ถ้าว่าง) / ช่องว่างช่องแรก / ถ้าเต็มทุกช่องแทนที่อาวุธในช่องที่เลือก
+    private void ToggleWeapon(WeaponData weapon)
     {
         if (data == null || weapon == null) return;
         if (!weapon.isUnlocked)
@@ -489,20 +543,36 @@ public class CampReArtUI : MonoBehaviour
             return;
         }
         WeaponData[] loadout = data.activeLoadout;
-        int slot = selectedLoadoutSlot;
-        if (loadout[slot] == weapon)
+        if (System.Array.IndexOf(loadout, weapon) >= 0)
         {
-            int count = 0;
-            foreach (WeaponData w in loadout) if (w != null) count++;
-            if (count <= 1) { Message("You need at least one weapon."); return; }
-            loadout[slot] = null;
+            PutAway(weapon);
+            return;
         }
-        else
-        {
-            int existing = System.Array.IndexOf(loadout, weapon);
-            if (existing >= 0) loadout[existing] = loadout[slot];
-            loadout[slot] = weapon;
-        }
+
+        int slot = -1;
+        if (data.IsLoadoutSlotUnlocked(selectedLoadoutSlot) && loadout[selectedLoadoutSlot] == null) slot = selectedLoadoutSlot;
+        for (int i = 0; slot < 0 && i < loadout.Length; i++)
+            if (data.IsLoadoutSlotUnlocked(i) && loadout[i] == null) slot = i;
+        if (slot < 0 && data.IsLoadoutSlotUnlocked(selectedLoadoutSlot)) slot = selectedLoadoutSlot; // เต็ม: แทนที่ช่องที่เลือก
+        if (slot < 0) { Message("No free slot."); return; }
+
+        WeaponData replaced = loadout[slot];
+        loadout[slot] = weapon;
+        selectedLoadoutSlot = slot;
+        Message(replaced != null ? $"{weapon.weaponName} replaces {replaced.weaponName}." : $"{weapon.weaponName} equipped.");
+        RefreshLoadout();
+    }
+
+    private void PutAway(WeaponData weapon)
+    {
+        WeaponData[] loadout = data.activeLoadout;
+        int index = System.Array.IndexOf(loadout, weapon);
+        if (index < 0) return;
+        int count = 0;
+        foreach (WeaponData w in loadout) if (w != null) count++;
+        if (count <= 1) { Message("You need at least one weapon."); return; }
+        loadout[index] = null;
+        Message($"{weapon.weaponName} put away.");
         RefreshLoadout();
     }
 
@@ -575,18 +645,32 @@ public class CampReArtUI : MonoBehaviour
         }
     }
 
+    // อาวุธที่คราฟต์แล้วทุกชิ้น (ใช้อยู่หรือไม่ก็ตาม) ตามลำดับของ Forge
+    private List<WeaponData> CraftedWeapons()
+    {
+        List<WeaponData> crafted = new List<WeaponData>();
+        foreach (WeaponData weapon in AllWeapons)
+            if (weapon != null && weapon.isUnlocked) crafted.Add(weapon);
+        return crafted;
+    }
+
+    // หน้า Skills: หนึ่งคอลัมน์ต่ออาวุธที่คราฟต์แล้ว (ไม่ขึ้นกับว่าใส่ใน Loadout หรือไม่) คอลัมน์ที่เหลือล็อก
     private void RefreshSkills()
     {
         if (data == null) return;
+        List<WeaponData> crafted = CraftedWeapons();
+        if (skillWeapon != null && !crafted.Contains(skillWeapon)) { skillWeapon = null; selectedSkill = null; }
         for (int c = 0; c < skillColumns.Count; c++)
         {
             SlotView column = skillColumns[c];
-            WeaponData weapon = c < data.activeLoadout.Length ? data.activeLoadout[c] : null;
+            WeaponData weapon = c < crafted.Count ? crafted[c] : null;
+            bool inUse = weapon != null && System.Array.IndexOf(data.activeLoadout, weapon) >= 0;
             if (column.icon != null)
             {
                 column.icon.gameObject.SetActive(true);
                 column.icon.sprite = weapon != null ? weapon.weaponIcon : column.icon.sprite;
-                column.icon.color = weapon != null ? Color.white : lockedTint;
+                // ไม่ได้ใส่ใน Loadout: ไอคอนหม่นลงเล็กน้อย แต่ยังจัดสกิลได้
+                column.icon.color = weapon == null ? lockedTint : inUse ? Color.white : new Color(0.7f, 0.7f, 0.75f, 1f);
             }
             if (column.labelFrame != null) column.labelFrame.SetActive(weapon != null);
             SetText(column.label, weapon != null ? $"LEVEL {weapon.currentLevel}" : "");
@@ -620,9 +704,8 @@ public class CampReArtUI : MonoBehaviour
 
         if (selectedSkill == null || skillWeapon == null)
         {
-            foreach (WeaponData weapon in data.activeLoadout)
+            foreach (WeaponData weapon in crafted)
             {
-                if (weapon == null) continue;
                 WeaponSkill first = weapon.skillPool.Find(s => s != null);
                 if (first != null) { SelectSkill(weapon, first); return; }
             }
@@ -649,7 +732,9 @@ public class CampReArtUI : MonoBehaviour
         bool unlocked = skillWeapon.IsSkillUnlocked(selectedSkill);
         bool equipped = data.GetEquippedSkills(skillWeapon).Contains(selectedSkill);
         SetText(infoCost, selectedSkill.apCost.ToString());
-        SetText(infoTag, unlocked ? skillWeapon.weaponName.ToUpper() : $"LOCKED  LV.{skillWeapon.SkillUnlockLevel(selectedSkill)}");
+        bool inUse = System.Array.IndexOf(data.activeLoadout, skillWeapon) >= 0;
+        SetText(infoTag, !unlocked ? $"LOCKED  LV.{skillWeapon.SkillUnlockLevel(selectedSkill)}"
+            : inUse ? skillWeapon.weaponName.ToUpper() : $"{skillWeapon.weaponName.ToUpper()}  (NOT EQUIPPED)");
         SetText(infoName, selectedSkill.skillName);
         SetText(infoDescription, selectedSkill.description);
         SetText(equipLabel, !unlocked ? "LOCKED" : equipped ? "UNEQUIP" : "EQUIP");
@@ -711,14 +796,9 @@ public class CampReArtUI : MonoBehaviour
             Image hit = upgrade.GetComponent<Image>();
             upgradePop = UIHoverPop.Add(hit != null ? hit.gameObject : upgrade.gameObject, DoForge, upgrade);
 
-            // อาร์ตไม่มีปุ่มกลับในหน้า Forge: ทำจากปุ่ม Upgrade วางมุมซ้ายล่าง (กด Esc ก็กลับได้)
-            RectTransform back = Instantiate((RectTransform)upgrade, tab);
-            back.name = "BackButton";
-            back.anchorMin = back.anchorMax = new Vector2(0f, 0f);
-            back.pivot = new Vector2(0f, 0f);
-            back.anchoredPosition = new Vector2(60f, 40f);
-            back.localScale = upgrade.localScale * 0.7f;
-            SetText(back.GetComponentInChildren<TMP_Text>(true), "BACK");
+            // อาร์ตไม่มีปุ่มกลับในหน้า Forge: ใช้ BackButton ใน Hierarchy ถ้ามี (Bake Runtime UI) ไม่มีค่อยทำจากปุ่ม Upgrade (กด Esc ก็กลับได้)
+            RectTransform back = tab.Find("BackButton") as RectTransform;
+            if (back == null) back = CreateForgeBackButton(tab, (RectTransform)upgrade);
             Image backHit = back.GetComponent<Image>();
             UIHoverPop.Add(backHit != null ? backHit.gameObject : back.gameObject, () => ShowPage(mainPage));
         }
@@ -760,6 +840,18 @@ public class CampReArtUI : MonoBehaviour
                 if (skillRow != null) skillRow.SetParent(statsGrid, false);
             }
         }
+    }
+
+    public static RectTransform CreateForgeBackButton(Transform tab, RectTransform upgrade)
+    {
+        RectTransform back = Instantiate(upgrade, tab);
+        back.name = "BackButton";
+        back.anchorMin = back.anchorMax = new Vector2(0f, 0f);
+        back.pivot = new Vector2(0f, 0f);
+        back.anchoredPosition = new Vector2(60f, 40f);
+        back.localScale = upgrade.localScale * 0.7f;
+        SetText(back.GetComponentInChildren<TMP_Text>(true), "BACK");
+        return back;
     }
 
     private void SelectForgeWeapon(int index)

@@ -240,6 +240,9 @@ public class BattleCameraController : MonoBehaviour
         if (attacker != null) currentAttacker = attacker;
         if (target != null) currentTarget = target;
 
+        // เลือกเป้า: จัดเฟรมตามขนาดตัวจริงของศัตรูก่อน (จุด Focus_N ในฉากวางไว้กับตำแหน่ง/ขนาดศัตรูชุดเก่า)
+        if (newState == CameraState.TargetSelecting && FrameFocusTarget()) return;
+
         // จุดกล้องที่ตั้งไว้ในฉากมาก่อนสูตรคำนวณเดิม
         if (MoveToPoint(newState)) return;
 
@@ -312,6 +315,63 @@ public class BattleCameraController : MonoBehaviour
         enemyTurnTarget = enemy;
         mode = Mode.Enemy;
         smoothTime = followSmoothTime * .8f;
+    }
+
+    [Header("เลือกเป้า (Focus) ตามขนาดศัตรู")]
+    [Tooltip("เปิด = คำนวณมุมกล้องจากความสูงตัวจริงของศัตรู (ไม่ใช้จุด Focus_N ในฉาก)")]
+    public bool focusFitsEnemy = true;
+    [Range(0.2f, 0.95f), Tooltip("ศัตรูสูงกี่ส่วนของจอ")]
+    public float focusFill = 0.55f;
+    [Tooltip("กล้องสูงกว่ากลางลำตัวกี่เท่าของความสูงศัตรู (มองลงเล็กน้อย)")]
+    public float focusElevation = 0.15f;
+    [Tooltip("จุดเล็งสูงจากเท้ากี่ส่วนของความสูง (0.5 = กลางตัว)")]
+    [Range(0.2f, 0.8f)] public float focusAimHeight = 0.56f;
+    [Tooltip("เลื่อนกล้องไปทางขวาของแนวมองกี่เท่าของระยะ (ให้เห็นศัตรูเฉียงเล็กน้อย ไม่ตรงหน้าเกินไป)")]
+    public float focusSideShift = 0.12f;
+
+    // จัดเฟรมตามขนาดตัว: ถอยกล้องให้ศัตรูสูง focusFill ของจอตาม FOV ของฉาก มองจากทิศเดียวกับกล้องหลัก
+    private bool FrameFocusTarget()
+    {
+        if (!focusFitsEnemy || currentTarget == null) return false;
+        if (!TargetBounds(currentTarget, out Vector3 feet, out float height) || height < 0.05f) return false;
+
+        Vector3 aim = feet + Vector3.up * (height * focusAimHeight);
+        float fov = sceneDefaultFov > 1f ? sceneDefaultFov : 55f;
+        float distance = height / Mathf.Max(0.05f, focusFill) * 0.5f / Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+
+        Vector3 direction = aim - sceneDefaultPosition;
+        direction.y = 0f;
+        if (direction.sqrMagnitude < 0.0001f) direction = sceneDefaultRotation * Vector3.forward;
+        direction.Normalize();
+        Vector3 side = Vector3.Cross(Vector3.up, direction);
+
+        Vector3 position = aim - direction * distance + side * (distance * focusSideShift) + Vector3.up * (height * focusElevation);
+        ApplyCustomTransition(position, Quaternion.LookRotation(aim - position, Vector3.up), sceneDefaultLensSize, targetFocusPreset.transitionDuration);
+        return true;
+    }
+
+    // เท้าและความสูงตัวในโลก: จาก EnemyAnimationSet (targetHeight) ถ้าไม่มีใช้กรอบของโมเดล
+    private static bool TargetBounds(Transform target, out Vector3 feet, out float height)
+    {
+        EnemyAnimationController anim = target.GetComponentInParent<EnemyAnimationController>();
+        if (anim != null && anim.Height > 0.01f)
+        {
+            feet = target.position + Vector3.down * anim.GroundBelowSpawn;
+            height = anim.Height;
+            return true;
+        }
+
+        bool found = false;
+        Bounds bounds = new Bounds(target.position, Vector3.zero);
+        foreach (Renderer r in target.GetComponentsInChildren<Renderer>())
+        {
+            if (!(r is SkinnedMeshRenderer) && !(r is MeshRenderer)) continue;
+            if (!found) { bounds = r.bounds; found = true; }
+            else bounds.Encapsulate(r.bounds);
+        }
+        feet = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+        height = bounds.size.y;
+        return found;
     }
 
     private bool MoveToPoint(CameraState state)

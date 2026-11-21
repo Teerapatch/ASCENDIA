@@ -181,15 +181,10 @@ public class BattleArtUI : MonoBehaviour
 
     private void BindSkillCards(PlayerUIManager menus, Transform example)
     {
-        // กองการ์ดใหม่ วางตำแหน่งแต่ละใบเอง (การ์ดอาร์ตมี Rect ใหญ่กว่าภาพ ใช้ LayoutGroup ไม่ได้)
-        RectTransform list = new GameObject("Skills_List", typeof(RectTransform)).GetComponent<RectTransform>();
-        list.SetParent(transform, false);
-        list.anchorMin = list.anchorMax = Vector2.zero;
-        list.pivot = new Vector2(0.5f, 0.5f);
-        list.anchoredPosition = skillCardsPosition;
-        list.sizeDelta = Vector2.zero;
-        SkillCardStack stack = list.gameObject.AddComponent<SkillCardStack>();
-        stack.step = skillCardStep;
+        // กองการ์ดสกิล: ใช้ Skills_List ที่วางไว้ใน Hierarchy ถ้ามี (Tools/ASCENDIA/Bake Runtime UI) ไม่มีค่อยสร้างเอง
+        RectTransform list = transform.Find("Skills_List") as RectTransform;
+        if (list == null) list = CreateSkillList(transform, skillCardsPosition, skillCardStep);
+        if (list.GetComponent<SkillCardStack>() == null) list.gameObject.AddComponent<SkillCardStack>().step = skillCardStep;
 
         Transform template = example;
         template.SetParent(transform, false);
@@ -214,9 +209,160 @@ public class BattleArtUI : MonoBehaviour
         Transform oldSkills = player.transform.Find("SkillsUI");
         if (oldSkills != null) oldSkills.gameObject.SetActive(false);
 
-        menus.skillMenuPanel = list.gameObject.AddComponent<CanvasGroup>();
+        menus.skillMenuPanel = GetOrAdd<CanvasGroup>(list.gameObject);
         menus.skillListContainer = list;
         menus.skillButtonPrefab = template.gameObject;
+
+        BindWeaponCards(menus, template);
+    }
+
+    private static T GetOrAdd<T>(GameObject target) where T : Component
+    {
+        T component = target.GetComponent<T>();
+        return component != null ? component : target.AddComponent<T>();
+    }
+
+    // กองการ์ดสกิล (การ์ดอาร์ตมี Rect ใหญ่กว่าภาพ ใช้ LayoutGroup ไม่ได้ SkillCardStack วางตำแหน่งแต่ละใบเอง)
+    public static RectTransform CreateSkillList(Transform canvas, Vector2 position, Vector2 step)
+    {
+        RectTransform list = new GameObject("Skills_List", typeof(RectTransform)).GetComponent<RectTransform>();
+        list.SetParent(canvas, false);
+        list.anchorMin = list.anchorMax = Vector2.zero;
+        list.pivot = new Vector2(0.5f, 0.5f);
+        list.anchoredPosition = position;
+        list.sizeDelta = Vector2.zero;
+        list.gameObject.AddComponent<SkillCardStack>().step = step;
+        return list;
+    }
+
+    [Header("เปลี่ยนอาวุธ (Switch): ไอคอนล้อมรอบตัวผู้เล่น")]
+    [Tooltip("Prefab ของปุ่มอาวุธหนึ่งอัน (Back/Icon/Name) ใช้เมื่อในฉากไม่มี WeaponOption_Template แต่งหน้าตาที่ Prefab ได้เลย")]
+    public GameObject weaponOptionPrefab;
+    [Tooltip("ขนาดไอคอนอาวุธ (อ้างอิง 1920x1080) ใช้เฉพาะตอนสร้างแม่แบบเอง ถ้าแม่แบบอยู่ใน Hierarchy แล้วให้แก้ที่ตัวมันเลย")]
+    public float weaponRingIconSize = 120f;
+    [Tooltip("ขนาดตัวอักษรชื่ออาวุธใต้ไอคอน (ใช้เฉพาะตอนสร้างแม่แบบเอง)")]
+    public float weaponRingNameSize = 26f;
+    [Tooltip("สีพื้นมืดหลังไอคอน (ใช้เฉพาะตอนสร้างแม่แบบเอง)")]
+    public Color weaponRingBackColor = new Color(0.02f, 0.03f, 0.1f, 0.85f);
+
+    // หน้าเปลี่ยนอาวุธ: ไอคอนเส้นของอาร์ต (WeaponData.battleIcon) + ชื่ออาวุธ วางเป็นวงรอบตัวผู้เล่นบนจอ (WeaponRingLayout)
+    // ไม่มีปุ่ม Back (กด Esc เพื่อกลับ) อาวุธที่ถืออยู่/พังแล้วจางลงและกดไม่ได้
+    // Weapons_Ring และ WeaponOption_Template ที่วางไว้ใน Hierarchy (Bake Runtime UI) ใช้ตามนั้นเลย จัดหน้าตาที่ตัวมันได้
+    private void BindWeaponCards(PlayerUIManager menus, Transform skillTemplate)
+    {
+        RectTransform list = transform.Find("Weapons_Ring") as RectTransform;
+        if (list == null) list = CreateWeaponRing(transform);
+        if (list.GetComponent<WeaponRingLayout>() == null) list.gameObject.AddComponent<WeaponRingLayout>();
+
+        // ลำดับที่ใช้: แม่แบบในฉาก (Instance ของ Prefab) > Prefab ที่ผูกไว้ > สร้างจากโค้ด
+        Transform found = transform.Find("WeaponOption_Template");
+        GameObject option;
+        if (found != null) option = found.gameObject;
+        else if (weaponOptionPrefab != null)
+        {
+            option = Instantiate(weaponOptionPrefab, transform);
+            option.name = "WeaponOption_Template";
+        }
+        else option = CreateWeaponOptionTemplate(transform, skillTemplate.Find("Name") != null ? skillTemplate.Find("Name").GetComponent<TMP_Text>() : null,
+                GlowSprite(transform), weaponRingIconSize, weaponRingNameSize, weaponRingBackColor);
+        // Awake ปิด Raycast ทุกภาพบน Canvas นี้ไปแล้ว พื้นรับคลิกของปุ่มต้องเปิดคืน
+        Button optionButton = option.GetComponent<Button>();
+        if (optionButton != null && optionButton.targetGraphic != null) optionButton.targetGraphic.raycastTarget = true;
+        option.SetActive(false);
+
+        // รายการเปลี่ยนอาวุธชุดเก่า (World Space ใต้ Player_Holder/Canvas) ไม่ใช้แล้ว
+        if (menus.weaponMenuPanel != null) menus.weaponMenuPanel.gameObject.SetActive(false);
+        menus.weaponMenuPanel = GetOrAdd<CanvasGroup>(list.gameObject);
+        menus.weaponListContainer = list;
+        menus.weaponOptionTemplate = option;
+        menus.weaponBackCard = false;
+        menus.dimUnavailableWeapons = true;
+    }
+
+    public static Sprite GlowSprite(Transform canvas)
+    {
+        Transform glow = canvas.Find("QTE_Frame/Glow");
+        Image image = glow != null ? glow.GetComponent<Image>() : null;
+        return image != null ? image.sprite : null;
+    }
+
+    public static RectTransform CreateWeaponRing(Transform canvas)
+    {
+        RectTransform list = new GameObject("Weapons_Ring", typeof(RectTransform)).GetComponent<RectTransform>();
+        list.SetParent(canvas, false);
+        list.anchorMin = Vector2.zero;
+        list.anchorMax = Vector2.one;
+        list.pivot = new Vector2(0.5f, 0.5f);
+        list.sizeDelta = Vector2.zero;
+        list.anchoredPosition = Vector2.zero;
+        list.gameObject.AddComponent<WeaponRingLayout>();
+        return list;
+    }
+
+    // ปุ่มหนึ่งอัน = พื้นรับคลิกโปร่งใส + พื้นมืดนุ่ม (Glow ของอาร์ต) + ไอคอน + ชื่อ (ฟอนต์เดียวกับชื่อการ์ดสกิล)
+    public static GameObject CreateWeaponOptionTemplate(Transform canvas, TMP_Text styleSource, Sprite glow, float iconSize, float nameSize, Color backColor)
+    {
+        GameObject option = new GameObject("WeaponOption_Template", typeof(RectTransform), typeof(Image), typeof(Button));
+        RectTransform root = (RectTransform)option.transform;
+        root.SetParent(canvas, false);
+        root.anchorMin = root.anchorMax = root.pivot = new Vector2(0.5f, 0.5f);
+        root.sizeDelta = new Vector2(iconSize * 1.5f, iconSize * 1.5f);
+        Image hit = option.GetComponent<Image>();
+        hit.color = new Color(1f, 1f, 1f, 0f);
+        hit.raycastTarget = true;
+        Button button = option.GetComponent<Button>();
+        button.transition = Selectable.Transition.None;
+        button.targetGraphic = hit;
+
+        if (glow != null)
+        {
+            GameObject backObject = new GameObject("Back", typeof(RectTransform), typeof(Image));
+            RectTransform back = (RectTransform)backObject.transform;
+            back.SetParent(root, false);
+            back.anchorMin = back.anchorMax = back.pivot = new Vector2(0.5f, 0.5f);
+            back.anchoredPosition = new Vector2(0f, iconSize * 0.05f);
+            back.sizeDelta = Vector2.one * iconSize * 2.1f;
+            Image backImage = backObject.GetComponent<Image>();
+            backImage.sprite = glow;
+            backImage.color = backColor;
+            backImage.raycastTarget = false;
+        }
+
+        GameObject iconObject = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+        RectTransform icon = (RectTransform)iconObject.transform;
+        icon.SetParent(root, false);
+        icon.anchorMin = icon.anchorMax = icon.pivot = new Vector2(0.5f, 0.5f);
+        icon.anchoredPosition = new Vector2(0f, iconSize * 0.12f);
+        icon.sizeDelta = Vector2.one * iconSize;
+        Image iconImage = iconObject.GetComponent<Image>();
+        iconImage.preserveAspect = true;
+        iconImage.raycastTarget = false;
+
+        GameObject nameObject = new GameObject("Name", typeof(RectTransform), typeof(TextMeshProUGUI));
+        RectTransform nameRect = (RectTransform)nameObject.transform;
+        nameRect.SetParent(root, false);
+        nameRect.anchorMin = nameRect.anchorMax = nameRect.pivot = new Vector2(0.5f, 0.5f);
+        nameRect.anchoredPosition = new Vector2(0f, -iconSize * 0.62f);
+        nameRect.sizeDelta = new Vector2(iconSize * 2.4f, nameSize * 1.6f);
+        TextMeshProUGUI nameText = nameObject.GetComponent<TextMeshProUGUI>();
+        if (styleSource != null)
+        {
+            nameText.font = styleSource.font;
+            nameText.fontSharedMaterial = styleSource.fontSharedMaterial;
+            nameText.color = styleSource.color;
+        }
+        nameText.text = "Weapon";
+        nameText.fontSize = nameSize;
+        nameText.alignment = TextAlignmentOptions.Center;
+        nameText.textWrappingMode = TextWrappingModes.NoWrap;
+        nameText.raycastTarget = false;
+
+        UIHoverPop pop = option.AddComponent<UIHoverPop>();
+        pop.target = icon;
+        pop.hoverScale = 1.15f;
+        pop.pressScale = 0.92f;
+        option.SetActive(false);
+        return option;
     }
 
     private static void Rename(Transform root, string path, string name)

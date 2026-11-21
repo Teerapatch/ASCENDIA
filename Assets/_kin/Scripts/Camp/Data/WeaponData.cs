@@ -19,6 +19,8 @@ public class WeaponData : ScriptableObject
     public WeaponType weaponType = WeaponType.Dagger;
     public string weaponName;
     public Sprite weaponIcon;
+    [Tooltip("ไอคอนเส้นขาวสำหรับฉากต่อสู้ (UI_New/Battle/Icon_*) ใช้ในหน้าเปลี่ยนอาวุธ")]
+    public Sprite battleIcon;
     public Color auraColor = Color.white;
     public string description;
 

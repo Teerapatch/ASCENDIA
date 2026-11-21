@@ -28,6 +28,10 @@ public class PlayerUIManager : MonoBehaviour
     public GameObject weaponOptionTemplate;
     [Tooltip("ปุ่มย้อนกลับในหน้าเลือกอาวุธ (ไม่บังคับ)")]
     public Button weaponMenuBackButton;
+    [Tooltip("เพิ่มการ์ด BACK ใบสุดท้ายในหน้าเปลี่ยนอาวุธ (BattleArtUI เปิดให้เมื่อใช้การ์ดของอาร์ต)")]
+    public bool weaponBackCard;
+    [Tooltip("อาวุธที่ถืออยู่/พังแล้วจางลง (CanvasGroup) แทนการแต้มสีพื้น")]
+    public bool dimUnavailableWeapons;
     public Color activeWeaponTint = new Color(1f, 0.85f, 0.4f);
     public Color brokenWeaponTint = new Color(0.45f, 0.45f, 0.45f);
 
@@ -94,16 +98,36 @@ public class PlayerUIManager : MonoBehaviour
             option.SetActive(true);
             spawnedWeaponOptions.Add(option);
 
+            string durability = $"DUR {Mathf.CeilToInt(Mathf.Max(0f, weapon.currentDurability))}/{Mathf.CeilToInt(weapon.maxDurability)}";
+            string status = isBroken ? "BROKEN" : isActive ? "EQUIPPED" : "";
             SetText(option, "Name", weapon.weaponName);
-            SetText(option, "Durability", $"DUR {Mathf.CeilToInt(Mathf.Max(0f, weapon.currentDurability))}/{Mathf.CeilToInt(weapon.maxDurability)}");
-            SetText(option, "Cost", isActive || isBroken ? "" : $"{apCost} AP");
-            SetText(option, "Status", isBroken ? "BROKEN" : isActive ? "EQUIPPED" : "");
+            SetText(option, "Durability", durability);
+            SetText(option, "Status", status);
+            SetText(option, "Tag", "WEAPON");
+            bool card = FindChild<TextMeshProUGUI>(option, "Description") != null;
+            if (card)
+            {
+                // การ์ดอาร์ต: ตัวเลขในวงกลมคือ AP ที่ใช้, คำอธิบายรวมความทนทาน/เลเวล/สถานะ
+                SetText(option, "Cost", isActive || isBroken ? "-" : apCost.ToString());
+                SetText(option, "Description", $"{durability}   LV {Mathf.Max(1, weapon.currentLevel)}" + (status != "" ? $"\n{status}" : ""));
+            }
+            else SetText(option, "Cost", isActive || isBroken ? "" : $"{apCost} AP");
+            if (card || dimUnavailableWeapons)
+            {
+                CanvasGroup group = option.GetComponent<CanvasGroup>();
+                if (group == null) group = option.AddComponent<CanvasGroup>();
+                group.alpha = isBroken ? 0.25f : isActive ? 0.45f : 1f;
+            }
+            UIHoverPop hover = option.GetComponent<UIHoverPop>();
+            if (hover != null) hover.interactable = !isActive && !isBroken;
 
             Image icon = FindChild<Image>(option, "Icon");
             if (icon != null)
             {
-                icon.sprite = weapon.weaponIcon;
-                icon.enabled = weapon.weaponIcon != null;
+                // ไอคอนเส้นสำหรับฉากต่อสู้ (battleIcon) ถ้าไม่มีใช้ไอคอนภาพวาดของ Camp
+                Sprite sprite = weapon.battleIcon != null ? weapon.battleIcon : weapon.weaponIcon;
+                icon.sprite = sprite;
+                icon.enabled = sprite != null;
             }
 
             Button button = option.GetComponent<Button>();
@@ -117,13 +141,40 @@ public class PlayerUIManager : MonoBehaviour
             }
 
             Image background = option.GetComponent<Image>();
-            if (background != null && (isActive || isBroken))
+            if (background != null && !dimUnavailableWeapons && (isActive || isBroken))
             {
                 background.color *= isActive ? activeWeaponTint : brokenWeaponTint;
             }
         }
 
+        if (weaponBackCard) AddWeaponBackCard(container);
         PlayMenuAnimation(weaponMenuPanel, true);
+    }
+
+    // การ์ดใบสุดท้ายของหน้าเปลี่ยนอาวุธ (ชุดการ์ดอาร์ต ไม่มีปุ่ม Back แยก): กดแล้วกลับเมนูหลัก เหมือนกด Esc
+    private void AddWeaponBackCard(Transform container)
+    {
+        GameObject back = Instantiate(weaponOptionTemplate, container);
+        back.name = "Weapon_Back";
+        back.SetActive(true);
+        spawnedWeaponOptions.Add(back);
+        SetText(back, "Name", "BACK");
+        SetText(back, "Tag", "");
+        SetText(back, "Description", "Return to actions  [Esc]");
+        foreach (string hidden in new[] { "CostCircle", "Cost", "AP", "Icon" })
+        {
+            foreach (Transform child in back.GetComponentsInChildren<Transform>(true))
+                if (child.name == hidden) child.gameObject.SetActive(false);
+        }
+        Button button = back.GetComponent<Button>();
+        if (button != null)
+        {
+            button.interactable = true;
+            button.onClick.AddListener(() =>
+            {
+                if (PlayerCombatController.Instance != null) PlayerCombatController.Instance.UI_CancelWeaponSwitch();
+            });
+        }
     }
 
     private static T FindChild<T>(GameObject root, string childName) where T : Component

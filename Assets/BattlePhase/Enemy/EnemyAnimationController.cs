@@ -33,7 +33,35 @@ public class EnemyAnimationController : MonoBehaviour
     private void Start()
     {
         SetupModel();
+        StartCoroutine(FaceWhenPlayerReady());
     }
+
+    // โมเดลผู้เล่นถูกสร้าง/วางโดย PlayerBattleAnimator อาจหลัง Start ของศัตรู (เช่นศัตรูเกิดก่อน หรือลูกน้องที่บอสเรียก) หันซ้ำอีกรอบ
+    private IEnumerator FaceWhenPlayerReady()
+    {
+        yield return null;
+        FacePlayer();
+        yield return new WaitForSeconds(0.25f);
+        FacePlayer();
+    }
+
+    // หันหน้าเข้าหาตัวผู้เล่นที่มองเห็น ไม่ใช่ Player_Holder: โมเดลผู้เล่นอยู่ห่าง Holder ราว 4 หน่วย
+    // ถ้าหันหา Holder ศัตรูบางจุดเกิด (ห่างกันตามแนว z) จะหันเบี้ยวออกจากผู้เล่น
+    public void FacePlayer()
+    {
+        if (model == null) return;
+        Vector3 target;
+        if (PlayerBattleAnimator.Instance != null) target = PlayerBattleAnimator.Instance.ModelPosition;
+        else if (PlayerCombatController.Instance != null) target = PlayerCombatController.Instance.transform.position;
+        else return;
+        Vector3 toPlayer = target - transform.position;
+        toPlayer.y = 0f;
+        if (toPlayer.sqrMagnitude > 0.01f) model.rotation = Quaternion.LookRotation(toPlayer, Vector3.up);
+    }
+
+    // ความสูงตัวในโลก และระยะที่โมเดลจมใต้จุดเกิด (ให้กล้องจัดเฟรมตามขนาดตัวจริง)
+    public float Height => set != null ? set.targetHeight : 0f;
+    public float GroundBelowSpawn => set != null ? set.groundBelowSpawn : 0f;
 
     // รัศมีลำตัวในหน่วยโลก ไม่นับอาวุธ ใช้หาระยะยืนตีของผู้เล่น
     public float BodyRadius => model != null && set != null ? set.targetHeight * 0.18f : 0f;
@@ -122,10 +150,7 @@ public class EnemyAnimationController : MonoBehaviour
         Transform bars = transform.Find("Canvas_WorldSpace");
         if (bars != null) bars.localPosition = Vector3.up * ((set.targetHeight + 0.8f - set.groundBelowSpawn) / rootScale);
 
-        if (PlayerCombatController.Instance == null) return;
-        Vector3 toPlayer = PlayerCombatController.Instance.transform.position - transform.position;
-        toPlayer.y = 0f;
-        if (toPlayer.sqrMagnitude > 0.01f) model.rotation = Quaternion.LookRotation(toPlayer, Vector3.up);
+        FacePlayer();
     }
 
     // ท่าเจ็บ: สะดุ้งตามทิศบนจอที่โดน (ศูนย์ = สุ่มทิศ) ระหว่างเทิร์นตัวเองเล่นแค่สะดุ้ง ไม่ตัดท่าโจมตี
