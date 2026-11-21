@@ -2341,6 +2341,7 @@ MonoBehaviour:
   isTransitioningWave: 0
   enemyPrefabsToSpawn:
   - {fileID: 6158294889510318146, guid: bb5aa388631ea6042bfa47d176cc1652, type: 3}
+  - {fileID: 6158294889510318146, guid: 501096c2a33d52445923d2364ef26551, type: 3}
   enemySpawnPoints:
   - {fileID: 188138314}
   - {fileID: 1466687689}

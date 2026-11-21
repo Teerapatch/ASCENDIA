@@ -1,7 +1,7 @@
 using UnityEngine;
 
-// ศัตรูติด Stagger (Posture แตก): ดาวหมุนรอบหัว + ตัวโยกเป็นวงแบบมึน ๆ + ขยับช้าลง จนกว่าจะหาย (ข้ามเทิร์นแล้วฟื้น) หรือตาย
-// ไม่มีคลิปมึนในอาร์ต ทำแบบ Procedural ทั้งหมด EnemyAnimationController เพิ่มให้ทุกตัวเอง
+// ศัตรูติด Stagger (Posture แตก): ป้าย BREAK! + ดาวหมุนรอบหัว จนกว่าจะหาย (ข้ามเทิร์นแล้วฟื้น) หรือตาย
+// ไม่แตะท่า/Animator ของศัตรู (ท่ามึนแบบ Procedural ถูกเอาออกแล้ว) EnemyController เพิ่มให้ทุกตัวเอง
 [DisallowMultipleComponent]
 public class StaggerFX : MonoBehaviour
 {
@@ -17,23 +17,13 @@ public class StaggerFX : MonoBehaviour
     [Tooltip("ดาวลอยเหนือหัวกี่ส่วนของความสูงตัว")]
     public float headOffsetRatio = 0.1f;
 
-    [Header("ตัวโยกมึน ๆ")]
-    public float wobbleAngle = 9f;
-    public float wobbleSpeed = 0.75f;
-    [Tooltip("ความเร็ว Animator ตอนมึน (ขยับเชื่องช้า)")]
-    public float groggyAnimatorSpeed = 0.45f;
-
     private EnemyController enemy;
     private EnemyAnimationController anim;
-    private Transform model;
-    private Animator animator;
     private Transform starRoot;
     private Transform[] stars;
     private SpriteRenderer[] starRenderers;
     private float strength; // 0..1 ค่อย ๆ เข้า/ออก
     private bool wasStaggered;
-    private Quaternion baseRotation;
-    private float savedAnimatorSpeed = 1f;
     private float phase;
 
     private static Sprite starSprite;
@@ -45,14 +35,6 @@ public class StaggerFX : MonoBehaviour
         anim = GetComponent<EnemyAnimationController>();
     }
 
-    private void FindModel()
-    {
-        if (model != null) return;
-        foreach (Transform t in GetComponentsInChildren<Transform>(true))
-            if (t.name == "Model") { model = t; break; }
-        animator = model != null ? model.GetComponentInChildren<Animator>() : GetComponentInChildren<Animator>();
-    }
-
     private float Height => anim != null && anim.Height > 0.01f ? anim.Height : 3f;
     private float Ground => anim != null ? anim.GroundBelowSpawn : 0f;
 
@@ -62,7 +44,6 @@ public class StaggerFX : MonoBehaviour
         bool staggered = enemy.isStaggered && !enemy.IsDead;
 
         if (staggered && !wasStaggered) Enter();
-        if (!staggered && wasStaggered) Exit();
         wasStaggered = staggered;
 
         strength = Mathf.MoveTowards(strength, staggered ? 1f : 0f, Time.deltaTime * (staggered ? 3f : 2.5f));
@@ -76,22 +57,10 @@ public class StaggerFX : MonoBehaviour
         if (starRoot != null && !starRoot.gameObject.activeSelf) starRoot.gameObject.SetActive(true);
         phase += Time.deltaTime;
         UpdateStars();
-
-        // โยกเป็นวง: แกนเอียงหมุนรอบตัว เหมือนยืนเซไปมา
-        if (model != null)
-        {
-            float spin = phase * wobbleSpeed * Mathf.PI * 2f;
-            Vector3 axis = new Vector3(Mathf.Cos(spin), 0f, Mathf.Sin(spin));
-            float angle = wobbleAngle * strength * (0.8f + 0.2f * Mathf.Sin(phase * 1.7f));
-            model.rotation = Quaternion.AngleAxis(angle, axis) * baseRotation;
-        }
     }
 
     private void Enter()
     {
-        FindModel();
-        if (model != null) baseRotation = model.rotation;
-        if (animator != null) { savedAnimatorSpeed = animator.speed; animator.speed = groggyAnimatorSpeed; }
         BuildStars();
         starRoot.gameObject.SetActive(true);
         phase = 0f;
@@ -99,15 +68,8 @@ public class StaggerFX : MonoBehaviour
             DamagePopupManager.Instance.CreateTextPopup(transform.position + Vector3.up * (Height - Ground), "BREAK!", starColor);
     }
 
-    private void Exit()
-    {
-        if (model != null) model.rotation = baseRotation;
-        if (animator != null) animator.speed = savedAnimatorSpeed;
-    }
-
     private void OnDisable()
     {
-        if (wasStaggered) Exit();
         wasStaggered = false;
     }
 

@@ -237,10 +237,8 @@ public class EnemyController : MonoBehaviour
         Statuses.Remove(CombatStatusType.Shatter);
         Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
 
-        if (staggerParticle != null)
-        {
-            staggerParticle.Play();
-        }
+        // Particle Stagger เดิมเลิกใช้แล้ว (StaggerFX ทำดาวหมุน + ท่ามึนแทน) หยุดไว้เผื่อ Prefab ตั้งให้เล่นเอง
+        if (staggerParticle != null) staggerParticle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
         CameraShakeManager.TryShake(1.5f);
     }
