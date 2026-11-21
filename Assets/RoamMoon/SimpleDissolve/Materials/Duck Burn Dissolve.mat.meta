@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e2e04d39665d7c44d9b85cd38064a96b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 409002
+  packageName: Simple Dissolve Shader 2D - Shader by Roam Moon
+  packageVersion: 1.1.0
+  assetPath: Assets/RoamMoon/SimpleDissolve/Materials/Duck Burn Dissolve.mat
+  uploadId: 1010870
