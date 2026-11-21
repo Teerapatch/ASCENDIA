@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: c13fd719fb5ef730be885c83c0290cc5
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {fileID: 2800000, guid: b7e33c61c63a013d3da781e7cd1f1e19, type: 3}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 409002
+  packageName: Simple Dissolve Shader 2D - Shader by Roam Moon
+  packageVersion: 1.1.0
+  assetPath: Assets/RoamMoon/SimpleDissolve/Scripts/SimpleDissolvePresets.cs
+  uploadId: 1010870

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: ee4157ebe88d5a94cb0acc756d4c222e
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 409002
+  packageName: Simple Dissolve Shader 2D - Shader by Roam Moon
+  packageVersion: 1.1.0
+  assetPath: Assets/RoamMoon/SimpleDissolve/Prefabs/Duck Dissolve Component.prefab
+  uploadId: 1010870

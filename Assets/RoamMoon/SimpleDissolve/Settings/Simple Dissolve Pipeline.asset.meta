@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: f991acdbc041eb189050e0a93396c60f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 409002
+  packageName: Simple Dissolve Shader 2D - Shader by Roam Moon
+  packageVersion: 1.1.0
+  assetPath: Assets/RoamMoon/SimpleDissolve/Settings/Simple Dissolve Pipeline.asset
+  uploadId: 1010870
