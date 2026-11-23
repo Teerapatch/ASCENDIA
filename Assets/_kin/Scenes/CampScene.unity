@@ -37574,7 +37574,7 @@ MonoBehaviour:
   systemMessageText: {fileID: 1100718769}
   climbSceneName: ClimbScene
   delayBeforeLoadScene: 1.5
-  endBuildOnRest: 1
+  endBuildOnRest: 0
 --- !u!4 &1451568820
 Transform:
   m_ObjectHideFlags: 0

@@ -20,7 +20,7 @@ public class CampManager : MonoBehaviour
 
     [Header("Build")]
     [Tooltip("กด Rest แล้วถือว่าจบ Build (ขึ้นหน้าจบแทนการปีนต่อ) ปิดเมื่ออยากทดสอบเกมต่อจาก Camp")]
-    public bool endBuildOnRest = true;
+    public bool endBuildOnRest = false;
 
     private GameObject currentActivePanel;
     private bool isTransitioning = false; 
@@ -173,7 +173,7 @@ public class CampManager : MonoBehaviour
 
         yield return new WaitForSeconds(delayBeforeLoadScene);
 
-        SceneManager.LoadScene(climbSceneName);
+        SceneTransition.Load(climbSceneName);
     }
 
     public void ShowSystemMessage(string msg)

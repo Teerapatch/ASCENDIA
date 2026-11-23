@@ -11,6 +11,7 @@ public class BattleRequest
     public string battleSceneName = BattleSession.DefaultBattleScene;
     public string returnSceneName;       // ว่าง = กลับไปฉากที่เรียก Begin() (ใช้เฉพาะโหมด Single)
     public string defeatPenaltyText;     // ข้อความบทลงโทษตอนแพ้ที่โชว์บนหน้าสรุปผล (ฉากที่เรียกเป็นคนกำหนดกติกา)
+    public bool finalBoss;               // บอสยอดเขา: ชนะแล้วจบเกม (ฉากที่เรียกเป็นคนแสดงหน้าจบ)
 
     // สกิลที่เลือกพกของอาวุธแต่ละชิ้น (key = ไฟล์อาวุธต้นฉบับ) null/ไม่มี key = ใช้ 3 สกิลแรกของอาวุธ
     public Dictionary<WeaponData, List<WeaponSkill>> equippedSkills;
@@ -20,6 +21,7 @@ public class BattleResult
 {
     public BattleOutcome outcome;
     public EncounterData encounter;
+    public bool finalBoss;
 
     // true = ฉากที่เรียกไม่ได้ถูกโหลดใหม่ (โหมด Additive) สถานะในฉากยังอยู่ครบ ต้องเดินเกมต่อเอง
     public bool callerSceneKept;
@@ -66,7 +68,7 @@ public static class BattleSession
 
         if (activeMode == LoadSceneMode.Single)
         {
-            SceneManager.LoadScene(request.battleSceneName);
+            SceneTransition.Load(request.battleSceneName);
             return;
         }
 
@@ -96,6 +98,7 @@ public static class BattleSession
         {
             outcome = outcome,
             encounter = Current.encounter,
+            finalBoss = Current.finalBoss,
             callerSceneKept = activeMode == LoadSceneMode.Additive
         };
         string battleScene = Current.battleSceneName;
@@ -108,7 +111,7 @@ public static class BattleSession
         if (activeMode == LoadSceneMode.Single)
         {
             pendingResult = result;
-            SceneManager.LoadScene(returnScene);
+            SceneTransition.Load(returnScene);
             return;
         }
 
@@ -151,6 +154,16 @@ public static class BattleSession
             if (root != null) root.SetActive(true);
         }
         hiddenCallerRoots.Clear();
+    }
+
+    // ออกจากเกมกลางการต่อสู้ (กลับหน้า Title / เริ่มรันใหม่): ล้างสถานะโดยไม่ส่งผลกลับ
+    public static void Abort()
+    {
+        Current = null;
+        pendingResult = null;
+        activeMode = LoadSceneMode.Single;
+        hiddenCallerRoots.Clear();
+        SceneManager.sceneLoaded -= OnBattleSceneLoaded;
     }
 
     public static bool TryConsumeResult(out BattleResult result)

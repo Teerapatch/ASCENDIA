@@ -233,6 +233,35 @@ public class NodeSelectionManager : MonoBehaviour
             confirmButton.onClick.AddListener(ConfirmSelectedCard);
         }
         RefreshConfirm();
+        UpdateCardHeader();
+    }
+
+    // หัวหน้าเลือกเส้นทาง: แก้คำผิดของอาร์ต ("SELECT YOU PATH") + บรรทัดบอกชั้น/ช่วงปัจจุบันใต้หัวข้อ (ก๊อปข้อความหัวข้อ สร้างครั้งเดียว)
+    private void UpdateCardHeader()
+    {
+        if (mapUIPanel == null) return;
+        Transform head = mapUIPanel.transform.Find("Head");
+        TMPro.TMP_Text title = head != null ? head.GetComponentInChildren<TMPro.TMP_Text>(true) : null;
+        if (title == null) return;
+
+        PlayerData data = GameManager.Instance != null ? GameManager.Instance.playerData : null;
+        bool lastFloor = data != null && data.currentFloor >= data.maxFloorBeforeCamp;
+        title.text = lastFloor ? (data.IsFinalBossStage ? "THE SUMMIT AWAITS" : "A CAMP AHEAD") : "SELECT YOUR PATH";
+
+        Transform infoTransform = head.Find("FloorInfo");
+        TMPro.TMP_Text info = infoTransform != null ? infoTransform.GetComponent<TMPro.TMP_Text>() : null;
+        if (info == null)
+        {
+            info = Instantiate(title, title.transform.parent);
+            info.name = "FloorInfo";
+            info.fontSize = title.fontSize * 0.45f;
+            info.characterSpacing = 6f;
+            info.color = new Color(0.78f, 0.84f, 1f, 0.85f);
+            info.rectTransform.anchoredPosition = title.rectTransform.anchoredPosition + Vector2.down * (title.fontSize * 1.05f);
+        }
+        info.text = data == null ? "" : lastFloor
+            ? $"STAGE {data.currentCampLevel} / {data.finalCampLevel}"
+            : $"FLOOR {data.currentFloor} / {data.maxFloorBeforeCamp}      STAGE {data.currentCampLevel} / {data.finalCampLevel}";
     }
 
     public void SelectCard(PathNode node)
@@ -587,13 +616,15 @@ public class NodeSelectionManager : MonoBehaviour
                 weapons = GameManager.Instance != null ? GameManager.Instance.playerData.GetEquippedWeapons() : null,
                 equippedSkills = GameManager.Instance != null ? GameManager.Instance.playerData.GetEquippedSkillMap() : null,
                 battleSceneName = battleScene,
-                defeatPenaltyText = "-1 Piton" // ต้องตรงกับกติกาใน ApplyBattleResult
+                // ต้องตรงกับกติกาใน ApplyBattleResult: ไม่มี Piton เหลือแล้วแพ้ = จบรัน
+                defeatPenaltyText = GameManager.Instance != null && GameManager.Instance.playerData.piton <= 0 ? "No pitons left" : "-1 Piton",
+                finalBoss = nextRoomType == PathNode.RoomType.Boss
             });
         }
         else if (nextRoomType == PathNode.RoomType.Camp && !string.IsNullOrEmpty(nextScene))
         {
             Debug.Log($"🚪 กำลังโหลดเข้าสู่ซีน: {nextScene} (ประเภท: {nextRoomType})");
-            UnityEngine.SceneManagement.SceneManager.LoadScene(nextScene);
+            SceneTransition.Load(nextScene);
         }
         else
         {
@@ -690,8 +721,9 @@ public class NodeSelectionManager : MonoBehaviour
             RoomManager.Instance.LoadNewRoom(PathNode.RoomType.Normal, stateManager.transform);
         }
 
-        ApplyBattleResult(result);
+        bool runOver = ApplyBattleResult(result);
         PlayerStateManager.InputLocked = true;
+        if (runOver) yield break; // หน้าจบ (ชนะบอสยอดเขา / แพ้ตอนไม่มี Piton) ขึ้นแล้ว จอดำค้างไว้ข้างหลัง
         ApplyFloorStartState();
         yield return StartCoroutine(SettleNewFloor()); // ตั้งหน้าผาและกล้องให้นิ่งก่อนเปิดจอ
 
@@ -700,11 +732,18 @@ public class NodeSelectionManager : MonoBehaviour
         PlayerStateManager.InputLocked = false;
     }
 
-    private void ApplyBattleResult(BattleResult result)
+    // คืน true = รันจบแล้ว (ชนะบอสสุดท้าย หรือแพ้ตอนไม่มี Piton เหลือ)
+    private bool ApplyBattleResult(BattleResult result)
     {
         if (result.outcome == BattleOutcome.Victory)
         {
-            if (result.encounter == null || InventoryManager.Instance == null) return;
+            if (GameManager.Instance != null) GameManager.Instance.playerData.battlesWon++;
+            if (result.finalBoss)
+            {
+                GameFlow.ShowEnding();
+                return true;
+            }
+            if (result.encounter == null || InventoryManager.Instance == null) return false;
 
             foreach (ItemReward reward in result.encounter.GetValidRewards())
             {
@@ -713,17 +752,24 @@ public class NodeSelectionManager : MonoBehaviour
                     ? $"🏆 ชนะการต่อสู้! ได้ {reward.item.itemName} x{reward.amount}"
                     : $"⚠️ ชนะการต่อสู้ แต่กระเป๋าเต็มหรือหนักเกินไป เก็บ {reward.item.itemName} x{reward.amount} ไม่ได้!");
             }
-            return;
+            return false;
         }
 
-        // แพ้การต่อสู้ = เสียหมุด (Piton) 1 อัน เหมือนตกจากกำแพง
-        if (GameManager.Instance == null) return;
+        // แพ้การต่อสู้ = เสียหมุด (Piton) 1 อัน เหมือนตกจากกำแพง ไม่มีเหลือแล้ว = จบรัน
+        if (GameManager.Instance == null) return false;
+        if (GameManager.Instance.playerData.piton <= 0)
+        {
+            GameFlow.ShowGameOver("FALLEN", "You were defeated with no pitons left to save you.");
+            return true;
+        }
 
         GameManager.Instance.UsePiton();
         Debug.Log($"💀 แพ้การต่อสู้! เสียหมุด 1 อัน (เหลือ {GameManager.Instance.playerData.piton})");
 
         PitonUIController pitonUI = FindFirstObjectByType<PitonUIController>();
-        if (pitonUI != null) pitonUI.ShowLostPitonAlert(GameManager.Instance.playerData.piton);
+        try { if (pitonUI != null) pitonUI.ShowLostPitonAlert(GameManager.Instance.playerData.piton); }
+        catch (System.Exception e) { Debug.LogException(e); }
+        return false;
     }
 
     private void TriggerNodeEncounter(PathNode node)

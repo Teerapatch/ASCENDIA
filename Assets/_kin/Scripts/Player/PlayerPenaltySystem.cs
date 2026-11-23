@@ -83,8 +83,7 @@ public class PlayerPenaltySystem : MonoBehaviour
         {
             Debug.Log("💀 GAME OVER - Stamina หมดและไม่มี Piton เหลือ ล้าตาย!");
             yield return StartCoroutine(FadeScreen(1f, 1.5f));
-            SoundManager.Play(Sfx.Defeat);
-            if (GameExitMenu.Instance != null) GameExitMenu.Instance.ShowGameOver(exhaustedTitle, exhaustedMessage);
+            GameFlow.ShowGameOver(exhaustedTitle, exhaustedMessage);
             yield break; // ค้างอยู่ในสถานะ Penalty ผู้เล่นขยับไม่ได้อีก
         }
 

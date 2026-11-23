@@ -107,7 +107,7 @@ public class TempGameFlowUI : MonoBehaviour
         }
         else
         {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            SceneTransition.Load(SceneManager.GetActiveScene().name);
         }
     }
 

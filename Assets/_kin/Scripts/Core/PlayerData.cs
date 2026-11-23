@@ -74,7 +74,13 @@ public class PlayerData : ScriptableObject
     [Tooltip("กำหนดว่าช่วง Camp Level ที่เท่าไหร่คือช่วงสุดท้ายที่จะเจอบอสใหญ่ (เช่น ตั้งไว้ 4 = แคมป์ 1-3 จะเจอโหนด Camp ส่วนช่วงที่ 4 ตอนจบจะเจอโหนด Boss อันเดียว)")]
     public int finalCampLevel = 4;
 
+    [Header("Run Stats")]
+    [Tooltip("จำนวนการต่อสู้ที่ชนะในรันนี้ (โชว์ในหน้าจบ)")]
+    public int battlesWon = 0;
+
     [Header("Weapons")]
+    [Tooltip("อาวุธที่ได้ตอนเริ่มรันใหม่ (คราฟต์แล้ว เลเวล 1 ใส่ช่อง Loadout ให้เลย) จะได้มีอาวุธสู้ก่อนถึง Camp แรก")]
+    public List<WeaponData> starterWeapons = new List<WeaponData>();
     [Tooltip("อาวุธทุกชิ้นในเกม: ResetData คืนทุกชิ้นเป็นยังไม่คราฟต์ เลเวล 1 (สถานะคราฟต์/เลเวลเก็บอยู่ในไฟล์ WeaponData จึงค้างข้ามการเล่นถ้าไม่รีเซ็ต)")]
     public List<WeaponData> allWeapons = new List<WeaponData>();
 
@@ -205,6 +211,18 @@ public class PlayerData : ScriptableObject
             if (weapon != null) weapon.ResetWeaponStatus();
         }
         currentWeaponInHand = null;
+        battlesWon = 0;
+        monsterPart = 0;
+
+        // อาวุธเริ่มต้น: คราฟต์แล้วและใส่ Loadout เรียงจากช่องแรก
+        int slot = 0;
+        foreach (WeaponData weapon in starterWeapons)
+        {
+            if (weapon == null || slot >= LoadoutSize) continue;
+            weapon.isUnlocked = true;
+            weapon.currentLevel = 1;
+            activeLoadout[slot++] = weapon;
+        }
     }
 
     public void ReachNextCamp()

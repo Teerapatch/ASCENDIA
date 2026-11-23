@@ -149,6 +149,6 @@ public class TitleMenu : MonoBehaviour
             }
             fade.alpha = 1f;
         }
-        SceneManager.LoadScene(playScene);
+        GameFlow.StartNewRun(playScene);
     }
 }

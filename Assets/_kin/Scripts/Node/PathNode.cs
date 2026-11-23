@@ -66,7 +66,7 @@ public class PathNode : MonoBehaviour
                 case RoomType.Battle: return "BATTLE";
                 case RoomType.MiniBoss: return "MINI BOSS";
                 case RoomType.Boss: return "BOSS";
-                case RoomType.Ore: return "ORE";
+                case RoomType.Ore: return "MINE"; // ตรงกับการ์ดของอาร์ต
                 case RoomType.Rest: return "REST";
                 case RoomType.Camp: return "CAMP";
                 default: return "NORMAL";
