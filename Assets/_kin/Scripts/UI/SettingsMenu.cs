@@ -7,6 +7,8 @@ using UnityEngine.UI;
 // หน้า Settings: Prefab ใน Resources (Assets/Resources/SettingsMenu.prefab) สร้างตัวเองตอนเปิดครั้งแรก อยู่ข้ามฉาก
 // แต่ง/ย้ายได้ใน Prefab เลย โค้ดหาแถวจากชื่อ: Window/Rows/Row_<ชื่อ> ข้างในมี Value (ข้อความ), Left / Right (ปุ่ม <  >), Bar/Fill (แถบ ถ้ามี)
 // ปุ่มปิด = Window/Btn_Close หรือกด Esc  เปิดได้จากหน้า Title และหน้าต่าง Esc ในเกม (GameExitMenu)
+// แถวเสียง: Row_Volume (รวม), Row_Music (เพลง/บรรยากาศ), Row_Effects (เอฟเฟกต์/UI) ถ้า Prefab ยังไม่มี Row_Music / Row_Effects
+// จะก๊อป Row_Volume ใส่ต่อท้ายให้ตอนเปิด แล้วบีบความสูงแถวให้พอดีกรอบ Rows เดิม
 public class SettingsMenu : MonoBehaviour
 {
     public static SettingsMenu Instance { get; private set; }
@@ -29,7 +31,7 @@ public class SettingsMenu : MonoBehaviour
         public TMP_Text value;
         public Image fill;
     }
-    private Row volume, shake, screen, resolution, quality, vsync;
+    private Row volume, music, effects, shake, screen, resolution, quality, vsync;
 
     public static void Open(System.Action closed = null)
     {
@@ -50,7 +52,10 @@ public class SettingsMenu : MonoBehaviour
         if (group == null) group = GetComponent<CanvasGroup>();
         if (window == null) window = transform.Find("Window") as RectTransform;
 
+        EnsureAudioRows();
         volume = BindRow("Row_Volume", d => GameSettings.SetMasterVolume(Snap(GameSettings.MasterVolume + d * step)));
+        music = BindRow("Row_Music", d => GameSettings.SetMusicVolume(Snap(GameSettings.MusicVolume + d * step)));
+        effects = BindRow("Row_Effects", d => GameSettings.SetEffectsVolume(Snap(GameSettings.EffectsVolume + d * step)));
         shake = BindRow("Row_Shake", d => GameSettings.SetCameraShake(Snap(GameSettings.CameraShake + d * step)));
         screen = BindRow("Row_Screen", d => GameSettings.SetFullscreen(!GameSettings.Fullscreen));
         resolution = BindRow("Row_Resolution", d =>
@@ -92,6 +97,42 @@ public class SettingsMenu : MonoBehaviour
         return view;
     }
 
+    // Prefab รุ่นเก่ายังไม่มีแถวเพลง/เอฟเฟกต์: ก๊อปแถว Master Volume มาใส่ต่อจากมัน แล้วบีบแถวทั้งหมดให้พอดีกรอบเดิม
+    private void EnsureAudioRows()
+    {
+        Transform rows = window != null ? window.Find("Rows") : null;
+        Transform master = rows != null ? rows.Find("Row_Volume") : null;
+        if (master == null) return;
+        bool added = false;
+        int index = master.GetSiblingIndex();
+        foreach (var (name, label) in new[] { ("Row_Music", "MUSIC"), ("Row_Effects", "SOUND EFFECTS") })
+        {
+            index++;
+            if (rows.Find(name) != null) continue;
+            Transform copy = Instantiate(master.gameObject, rows, false).transform;
+            copy.name = name;
+            copy.SetSiblingIndex(index);
+            TMP_Text text = copy.Find("Label") != null ? copy.Find("Label").GetComponent<TMP_Text>() : null;
+            if (text != null) text.text = label;
+            added = true;
+        }
+        if (!added) return;
+
+        // ความสูงแถว = พอดีกรอบ Rows (ไม่เกินความสูงเดิม)
+        var layout = rows.GetComponent<VerticalLayoutGroup>();
+        float spacing = layout != null ? Mathf.Min(layout.spacing, 6f) : 6f;
+        if (layout != null) layout.spacing = spacing;
+        int count = 0;
+        foreach (Transform child in rows) if (child.gameObject.activeSelf) count++;
+        float available = ((RectTransform)rows).rect.height;
+        foreach (Transform child in rows)
+        {
+            var rt = (RectTransform)child;
+            float height = Mathf.Min(rt.sizeDelta.y, (available - spacing * (count - 1)) / Mathf.Max(1, count));
+            rt.sizeDelta = new Vector2(rt.sizeDelta.x, height);
+        }
+    }
+
     private void Show(System.Action closed)
     {
         onClosed = closed;
@@ -118,6 +159,8 @@ public class SettingsMenu : MonoBehaviour
     private void Refresh()
     {
         Set(volume, Mathf.RoundToInt(GameSettings.MasterVolume * 100f) + "%", GameSettings.MasterVolume);
+        Set(music, GameSettings.MusicVolume <= 0f ? "OFF" : Mathf.RoundToInt(GameSettings.MusicVolume * 100f) + "%", GameSettings.MusicVolume);
+        Set(effects, GameSettings.EffectsVolume <= 0f ? "OFF" : Mathf.RoundToInt(GameSettings.EffectsVolume * 100f) + "%", GameSettings.EffectsVolume);
         Set(shake, GameSettings.CameraShake <= 0f ? "OFF" : Mathf.RoundToInt(GameSettings.CameraShake * 100f) + "%", GameSettings.CameraShake);
         Set(screen, GameSettings.Fullscreen ? "FULLSCREEN" : "WINDOWED", -1f);
         Resolution[] list = GameSettings.Resolutions;

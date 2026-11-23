@@ -21,6 +21,11 @@ public class EnemyHUDOverlay : MonoBehaviour
     public Color staggerColor = new Color(1f, 0.82f, 0.3f, 1f);
     [Tooltip("ป้ายลอยเหนือชื่อกี่เท่าของความสูงป้ายชื่อ")]
     public float staggerLabelLift = 1.3f;
+    [Header("แถบสถานะใต้หลอด (StatusBadgeRow)")]
+    public bool showStatusRow = true;
+    public float statusRowScale = 0.8f;
+    [Tooltip("ระยะจากเส้นกลางของหลอดล่างสุด (หลอด Stagger) ลงมาถึงขอบบนของแถบสถานะ (พิกเซลอ้างอิง 1920x1080)")]
+    public float statusRowGap = 13f;
 
     private class Entry
     {
@@ -33,6 +38,8 @@ public class EnemyHUDOverlay : MonoBehaviour
         public Color staggerBarColor;
         public float staggerPop;
         public bool wasStaggered;
+        public StatusBadgeRow status;
+        public RectTransform[] bars; // หลอดที่มองเห็นจริง (ใช้ขอบล่างวางแถบสถานะ)
     }
 
     private readonly Dictionary<EnemyController, Entry> entries = new Dictionary<EnemyController, Entry>();
@@ -94,12 +101,14 @@ public class EnemyHUDOverlay : MonoBehaviour
             }
             entry.group.alpha = Mathf.MoveTowards(entry.group.alpha, visible ? 1f : 0f, Time.unscaledDeltaTime * 6f);
             UpdateStagger(entry, enemy.isStaggered);
+            PlaceStatusRow(entry);
         }
 
         foreach (EnemyController enemy in stale)
         {
             Entry entry = entries[enemy];
             if (entry.root != null) Destroy(entry.root.gameObject);
+            if (entry.status != null) Destroy(entry.status.gameObject);
             entries.Remove(enemy);
         }
     }
@@ -122,6 +131,43 @@ public class EnemyHUDOverlay : MonoBehaviour
             entry.stagger.color = staggered ? Color.Lerp(staggerColor, Color.white, pulse * 0.6f) : entry.staggerBarColor;
         if (entry.staggerPop > 0f)
             entry.root.position += (Vector3)(Random.insideUnitCircle * entry.staggerPop * 6f * (canvas != null ? canvas.scaleFactor : 1f));
+    }
+
+    // แถบสถานะอยู่ใต้ขอบล่างของหลอด (หลอดถูกย่อด้วย hudScale แถบไม่ย่อตาม จึงอ่านออก)
+    private readonly Vector3[] corners = new Vector3[4];
+    private void PlaceStatusRow(Entry entry)
+    {
+        if (entry.status == null) return;
+        // ใช้เส้นกลางของหลอดล่างสุด: กรอบของภาพหลอดมีที่ว่างโปร่งใสด้านล่างมาก ถ้าใช้ขอบล่างแถบจะลอยห่างหลอด
+        float bottom = float.MaxValue, left = float.MaxValue, right = float.MinValue;
+        RectTransform[] targets = entry.bars != null && entry.bars.Length > 0 ? entry.bars : new[] { entry.root };
+        foreach (RectTransform bar in targets)
+        {
+            if (bar == null) continue;
+            bar.GetWorldCorners(corners);
+            bottom = Mathf.Min(bottom, (corners[0].y + corners[1].y) * 0.5f);
+            left = Mathf.Min(left, corners[0].x);
+            right = Mathf.Max(right, corners[2].x);
+        }
+        if (bottom == float.MaxValue) return;
+        float scale = canvas != null ? canvas.scaleFactor : 1f;
+        entry.status.transform.position = new Vector3((left + right) * 0.5f, bottom - statusRowGap * scale, 0f);
+        entry.status.alpha = entry.group.alpha;
+        entry.status.badgeScale = statusRowScale;
+    }
+
+    private static List<StatusBadgeRow.Info> StatusesOf(EnemyController enemy, List<StatusBadgeRow.Info> list)
+    {
+        list.Clear();
+        if (enemy == null) return list;
+        StatusBadgeRow.Describe(enemy.Statuses, list);
+        if (enemy.isMarkedByGun)
+            list.Add(new StatusBadgeRow.Info
+            {
+                key = "GunMark", title = "MARKED", isBuff = false, glyph = StatusBadgeRow.StatusGlyph.Cross,
+                color = new Color(1f, 0.32f, 0.3f), detail = "Free-aim shots deal +50% damage to it.", duration = "Until removed",
+            });
+        return list;
     }
 
     private Entry Create(EnemyController enemy)
@@ -160,16 +206,29 @@ public class EnemyHUDOverlay : MonoBehaviour
             entry.staggerLabel = tag;
         }
 
-        // หลอดเดิมบนตัวศัตรู: ซ่อนภาพหลอด เหลือไอคอนสถานะ แล้วใช้ตำแหน่งของมันเป็นจุดยึด
+        // แถบสถานะแบบใหม่ (ชื่อเต็ม + เทิร์นที่เหลือ + คำอธิบายตอนชี้เมาส์) แทนไอคอนตัวย่อบนหัวศัตรู
+        if (showStatusRow)
+        {
+            var bars = new List<RectTransform>();
+            foreach (string path in new[] { "HPBar", "Stagger" })
+                if (root.Find(path) is RectTransform bar) bars.Add(bar);
+            entry.bars = bars.ToArray();
+            entry.status = StatusBadgeRow.Create(HudParent(), "EnemyStatus_" + enemy.enemyName, entry.label != null ? entry.label.font : null, StatusBadgeRow.Align.Center);
+            var list = new List<StatusBadgeRow.Info>();
+            entry.status.source = () => StatusesOf(enemy, list);
+        }
+
+        // หลอดเดิมบนตัวศัตรู: ซ่อนภาพหลอด (และไอคอนสถานะตัวย่อเดิม ถ้าใช้แถบใหม่) แล้วใช้ตำแหน่งของมันเป็นจุดยึด
         EnemyUI old = enemy.GetComponentInChildren<EnemyUI>(true);
         entry.anchor = old != null ? old.transform : enemy.transform;
         if (old != null)
         {
             foreach (Graphic graphic in old.GetComponentsInChildren<Graphic>(true))
             {
-                if (old.statusContainer != null && graphic.transform.IsChildOf(old.statusContainer)) continue;
+                if (!showStatusRow && old.statusContainer != null && graphic.transform.IsChildOf(old.statusContainer)) continue;
                 graphic.enabled = false;
             }
+            if (showStatusRow && old.statusContainer != null) old.statusContainer.gameObject.SetActive(false);
         }
         return entry;
     }

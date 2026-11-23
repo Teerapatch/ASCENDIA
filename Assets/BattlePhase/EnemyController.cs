@@ -60,6 +60,10 @@ public class EnemyController : MonoBehaviour
 
     [Header("Visual Effects")]
     public ParticleSystem staggerParticle;
+    [Tooltip("เล่นเอฟเฟกต์เข้าฉาก (CharacterFX.Materialize) ตอนเกิด")]
+    public bool playEntranceFX = true;
+    // CombatManager ตั้งให้ตอนเสก: ศัตรูในชุดเดียวกันเกิดเหลื่อมกัน
+    [System.NonSerialized] public float entranceDelay;
 
     private const string CombatStatusPrefix = "CS_";
 
@@ -228,6 +232,8 @@ public class EnemyController : MonoBehaviour
         Color dmgColor = isStaggered ? Color.yellow : Color.white;
         DamagePopupManager.Instance.CreatePopup(BodyCenter, damage, isStaggered, dmgColor); // กลางลำตัว แล้วลอยขึ้นบนจอ
         if (!suppressHitVFX) CombatVFX.Hit(BodyCenter, BodyHeight, hitDirection); // ประกายกระแทก คู่กับท่าเจ็บ (PlayHurt ด้านล่าง)
+        if (!suppressHitVFX) SoundManager.Play(Sfx.HitFlesh);
+        SoundManager.Play(Sfx.EnemyHurt);
 
         CameraShakeManager.TryShake(0.3f);
         if (AnimationController != null) AnimationController.PlayHurt(hitDirection, isStaggered ? 1.3f : 1f);
@@ -252,6 +258,7 @@ public class EnemyController : MonoBehaviour
     private void EnterStagger()
     {
         isStaggered = true;
+        SoundManager.Play(Sfx.EnemyStagger);
         Statuses.Remove(CombatStatusType.Shatter);
         Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
 
@@ -276,7 +283,15 @@ public class EnemyController : MonoBehaviour
         }
 
 
-        Destroy(gameObject, 0.5f);
+        SoundManager.Play(Sfx.EnemyVocalDeath);
+        // สลายเป็นประกายและเถ้า แล้วค่อยลบตัว
+        Transform body = AnimationController != null && AnimationController.Model != null ? AnimationController.Model : EnemyAnimationController.FindModel(transform);
+        if (body != null)
+        {
+            CharacterFX.Dissolve(body, CharacterFX.Instance.enemyColor, AnimationController != null ? AnimationController.Height : 0f);
+            Destroy(gameObject, CharacterFX.DeathTime + 0.15f);
+        }
+        else Destroy(gameObject, 0.5f);
     }
 }
 

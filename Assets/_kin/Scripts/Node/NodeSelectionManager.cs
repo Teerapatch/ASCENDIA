@@ -600,6 +600,7 @@ public class NodeSelectionManager : MonoBehaviour
             // ไร้รอยต่อ: ระหว่างจอดำสร้างหน้าผาใหม่ วางผู้เล่นบนผนัง และตัดกล้องให้เข้าที่ให้เสร็จก่อน
             // แล้วค่อยเปิดจอ (การ์ดยังค้างอยู่) -> การ์ดค่อย ๆ หายไป -> ปลดล็อกให้เล่นต่อ
             PlayerStateManager.InputLocked = true;
+            SoundManager.Play(Sfx.FloorWhoosh);
             if (RoomManager.Instance != null && stateManager != null)
             {
                 RoomManager.Instance.LoadNewRoom(PathNode.RoomType.Normal, stateManager.transform);

@@ -190,6 +190,7 @@ public class ParryManager : MonoBehaviour
 
     private void ShowDirectionHint(float screenAngle)
     {
+        SoundManager.Play(Sfx.ParryHint);
         // HintVFX ชุดใหม่ (Resources/BattleVFX/VFX_Hint) บอกทิศที่ศัตรูจะตี แทน Hint จังหวะ 2 เดิม
         GameObject vfxHint = CombatVFX.HintPrefab;
         if (vfxHint != null)
@@ -459,6 +460,7 @@ public class ParryManager : MonoBehaviour
         ClearHint();
         EndParrySlow();
         LastStrikeParried = true;
+        SoundManager.Play(Sfx.ParrySuccess);
         LastSwipeDirection = swipeScreenDirection.sqrMagnitude > 0.0001f ? swipeScreenDirection.normalized : requiredDirection;
 
         if (PlayerBattleAnimator.Instance != null) PlayerBattleAnimator.Instance.PlayParry();

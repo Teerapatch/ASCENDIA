@@ -155,6 +155,7 @@ public class CollectibleItem : MonoBehaviour
         if (success)
         {
             if (collectEffect != null) Instantiate(collectEffect, transform.position, Quaternion.identity);
+            SoundManager.Play(useImmediately ? Sfx.PickupHerb : Sfx.PickupGem);
             if (screenPrompt != null) { screenPrompt.Collect(); screenPrompt = null; }
             Destroy(gameObject);
         }

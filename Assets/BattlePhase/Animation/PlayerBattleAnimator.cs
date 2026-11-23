@@ -91,6 +91,18 @@ public class PlayerBattleAnimator : MonoBehaviour
 
         PlayerCombatController player = GetComponent<PlayerCombatController>();
         if (player != null && player.ActiveWeapon != null) SetWeapon(player.ActiveWeapon.weaponType);
+        // เข้าฉาก: ก่อตัวขึ้นจากแสงพร้อมศัตรู
+        if (playEntranceFX && current != null) CharacterFX.Materialize(current.root.transform, CharacterFX.Instance.playerColor);
+    }
+
+    [Tooltip("เล่นเอฟเฟกต์เข้าฉาก (CharacterFX.Materialize) ตอนเริ่มการต่อสู้")]
+    public bool playEntranceFX = true;
+
+    // แพ้: โมเดลที่ถืออยู่สลายเป็นประกายและเถ้า (CombatManager.EndBattle)
+    public void PlayDeathFX()
+    {
+        if (current != null && current.root != null) CharacterFX.Dissolve(current.root.transform, CharacterFX.Instance.playerColor);
+        SoundManager.Play(Sfx.PlayerDeath);
     }
 
     public void SetWeapon(WeaponType type)
@@ -267,18 +279,51 @@ public class PlayerBattleAnimator : MonoBehaviour
 
     // จุดปล่อยกระสุน: ค่าที่จัดเองใน ShotOriginSettings (Slash VFX Editor) ก่อน
     // ไม่มี = จุดของอาวุธที่ยื่นไปทางเป้ามากที่สุด ณ เฟรมนี้ (ปากกระบอกปืน / ปลายไม้เท้า) ไม่เจออาวุธ = มือ
+    private void FindWeapon()
+    {
+        if (current == null || current.weaponSearched) return;
+        current.weaponSearched = true;
+        WeaponMeshNames.TryGetValue(current.data.weapon, out string meshName);
+        foreach (SkinnedMeshRenderer r in current.root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            if (r.name == meshName) current.weapon = r;
+        foreach (Transform t in current.root.GetComponentsInChildren<Transform>(true))
+            if (t.name == "DEF-hand.R") current.hand = t;
+    }
+
+    // สำเนาโมเดลอาวุธที่ถืออยู่ ณ ท่าปัจจุบัน (ใช้เป็นมีดที่ปาออกไป) จุดยอดเป็นทิศและขนาดในโลก จุดกึ่งกลางที่ center
+    // คืน null ถ้าไม่มีอาวุธ (BakeMesh ไม่ใส่สเกลได้ขนาดโลกแล้ว ดู CLAUDE.md เรื่อง BakeMesh)
+    public Mesh BakeHeldWeapon(out Material[] materials, out Vector3 center)
+    {
+        materials = null;
+        center = BodyCenter;
+        FindWeapon();
+        if (current == null || current.weapon == null || current.weapon.sharedMesh == null) return null;
+        SkinnedMeshRenderer weapon = current.weapon;
+        var mesh = new Mesh { name = "ThrownWeapon", hideFlags = HideFlags.DontSave };
+        weapon.BakeMesh(mesh);
+        var vertices = new List<Vector3>();
+        mesh.GetVertices(vertices);
+        if (vertices.Count == 0) return null;
+        Quaternion rotation = weapon.transform.rotation;
+        Bounds bounds = new Bounds(rotation * vertices[0], Vector3.zero);
+        for (int i = 0; i < vertices.Count; i++)
+        {
+            vertices[i] = rotation * vertices[i];
+            bounds.Encapsulate(vertices[i]);
+        }
+        for (int i = 0; i < vertices.Count; i++) vertices[i] -= bounds.center;
+        mesh.SetVertices(vertices);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        center = weapon.transform.position + bounds.center;
+        materials = weapon.sharedMaterials;
+        return mesh;
+    }
+
     public Vector3 ShotOrigin(Vector3 toward)
     {
         if (current == null) return BodyCenter;
-        if (!current.weaponSearched)
-        {
-            current.weaponSearched = true;
-            WeaponMeshNames.TryGetValue(current.data.weapon, out string meshName);
-            foreach (SkinnedMeshRenderer r in current.root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-                if (r.name == meshName) current.weapon = r;
-            foreach (Transform t in current.root.GetComponentsInChildren<Transform>(true))
-                if (t.name == "DEF-hand.R") current.hand = t;
-        }
+        FindWeapon();
 
         ShotOriginSettings settings = ShotOriginSettings.Instance;
         ShotOriginEntry entry = settings != null ? settings.Find(current.data.weapon, activeClip != null ? activeClip.state : null) : null;

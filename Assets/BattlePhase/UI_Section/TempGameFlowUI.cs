@@ -134,6 +134,8 @@ public class TempGameFlowUI : MonoBehaviour
     private void ShowResult(BattleSummary summary)
     {
         lastOutcome = summary.outcome;
+        SoundManager.Play(summary.outcome == BattleOutcome.Victory ? Sfx.Victory : Sfx.Defeat);
+        if (summary.outcome == BattleOutcome.Victory) SoundManager.Play(Sfx.PlayerWin);
 
         // หน้าจบชุดใหม่ (BattleResult_UI ในฉาก) ถ้ามีใช้ตัวนี้แทน Panel เดิม
         if (BattleResultScreen.Instance != null)

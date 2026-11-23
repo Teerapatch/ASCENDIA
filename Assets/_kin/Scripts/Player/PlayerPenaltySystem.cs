@@ -83,6 +83,7 @@ public class PlayerPenaltySystem : MonoBehaviour
         {
             Debug.Log("💀 GAME OVER - Stamina หมดและไม่มี Piton เหลือ ล้าตาย!");
             yield return StartCoroutine(FadeScreen(1f, 1.5f));
+            SoundManager.Play(Sfx.Defeat);
             if (GameExitMenu.Instance != null) GameExitMenu.Instance.ShowGameOver(exhaustedTitle, exhaustedMessage);
             yield break; // ค้างอยู่ในสถานะ Penalty ผู้เล่นขยับไม่ได้อีก
         }
@@ -90,6 +91,7 @@ public class PlayerPenaltySystem : MonoBehaviour
         yield return StartCoroutine(FadeScreen(1f, pitonFadeDuration));
 
         GameManager.Instance.UsePiton();
+        SoundManager.Play(Sfx.PitonLost);
         data.stamina = data.EffectiveMaxStamina; // ฟื้นเต็ม แต่ไม่คืนส่วนที่หายไปจากความล้า (fatigue)
         exertionTime = 0f;
         Debug.Log($"🪝 Stamina หมด! ใช้ Piton 1 อัน ฟื้น Stamina เป็น {data.stamina:0} (เหลือ Piton {data.piton})");

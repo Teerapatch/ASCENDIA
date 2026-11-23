@@ -187,12 +187,18 @@ public class NodeCardButton : MonoBehaviour, IPointerEnterHandler, IPointerExitH
         UpdateTarget();
     }
 
-    public void OnPointerEnter(PointerEventData eventData) { hovered = true; UpdateTarget(); }
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        hovered = true;
+        UpdateTarget();
+        if (!locked && intro >= 1f) SoundManager.Play(Sfx.UIHover);
+    }
     public void OnPointerExit(PointerEventData eventData) { hovered = false; UpdateTarget(); }
 
     public void OnPointerClick(PointerEventData eventData)
     {
         if (locked || manager == null || intro < 1f) return;
+        SoundManager.Play(Sfx.UIClick);
         manager.SelectCard(Node);
     }
 

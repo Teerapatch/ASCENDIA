@@ -137,6 +137,7 @@ public class CampManager : MonoBehaviour
     public void OnClickRest()
     {
         if (isTransitioning || playerData == null) return;
+        SoundManager.Play(Sfx.CampRest);
 
         if (endBuildOnRest && GameExitMenu.Instance != null)
         {

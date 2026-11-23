@@ -96,6 +96,7 @@ public class CampMenuButton : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     {
         hovered = true;
         scaleVelocity += HoverKick;
+        SoundManager.Play(Sfx.UIHover);
     }
 
     public void OnPointerExit(PointerEventData eventData)
@@ -117,6 +118,7 @@ public class CampMenuButton : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData.button != PointerEventData.InputButton.Left || isClicking) return;
+        SoundManager.Play(Sfx.UIConfirm);
         StartCoroutine(ClickRoutine());
         StartCoroutine(Burst());
     }

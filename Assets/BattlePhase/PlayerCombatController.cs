@@ -529,6 +529,13 @@ public class PlayerCombatController : MonoBehaviour
     {
         if (pendingHits == null) return;
 
+        // เสียงเหวี่ยงอาวุธทุกจังหวะของท่าฟัน (โดนหรือไม่ก็ตาม) ท่ายิงมีเสียงจาก BattleProjectiles แทน
+        if (battleAnimator != null && battleAnimator.ActiveClipMelee && ActiveWeapon != null)
+        {
+            SoundManager.Play(ActiveWeapon.weaponType == WeaponType.Dagger ? Sfx.DaggerSwing : Sfx.SwordSwing);
+            if (index == 0) SoundManager.Play(Sfx.PlayerAttackVocal); // ฮึบตอนฟันแรก (สุ่มบางครั้ง ตาม chance ในตาราง)
+        }
+
         float totalWeight = count - 1 + finalHitWeight;
         float from = index / totalWeight;
         float to = index == count - 1 ? 1f : (index + 1) / totalWeight;
@@ -557,6 +564,7 @@ public class PlayerCombatController : MonoBehaviour
         }
 
         if (landed) PlayHitImpact(last, killed, count, hitPosition);
+        if (killed) SoundManager.Play(Sfx.HitCritical);
 
         // Combo ของจังหวะนี้ (แบ่งตามสัดส่วนเดียวกับดาเมจ) ได้เฉพาะเมื่อดาเมจลงตัวศัตรูจริง
         int stacks = Mathf.RoundToInt(pendingComboStacks * to) - Mathf.RoundToInt(pendingComboStacks * from);
@@ -718,6 +726,7 @@ public class PlayerCombatController : MonoBehaviour
         if (currentAP < switchWeaponAPCost)
         {
             ShowPopup("NOT ENOUGH AP", new Color(1f, 0.45f, 0.45f));
+            SoundManager.Play(Sfx.UIError);
             return;
         }
 
@@ -742,6 +751,7 @@ public class PlayerCombatController : MonoBehaviour
         if (currentAP < switchWeaponAPCost)
         {
             ShowPopup("NOT ENOUGH AP", new Color(1f, 0.45f, 0.45f));
+            SoundManager.Play(Sfx.UIError);
             return;
         }
 
@@ -751,6 +761,7 @@ public class PlayerCombatController : MonoBehaviour
         // หน้า Turn Order: เทิร์นปัจจุบันเปลี่ยนเป็นของอาวุธที่เพิ่งสลับมา
         if (CombatManager.Instance != null) CombatManager.Instance.SwapActiveWeaponTurn(previous, ActiveWeapon);
         ShowPopup($"SWITCH  -{switchWeaponAPCost} AP", new Color(0.6f, 0.9f, 1f));
+        SoundManager.Play(Sfx.WeaponSwitch);
         Debug.Log($"Switched to {ActiveWeapon.weaponName} (-{switchWeaponAPCost} AP)");
 
         ReturnToActionMenu();
@@ -772,6 +783,7 @@ public class PlayerCombatController : MonoBehaviour
             {
                 bool ownTurn = CombatManager.Instance != null && CombatManager.Instance.currentState == CombatState.PlayerTurn;
                 ApplyActiveWeapon(next, ownTurn);
+                SoundManager.Play(Sfx.WeaponSwitch);
                 Debug.Log($"Auto-switched to {ActiveWeapon.weaponName}");
                 return;
             }
@@ -925,38 +937,60 @@ public class PlayerCombatController : MonoBehaviour
             {
                 float rawDamage = ActiveWeapon.baseDamage * ActiveWeapon.freeAimMultiplier;
                 int finalDamage = Mathf.RoundToInt(rawDamage);
-
-                if (enemy.isMarkedByGun)
+                bool marked = enemy.isMarkedByGun;
+                if (marked)
                 {
                     finalDamage = Mathf.RoundToInt(finalDamage * 1.5f);
                     Debug.Log($"<color=red>TARGET MARKED: Free-Aim damage amplified by 50%! Final DMG: {finalDamage}</color>");
-                    CameraShakeManager.TryShake(1.0f);
-                }
-                else
-                {
-                    CameraShakeManager.TryShake(0.6f);
                 }
 
                 int postureDamage = Mathf.RoundToInt(finalDamage * 0.5f);
+                if (hitWeakPoint) postureDamage = Mathf.RoundToInt(postureDamage * weakPoint.postureDamageMultiplier);
 
-                if (hitWeakPoint)
+                // ดาเมจ / แตกจุดอ่อน / สั่นกล้อง เกิดตอนกระสุนถึงเป้า
+                EnemyController target = enemy;
+                EnemyWeakPoint hitPoint = hitWeakPoint ? weakPoint : null;
+                System.Action land = () =>
                 {
-                    postureDamage = Mathf.RoundToInt(postureDamage * weakPoint.postureDamageMultiplier);
-                    weakPoint.BreakWeakPoint();
-
-                    Debug.Log($"<color=red>CRITICAL HIT! Posture Damage increased to {postureDamage}!</color>");
-
-                    // สั่นกล้องแรงสะใจเมื่อยิงโดนจุดอ่อน
-                    CameraShakeManager.TryShake(1.5f);
-                }
+                    if (target == null || target.IsDead) return;
+                    CameraShakeManager.TryShake(marked ? 1.0f : 0.6f);
+                    if (hitPoint != null && !hitPoint.isBroken)
+                    {
+                        hitPoint.BreakWeakPoint();
+                        Debug.Log($"<color=red>CRITICAL HIT! Posture Damage increased to {postureDamage}!</color>");
+                        // สั่นกล้องแรงสะใจเมื่อยิงโดนจุดอ่อน
+                        CameraShakeManager.TryShake(1.5f);
+                    }
+                    DealDamage(target, finalDamage, postureDamage);
+                };
 
                 if (battleAnimator != null) battleAnimator.PlayFreeAimShot();
-                DealDamage(enemy, finalDamage, postureDamage);
+                FireFreeAimShot(enemy, hit.point, land);
                 currentAP -= 1;
                 ExitAimMode();
             }
         }
         UpdateAPUI();
+    }
+
+    [Header("Free Aim Shot")]
+    [Tooltip("Free Aim (ทุกอาวุธยกเว้น Wand) ยิงกระสุนพร้อมเอฟเฟกต์ (ไฟปากกระบอก / หัวกระสุน / กระทบ) ดาเมจลงตอนกระสุนถึง ปิด = ลงดาเมจทันทีแบบเดิม")]
+    public bool freeAimFiresBullet = true;
+
+    // กระสุนของ Free Aim: ท่าเล็งใช้ปืนทุกอาวุธ จึงยิงจากปากกระบอกปืน ไปยังจุดที่เมาส์โดนบนตัวศัตรู (ตามตัวถ้าศัตรูขยับ)
+    private void FireFreeAimShot(EnemyController enemy, Vector3 hitPoint, System.Action land)
+    {
+        if (!freeAimFiresBullet || battleAnimator == null)
+        {
+            land();
+            return;
+        }
+        Vector3 offset = hitPoint - enemy.transform.position;
+        Vector3 last = hitPoint;
+        Vector3 from = battleAnimator.ShotOrigin(hitPoint);
+        BattleProjectiles.Instance.Fire(BattleProjectileKind.Bullet, from,
+            () => { if (enemy != null && !enemy.IsDead) last = enemy.transform.position + offset; return last; },
+            () => { if (this != null) land(); });
     }
 
     // เก็บลูกแก้วธาตุที่ใกล้เมาส์ที่สุด ได้ 1 ลูกต่อเทิร์น
@@ -978,6 +1012,7 @@ public class PlayerCombatController : MonoBehaviour
         AddElement(orb.elementType);
         ShowPopup($"+{orb.elementType}", ElementTypes.GetColor(orb.elementType));
         orb.Harvest();
+        SoundManager.Play(Sfx.OrbHarvest);
         hasHarvestedThisTurn = true; // ใช้สิทธิ์หมดแล้วในเทิร์นนี้
         UpdateAPUI();
         ExitAimMode();
@@ -1031,6 +1066,8 @@ public class PlayerCombatController : MonoBehaviour
     {
         if (ActiveWeapon == null) return;
         if (battleAnimator != null) battleAnimator.PlayHurt(hitDirection);
+        SoundManager.Play(Sfx.HitFlesh);
+        SoundManager.Play(Sfx.PlayerHurt);
 
         ActiveWeapon.currentDurability -= damage;
         Debug.Log($"{ActiveWeapon.weaponName} took {damage} damage. Remaining: {ActiveWeapon.currentDurability}");
@@ -1063,14 +1100,16 @@ public class PlayerCombatController : MonoBehaviour
         }
     }
 
+    [System.NonSerialized] public StatusBadgeRow statusRow; // BattleArtUI สร้างให้ (ป้ายบัฟเหนือหลอด AP)
+
     public void UpdateAPUI()
     {
         if (apFillImage != null) apFillImage.fillAmount = maxAP > 0 ? (float)currentAP / maxAP : 0f;
         if (textAP == null) return;
 
-        // บัฟที่ติดอยู่ แสดงใต้ตัวเลข AP (เช่น BSK2  EVA)
+        // บัฟที่ติดอยู่ แสดงใต้ตัวเลข AP (เช่น BSK2  EVA) เฉพาะตอนไม่มีแถบสถานะแบบป้าย (BattleArtUI.playerStatusRow)
         string buffs = "";
-        foreach (CombatStatus status in Statuses.All) buffs += status.ShortLabel + "  ";
+        if (statusRow == null) foreach (CombatStatus status in Statuses.All) buffs += status.ShortLabel + "  ";
         string apLabel = showMaxAP ? $"{currentAP}/{maxAP}" : currentAP.ToString();
         textAP.text = buffs.Length > 0
             ? $"{apLabel}\n<size=45%><color=#FFD27A>{buffs.TrimEnd()}</color></size>"

@@ -170,6 +170,8 @@ public class PlayerClimbController : MonoBehaviour
         {
             playerData.stamina -= jumpStaminaCost;
             playerData.AddFatigue(jumpMaxStaminaCost);
+            SoundManager.Play(Sfx.ClimbJump);
+            SoundManager.Play(Sfx.PlayerGrunt);
             jumpDirection = input.sqrMagnitude > .01f ? input.normalized : Vector2.up;
             jumpTime = 0f;
             // ฝุ่นจากผิวหินตรงที่ถีบตัว พุ่งสวนทางที่กระโดด
@@ -192,7 +194,8 @@ public class PlayerClimbController : MonoBehaviour
             {
                 jumpTime = -1f;
                 if (contactIK != null) contactIK.SetJump(Vector3.zero, -1f);
-                // มือกลับมาเกาะหิน: ฝุ่นเล็ก ๆ ตรงจุดที่คว้า
+                // มือกลับมาเกาะหิน: ฝุ่นเล็ก ๆ ตรงจุดที่คว้า + เสียงคว้าหิน
+                SoundManager.Play(Sfx.ClimbLand);
                 SoftGlow.Puff(transform.position + upAlong * 1.2f + facing * (surfaceOffset * .6f), -facing, new Color(.93f, .95f, 1f), 10);
             }
         }

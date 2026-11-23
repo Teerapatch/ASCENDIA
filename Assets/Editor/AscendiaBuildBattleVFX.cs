@@ -25,6 +25,7 @@ using UnityEngine.VFX;
 public static class AscendiaBuildBattleVFX
 {
     const string TestScene = "Assets/Scenes/ReArt/VFX_test.unity";
+    const float ParrySparkYaw = 90f; // ดูที่ใช้ใน Build: แนวประกายของ Parry_01 ไปอยู่บนแกน X (ทิศที่ลาก)
     public const string Folder = "Assets/Resources/BattleVFX";
     public const string GraphFolder = "Assets/BattlePhase/VFX/Graphs";
     // กราฟที่ทำสำเนาให้ด้วย แม้ไม่ได้สร้าง Prefab จากฉากทดสอบ
@@ -89,6 +90,9 @@ public static class AscendiaBuildBattleVFX
                 // ตำแหน่งเทียบกลางตัวทดสอบ (Hit/Parry/Hint วางเองตรงจุดปะทะ จึงตัดระยะเยื้องออก)
                 copy.transform.localPosition = source.center ? Vector3.zero : group.localPosition;
                 copy.transform.localRotation = group.localRotation;
+                // ประกายของ Parry_01 พุ่งตามแกน ±Z ของอาร์ต (กล้องทดสอบมองจากด้านข้างเลยเห็นเป็นซ้าย-ขวา)
+                // ในเกม +Z ของรากชี้ไปหาศัตรู = แนวสายตากล้อง ประกายจึงพุ่งเข้า/ออกจากกล้องจนมองไม่เห็น: หมุนกลุ่ม 90° ให้แนวประกายอยู่บน +X (ทิศที่ลาก)
+                if (source.prefab == "VFX_Parry") copy.transform.localRotation = Quaternion.Euler(0f, ParrySparkYaw, 0f) * group.localRotation;
                 copy.transform.localScale = group.localScale;
                 if (source.center)
                 {

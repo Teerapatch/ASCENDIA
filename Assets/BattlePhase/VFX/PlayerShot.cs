@@ -14,6 +14,9 @@ public class PlayerShot : MonoBehaviour
     private bool arrived;
 
     private ShotVisual visual;
+    private Transform knife;      // มีดจริง (สำเนาโมเดลดาบในมือ) หมุนตีลังกาไปตามทาง
+    private Vector3 spinAxis;
+    private float spin;
 
     public void Init(BattleProjectiles owner, BattleProjectileKind kind, Vector3 from, Func<Vector3> target, Action onArrive)
     {
@@ -37,6 +40,11 @@ public class PlayerShot : MonoBehaviour
 
     private void BuildVisual()
     {
+        if (kind == BattleProjectileKind.Knife)
+        {
+            BuildKnife();
+            return;
+        }
         bool blast = kind == BattleProjectileKind.EnergyBlast;
         visual = ShotVisual.Build(owner, gameObject, blast,
             blast ? owner.blastColor : owner.bulletColor,
@@ -46,12 +54,38 @@ public class PlayerShot : MonoBehaviour
             blast ? owner.blastSize * 0.7f : owner.tracerWidth);
     }
 
+    // มีด: สำเนาโมเดลดาบที่ถืออยู่ (ไม่มีก็ใช้หัวกระสุนสีเงิน) + เส้นแสงสีเงินบาง ๆ
+    private void BuildKnife()
+    {
+        visual = ShotVisual.Build(owner, gameObject, false, owner.knifeTrailColor, Color.white, owner.knifeTrailWidth * 1.6f, owner.knifeTrailTime, owner.knifeTrailWidth);
+        Vector3 to = target != null ? target() : transform.position + Vector3.forward;
+        Vector3 direction = (to - transform.position).sqrMagnitude > 0.0001f ? (to - transform.position).normalized : Vector3.forward;
+        spinAxis = Vector3.Cross(Vector3.up, direction);
+        if (spinAxis.sqrMagnitude < 0.0001f) spinAxis = side;
+        spinAxis.Normalize();
+
+        PlayerBattleAnimator animator = PlayerBattleAnimator.Instance;
+        Material[] materials = null;
+        Mesh mesh = animator != null ? animator.BakeHeldWeapon(out materials, out _) : null;
+        if (mesh == null) return;
+        var go = new GameObject("Knife");
+        knife = go.transform;
+        knife.position = transform.position;
+        knife.localScale = Vector3.one * owner.knifeScale;
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var renderer = go.AddComponent<MeshRenderer>();
+        renderer.sharedMaterials = materials;
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        // มีดไม่ได้อยู่ใต้ตัวกระสุน (ตัวกระสุนหมุนตามทิศบิน) จึงหมุนตีลังกาในโลกเองได้
+        Destroy(go, owner.maxFlightTime + 1f);
+    }
+
     private void Update()
     {
         if (arrived) return;
         Vector3 to = target != null ? target() : straight;
         bool blast = kind == BattleProjectileKind.EnergyBlast;
-        float speed = blast ? owner.blastSpeed : owner.bulletSpeed;
+        float speed = blast ? owner.blastSpeed : kind == BattleProjectileKind.Knife ? owner.knifeSpeed : owner.bulletSpeed;
         float step = speed * Time.deltaTime;
 
         Vector3 toTarget = to - straight;
@@ -77,6 +111,12 @@ public class PlayerShot : MonoBehaviour
         }
         transform.position = straight + offset;
         if (toTarget.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(toTarget);
+        if (knife != null)
+        {
+            spin += owner.knifeSpin * Time.deltaTime;
+            knife.position = transform.position;
+            knife.rotation = Quaternion.AngleAxis(spin, spinAxis);
+        }
     }
 
     private void Arrive(Vector3 direction)
@@ -85,6 +125,7 @@ public class PlayerShot : MonoBehaviour
         try { onArrive?.Invoke(); }
         catch (Exception e) { Debug.LogException(e); }
         owner.Impact(kind, transform.position, direction);
+        if (knife != null) Destroy(knife.gameObject);
 
         // ซ่อนตัวกระสุน ปล่อยเส้นแสง/ประกายที่ค้างให้จางเองแล้วค่อยลบ
         Destroy(gameObject, visual != null ? visual.Finish() : 0.1f);
@@ -92,6 +133,7 @@ public class PlayerShot : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (knife != null) Destroy(knife.gameObject);
         // ถูกลบก่อนถึงเป้า (เช่นออกจากฉาก): ยังต้องลงดาเมจให้เทิร์นจบได้
         if (!arrived)
         {

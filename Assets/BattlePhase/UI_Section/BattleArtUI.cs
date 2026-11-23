@@ -125,12 +125,40 @@ public class BattleArtUI : MonoBehaviour
         });
     }
 
+    [Header("แถบสถานะของผู้เล่น (เหนือหลอด AP)")]
+    public bool playerStatusRow = true;
+    [Tooltip("ตำแหน่งเทียบกลาง AP_Frame (พิกเซลอ้างอิง 1920x1080)")]
+    public Vector2 playerStatusOffset = new Vector2(0f, 120f);
+    public float playerStatusScale = 1f;
+
     private void BindAP()
     {
         Transform ap = transform.Find("AP_Frame");
         player.textAP = ap.Find("Text (TMP)").GetComponent<TextMeshProUGUI>();
         player.apFillImage = ap.Find("Image (2)").GetComponent<Image>();
         player.showMaxAP = false;
+
+        // บัฟของผู้เล่นเป็นป้ายอ่านง่ายเหนือหลอด AP (แทนตัวย่อ BSK2 ใต้ตัวเลข AP)
+        if (playerStatusRow)
+        {
+            StatusBadgeRow row = StatusBadgeRow.Create(ap.parent, "PlayerStatus", player.textAP.font, StatusBadgeRow.Align.Center);
+            var rowRect = (RectTransform)row.transform;
+            var apRect = (RectTransform)ap;
+            rowRect.anchorMin = apRect.anchorMin;
+            rowRect.anchorMax = apRect.anchorMax;
+            rowRect.anchoredPosition = apRect.anchoredPosition + playerStatusOffset;
+            rowRect.pivot = new Vector2(0.5f, 0f);
+            row.badgeScale = playerStatusScale;
+            var list = new System.Collections.Generic.List<StatusBadgeRow.Info>();
+            PlayerCombatController owner = player;
+            row.source = () =>
+            {
+                list.Clear();
+                if (owner != null) StatusBadgeRow.Describe(owner.Statuses, list);
+                return list;
+            };
+            player.statusRow = row;
+        }
     }
 
     private void BindSkills(PlayerUIManager menus)
@@ -182,6 +210,7 @@ public class BattleArtUI : MonoBehaviour
     public Vector2 skillCardsPosition = new Vector2(430f, 640f);
     [Tooltip("ระยะห่างระหว่างการ์ดแต่ละใบ (เลื่อนลงและเยื้องขวาเล็กน้อยแบบพู่กัน)")]
     public Vector2 skillCardStep = new Vector2(40f, -210f);
+    [Tooltip("ใช้เฉพาะตอนฉากยังไม่มี Skills_List (สร้างใหม่) ถ้ามีแล้วให้ปรับ cardScale ที่ SkillCardStack ของ Skills_List")]
     public float skillCardScale = 0.42f;
 
     private void BindSkillCards(PlayerUIManager menus, Transform example)
@@ -189,7 +218,13 @@ public class BattleArtUI : MonoBehaviour
         // กองการ์ดสกิล: ใช้ Skills_List ที่วางไว้ใน Hierarchy ถ้ามี (Tools/ASCENDIA/Bake Runtime UI) ไม่มีค่อยสร้างเอง
         RectTransform list = transform.Find("Skills_List") as RectTransform;
         if (list == null) list = CreateSkillList(transform, skillCardsPosition, skillCardStep);
-        if (list.GetComponent<SkillCardStack>() == null) list.gameObject.AddComponent<SkillCardStack>().step = skillCardStep;
+        SkillCardStack stack = list.GetComponent<SkillCardStack>();
+        if (stack == null)
+        {
+            stack = list.gameObject.AddComponent<SkillCardStack>();
+            stack.step = skillCardStep;
+            stack.cardScale = skillCardScale;
+        }
 
         Transform template = example;
         template.SetParent(transform, false);
@@ -197,7 +232,8 @@ public class BattleArtUI : MonoBehaviour
         RectTransform templateRect = (RectTransform)template;
         templateRect.anchorMin = templateRect.anchorMax = new Vector2(0.5f, 0.5f);
         templateRect.anchoredPosition = Vector2.zero;
-        templateRect.localScale = Vector3.one * skillCardScale;
+        // ขนาดการ์ดตั้งที่ SkillCardStack ของ Skills_List (ปรับใน Hierarchy เห็นพรีวิวทันที)
+        templateRect.localScale = Vector3.one * stack.cardScale;
         Rename(template, "Image (1)/Text (TMP) (2)", "Cost");
         Rename(template, "Text (TMP) (4)", "Name");
         Rename(template, "Text (TMP) (5)", "Description");

@@ -40,6 +40,18 @@ public class BattleProjectiles : MonoBehaviour
     public float castFlashSize = 5f;
     public float blastImpactSize = 9f;
 
+    [Header("มีดปา (Knife: Throwing Knife ของ Dagger)")]
+    [Tooltip("ความเร็วมีด (หน่วยโลก/วินาที)")]
+    public float knifeSpeed = 42f;
+    [Tooltip("ความเร็วหมุนตีลังกา (องศา/วินาที)")]
+    public float knifeSpin = 1440f;
+    [Tooltip("ขนาดมีดเทียบกับดาบในมือ")]
+    public float knifeScale = 1.3f;
+    public Color knifeTrailColor = new Color(0.82f, 0.92f, 1f, 1f);
+    public float knifeTrailWidth = 0.35f;
+    public float knifeTrailTime = 0.14f;
+    public float knifeImpactSize = 3f;
+
     [Header("ลูกพลังงานของศัตรู (Wand Guardian: EnemyAnimationSet.projectileEnergyBlast)")]
     public Color enemyBlastCoreColor = new Color(0.9f, 0.97f, 1f, 1f);
     public Color enemyBlastColor = new Color(0.55f, 0.4f, 1f, 1f);
@@ -60,8 +72,15 @@ public class BattleProjectiles : MonoBehaviour
     {
         Vector3 to = target != null ? target() : from + transform.forward;
         Vector3 direction = (to - from).sqrMagnitude > 0.0001f ? (to - from).normalized : Vector3.forward;
+        SoundManager.Play(kind == BattleProjectileKind.EnergyBlast ? Sfx.SpellCast : kind == BattleProjectileKind.Knife ? Sfx.KnifeThrow : Sfx.GunShot);
 
         if (kind == BattleProjectileKind.EnergyBlast) BlastCast(from, direction, blastColor, blastCoreColor);
+        else if (kind == BattleProjectileKind.Knife)
+        {
+            // ประกายวาบเล็ก ๆ ตอนมีดหลุดจากมือ
+            Flash(from, knifeTrailColor, knifeImpactSize * 0.45f, 0.1f);
+            Sparks(from, direction, knifeTrailColor, 5, 6f, 14f, 0.3f, 0.18f, 30f);
+        }
         else
         {
             Flash(from, muzzleColor, muzzleFlashSize, 0.14f);
@@ -79,7 +98,15 @@ public class BattleProjectiles : MonoBehaviour
     // ตอนกระสุนถึงเป้า
     public void Impact(BattleProjectileKind kind, Vector3 position, Vector3 direction)
     {
+        SoundManager.Play(kind == BattleProjectileKind.EnergyBlast ? Sfx.BlastImpact : kind == BattleProjectileKind.Knife ? Sfx.KnifeImpact : Sfx.ShotImpact);
         if (kind == BattleProjectileKind.EnergyBlast) BlastImpact(position, direction, blastColor, blastCoreColor);
+        else if (kind == BattleProjectileKind.Knife)
+        {
+            // มีดปัก: ประกายโลหะกระเด็นสวนทาง + แสงวาบสั้น
+            Flash(position, knifeTrailColor, knifeImpactSize, 0.12f);
+            Sparks(position, -direction, new Color(1f, 0.86f, 0.6f, 1f), 14, 10f, 26f, 0.35f, 0.25f, 70f);
+            Ring(position, knifeTrailColor, knifeImpactSize * 0.9f, 0.18f);
+        }
         else
         {
             Flash(position, bulletColor, bulletImpactSize, 0.14f);

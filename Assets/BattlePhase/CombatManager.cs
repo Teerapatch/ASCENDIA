@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Collections;
 using System.Linq;
 using UnityEngine;
 
@@ -48,6 +49,8 @@ public class CombatManager : MonoBehaviour
     [Header("Debug")]
     [Tooltip("โชว์ปุ่ม Win Battle (และปุ่มลัด F9) เฉพาะใน Editor / Development Build เพื่อเทสให้ไวขึ้น")]
     public bool enableDebugWinButton = true;
+    [Tooltip("รอเอฟเฟกต์เข้าฉากของศัตรู (CharacterFX) จบก่อนเริ่มเทิร์นแรกของแต่ละ Wave")]
+    public bool waitForEntranceFX = true;
 
     // 1. เพิ่ม Class สำหรับเก็บผลลัพธ์การคาดเดาเทิร์น
     public class PredictedTurn
@@ -181,6 +184,8 @@ public class CombatManager : MonoBehaviour
         if (SpellOrbManager.Instance != null) SpellOrbManager.Instance.ClearOrbs();
 
         EnemyTurnLight.Release();
+        // แพ้: ตัวผู้เล่นสลายไป
+        if (outcome == BattleOutcome.Defeat && PlayerBattleAnimator.Instance != null) PlayerBattleAnimator.Instance.PlayDeathFX();
         LastSummary = BuildSummary(outcome);
         OnBattleEnded?.Invoke(LastSummary);
     }
@@ -234,8 +239,8 @@ public class CombatManager : MonoBehaviour
 
         SpawnWave(nextWave.enemiesInWave);
 
-        // เริ่มวงจร Turn Order ใหม่อีกครั้ง (รวมผู้เล่นและศัตรูใหม่เข้าด้วยกัน)
-        BeginRound();
+        // เริ่มวงจร Turn Order ใหม่อีกครั้ง (รวมผู้เล่นและศัตรูใหม่เข้าด้วยกัน) หลังศัตรูชุดใหม่เข้าฉากเสร็จ
+        BeginRoundAfterEntrance(Mathf.Min(nextWave.enemiesInWave.Count, enemySpawnPoints.Count));
     }
 
     // ==========================================
@@ -248,7 +253,7 @@ public class CombatManager : MonoBehaviour
 
         Debug.Log($"<color=green>Encounter Started! Spawned {enemies.Count} enemies.</color>");
 
-        BeginRound();
+        BeginRoundAfterEntrance(enemies.Count);
     }
 
     private void SpawnWave(List<GameObject> enemyPrefabs)
@@ -257,8 +262,24 @@ public class CombatManager : MonoBehaviour
         int spawnCount = Mathf.Min(enemyPrefabs.Count, enemySpawnPoints.Count);
         for (int i = 0; i < spawnCount; i++)
         {
-            SpawnEnemy(enemyPrefabs[i], enemySpawnPoints[i]);
+            EnemyController spawned = SpawnEnemy(enemyPrefabs[i], enemySpawnPoints[i]);
+            if (spawned != null) spawned.entranceDelay = i * CharacterFX.Instance.entranceStagger;
         }
+    }
+
+    // รอให้เอฟเฟกต์เข้าฉาก (CharacterFX.Materialize) เล่นจบก่อนเริ่มเทิร์นแรก ศัตรูจะได้ไม่ลงมือระหว่างกำลังก่อตัว
+    private void BeginRoundAfterEntrance(int enemyCount)
+    {
+        if (!waitForEntranceFX) { BeginRound(); return; }
+        StartCoroutine(BeginRoundAfter(CharacterFX.EntranceTime(enemyCount) + 0.1f));
+    }
+
+    private IEnumerator BeginRoundAfter(float seconds)
+    {
+        float end = Time.unscaledTime + seconds;
+        while (Time.unscaledTime < end) yield return null;
+        if (IsBattleOver) yield break;
+        BeginRound();
     }
 
     private EnemyController SpawnEnemy(GameObject prefab, Transform spawnPoint)
@@ -488,6 +509,7 @@ public class CombatManager : MonoBehaviour
         {
             currentState = CombatState.PlayerTurn;
             EnemyTurnLight.Release();
+            SoundManager.Play(Sfx.TurnPlayer);
             player.StartTurn(activeTurn.WeaponRef);
         }
         else
@@ -495,6 +517,7 @@ public class CombatManager : MonoBehaviour
             currentState = CombatState.EnemyTurn;
             // ไฟส่องศัตรูที่ถึงเทิร์น (ติดตั้งแต่ป้ายประกาศขึ้น)
             EnemyTurnLight.Focus(activeTurn.EnemyRef);
+            SoundManager.Play(Sfx.TurnEnemy);
 
             if (WeaponUIManager.Instance != null)
             {

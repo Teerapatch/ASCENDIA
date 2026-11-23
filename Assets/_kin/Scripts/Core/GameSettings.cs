@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // ค่าตั้งค่าของเกม (หน้า Settings) เก็บใน PlayerPrefs และใช้ทันทีตอนเปิดเกม
-// เสียง: ระดับเสียงรวม (AudioListener.volume) | จอ: เต็มจอ/หน้าต่าง, ความละเอียด, คุณภาพกราฟิก, VSync | ความแรงการสั่นของกล้อง
+// เสียง: ระดับเสียงรวม (AudioListener.volume) + เพลง/บรรยากาศ และเอฟเฟกต์/UI (SoundManager อ่านค่า MusicVolume / EffectsVolume) | จอ: เต็มจอ/หน้าต่าง, ความละเอียด, คุณภาพกราฟิก, VSync | ความแรงการสั่นของกล้อง
 public static class GameSettings
 {
     const string KeyVolume = "settings.masterVolume";
@@ -10,6 +10,8 @@ public static class GameSettings
     const string KeyQuality = "settings.quality";
     const string KeyVSync = "settings.vsync";
     const string KeyShake = "settings.cameraShake";
+    const string KeyMusic = "settings.musicVolume";
+    const string KeyEffects = "settings.effectsVolume";
 
     public static float MasterVolume { get; private set; } = 1f;
     public static bool Fullscreen { get; private set; } = true;
@@ -17,6 +19,8 @@ public static class GameSettings
     public static int Quality { get; private set; }
     public static bool VSync { get; private set; } = true;
     public static float CameraShake { get; private set; } = 1f;
+    public static float MusicVolume { get; private set; } = 0.8f;
+    public static float EffectsVolume { get; private set; } = 1f;
 
     // ความละเอียดที่เลือกได้ (ไม่ซ้ำ กว้าง x สูง เรียงจากเล็กไปใหญ่)
     public static Resolution[] Resolutions
@@ -43,10 +47,16 @@ public static class GameSettings
         Quality = PlayerPrefs.GetInt(KeyQuality, QualitySettings.GetQualityLevel());
         VSync = PlayerPrefs.GetInt(KeyVSync, QualitySettings.vSyncCount > 0 ? 1 : 0) == 1;
         CameraShake = PlayerPrefs.GetFloat(KeyShake, 1f);
+        MusicVolume = PlayerPrefs.GetFloat(KeyMusic, 0.8f);
+        EffectsVolume = PlayerPrefs.GetFloat(KeyEffects, 1f);
         Apply(applyScreen: !Application.isEditor); // ใน Editor ไม่ไปยุ่งขนาดหน้าต่าง Game
     }
 
     public static void SetMasterVolume(float value) { MasterVolume = Mathf.Clamp01(value); AudioListener.volume = MasterVolume; Save(); }
+    public static void SetMusicVolume(float value) { MusicVolume = Mathf.Clamp01(value); Save(); }
+    public static void SetEffectsVolume(float value) { EffectsVolume = Mathf.Clamp01(value); Save(); }
+    // ระดับเสียงรวม (SoundManager เรียกตอนเริ่ม เผื่อมีอะไรไปเปลี่ยน AudioListener.volume)
+    public static void ApplyAudio() => AudioListener.volume = MasterVolume;
     public static void SetCameraShake(float value) { CameraShake = Mathf.Clamp01(value); Save(); }
     public static void SetQuality(int value) { Quality = Mathf.Clamp(value, 0, QualitySettings.names.Length - 1); QualitySettings.SetQualityLevel(Quality, true); ApplyVSync(); Save(); }
     public static void SetVSync(bool value) { VSync = value; ApplyVSync(); Save(); }
@@ -89,6 +99,8 @@ public static class GameSettings
         PlayerPrefs.SetInt(KeyQuality, Quality);
         PlayerPrefs.SetInt(KeyVSync, VSync ? 1 : 0);
         PlayerPrefs.SetFloat(KeyShake, CameraShake);
+        PlayerPrefs.SetFloat(KeyMusic, MusicVolume);
+        PlayerPrefs.SetFloat(KeyEffects, EffectsVolume);
         PlayerPrefs.Save();
     }
 }

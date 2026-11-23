@@ -37,7 +37,7 @@ public static class AscendiaBuildBattleAnimators
     static readonly Source[] Sources =
     {
         new Source { type = WeaponType.Dagger, name = "Dagger", weaponMesh = "Dagger", melee = true, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Dagger_Anim/Dagger_Anim_V2.fbx",
-            map = new[] { ("Quick Attack", "Attack", true), ("Dancing Knife", "DanceSkill", true), ("Flurry Strike", "FlurrySkill", true), ("Eviscerate", "Attack", true),
+            map = new[] { ("Quick Attack", "Attack", true), ("Dancing Knife", "DanceSkill", true), ("Flurry Strike", "FlurrySkill", true), ("Eviscerate", "FlurrySkill", true),
                           ("Expose Weakness", "Attack", true), ("Throwing Knife", "Attack", false), ("Vanish Blade", "Parry1", false) } },
         // คลิป Attack ของปืนเป็นท่าฟาดด้ามปืน: ท่าพื้นฐานและสกิลยิงใช้ QuickSkill2 (ยกปืนเล็งแล้วยิง มีแรงถีบตอนยิง)
         new Source { type = WeaponType.Gun, name = "Gun", weaponMesh = "Gun", melee = false, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Gun_Anim/Gun_Anim_V2.fbx",
@@ -138,6 +138,18 @@ public static class AscendiaBuildBattleAnimators
                     if (clip != entry.clip) report.AppendLine($"  skill {entry.skill}: missing {entry.clip}, using Attack");
                     BattleClip skillClip = MakeClip(clip, impacts, tracks, source.melee && entry.strike);
                     if (!clip.StartsWith("Parry")) skillClip.projectile = source.skillShot;
+                    if (SkillOverrides.TryGetValue(entry.skill, out var custom))
+                    {
+                        // ท่าที่ใช้คลิปร่วมกับท่าอื่นแต่จังหวะ/กระสุนต่างกัน (เช่น Throwing Knife ใช้ท่าฟันปกติ แต่ปามีด 3 เล่ม)
+                        skillClip.projectile = custom.shot;
+                        if (custom.hits != null)
+                        {
+                            Vector3 swing = skillClip.swings.Count > 0 ? skillClip.swings[0] : Vector3.forward;
+                            skillClip.hits = custom.hits.ToList();
+                            skillClip.impact = custom.hits[0];
+                            skillClip.swings = custom.hits.Select(_ => swing).ToList();
+                        }
+                    }
                     data.skills.Add(new BattleSkillClip { skillName = entry.skill, clip = skillClip });
                 }
                 set.weapons.Add(data);
@@ -152,6 +164,13 @@ public static class AscendiaBuildBattleAnimators
         AssetDatabase.SaveAssets();
         return report.ToString();
     }
+
+    // ต่อสกิล: กระสุนและจังหวะปล่อยของสกิลที่ใช้คลิปร่วมกับท่าอื่น
+    // Throwing Knife: ไม่มีท่าปา ใช้ท่าฟันปกติแล้วปามีดจริง 3 เล่มติดกันตอนสะบัด (DaggerMultiHitSkill 3 ฮิต)
+    static readonly Dictionary<string, (BattleProjectileKind shot, float[] hits)> SkillOverrides = new Dictionary<string, (BattleProjectileKind, float[])>
+    {
+        { "Throwing Knife", (BattleProjectileKind.Knife, new[] { 0.3f, 0.36f, 0.42f }) },
+    };
 
     // จังหวะโดนที่หาจากข้อมูลไม่ได้ถูก (เช่นท่ายิงรัว) กำหนดเองที่นี่ ใช้สเกลเวลา 0-1 ของคลิป
     static readonly Dictionary<string, (float[] hits, float speed)> Overrides = new Dictionary<string, (float[], float)>

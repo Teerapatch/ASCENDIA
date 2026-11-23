@@ -151,6 +151,86 @@ public static class AscendiaBuildMenusUI
         };
     }
 
+    // ---------------------------------------------------------------- Status Tooltip (กล่องคำอธิบายป้ายสถานะในการต่อสู้)
+    const string StatusTooltipPrefab = "Assets/Resources/StatusTooltip.prefab";
+
+    [MenuItem("Tools/ASCENDIA/UI/Build Status Tooltip Prefab")]
+    static void BuildStatusTooltipMenu() => Debug.Log(BuildStatusTooltip());
+
+    // ยังไม่มี Prefab = สร้างให้เองครั้งเดียว มีแล้วไม่แตะ ของที่แต่งไว้จึงไม่หาย
+    [InitializeOnLoadMethod]
+    static void EnsureStatusTooltip()
+    {
+        EditorApplication.delayCall += () =>
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || System.IO.File.Exists(StatusTooltipPrefab)) return;
+            if (AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontBold) == null || S("Battle/Skills_Frame.png") == null) return; // ยัง Import ไม่เสร็จ
+            Debug.Log(BuildStatusTooltip());
+        };
+    }
+
+    // ปื้นพู่กันแบบการ์ดสกิล (Skills_Frame) ยืดตามข้อความ + ปื้นสีของสถานะหลังชื่อ (TitleBack), ตัวอักษร NotoSerifJP สีครีม
+    // ขนาดตามข้อความ: VerticalLayoutGroup + ContentSizeFitter (Detail กว้างตาม LayoutElement.preferredWidth แล้วตัดบรรทัด)
+    public static string BuildStatusTooltip()
+    {
+        Color cream = new Color(0.94f, 0.91f, 0.83f, 1f);
+        var root = new GameObject("StatusTooltip", typeof(RectTransform));
+        var rt = (RectTransform)root.transform;
+        rt.pivot = new Vector2(0.5f, 0f);
+        root.AddComponent<CanvasGroup>().blocksRaycasts = false;
+        var layout = root.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(44, 44, 30, 34);
+        layout.spacing = 2f;
+        layout.childAlignment = TextAnchor.UpperLeft;
+        layout.childControlWidth = layout.childControlHeight = true;
+        layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+        var fitter = root.AddComponent<ContentSizeFitter>();
+        fitter.horizontalFit = fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        // ปื้นพู่กันเดียวกับการ์ดสกิล (Skills_Frame: พื้นกรมท่าเข้ม + ปื้นสีฟ้าด้านบนซ้าย) ภาพ 1080x1080 มีที่ว่างรอบ ๆ
+        // ข้อความวางบนส่วนพื้นทึบ (ราว 45-80% จากขอบบนของภาพ) จึงขยายกรอบภาพเกินกล่องตามสัดส่วนนั้น (Anchor เลย 0..1 ได้)
+        RectTransform brush = Stretch("Brush", rt);
+        brush.anchorMin = new Vector2(-0.14f, -0.74f);
+        brush.anchorMax = new Vector2(1.12f, 2.18f);
+        brush.offsetMin = brush.offsetMax = Vector2.zero;
+        Img(brush, S("Battle/Skills_Frame.png"), Color.white);
+        brush.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+
+        RectTransform accentRect = Rect("Accent", rt, Vector2.zero, Vector2.zero);
+        // ปื้นสีหลังชื่อ: ภาพสูง 380 = ปื้นจริงราว 60 วางกลางแนวชื่อ
+        accentRect.anchorMin = new Vector2(0f, 1f);
+        accentRect.anchorMax = new Vector2(0.95f, 1f);
+        accentRect.pivot = new Vector2(0f, 0.5f);
+        accentRect.offsetMin = new Vector2(4f, -76f - 190f);
+        accentRect.offsetMax = new Vector2(0f, -76f + 190f);
+        Image accent = Img(accentRect, S("Camp 1/TitleBack.png"), new Color(1f, 1f, 1f, 0.4f));
+        accentRect.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+
+        TextMeshProUGUI kind = Text("Kind", rt, "DEBUFF", Bold, 14f, new Color(0.92f, 0.38f, 0.42f, 1f), Vector2.zero, new Vector2(200f, 20f), TextAlignmentOptions.Left);
+        kind.characterSpacing = 8f;
+        TextMeshProUGUI title = Text("Title", rt, "EXPOSED", Bold, 30f, cream, Vector2.zero, new Vector2(300f, 40f), TextAlignmentOptions.Left);
+        title.characterSpacing = 4f;
+        TextMeshProUGUI detail = Text("Detail", rt, "Takes +30% damage from Gun and Long Sword.", Regular, 19f, cream, Vector2.zero, new Vector2(300f, 60f), TextAlignmentOptions.TopLeft);
+        detail.textWrappingMode = TextWrappingModes.Normal;
+        detail.lineSpacing = 4f;
+        detail.margin = new Vector4(0f, 6f, 0f, 2f);
+        detail.gameObject.AddComponent<LayoutElement>().preferredWidth = 300f;
+        TextMeshProUGUI duration = Text("Duration", rt, "2 turns left", Regular, 16f, new Color(0.72f, 0.7f, 0.66f, 1f), Vector2.zero, new Vector2(300f, 24f), TextAlignmentOptions.Left);
+        duration.fontStyle = FontStyles.Italic;
+
+        StatusTooltipView view = root.AddComponent<StatusTooltipView>();
+        view.title = title;
+        view.kind = kind;
+        view.detail = detail;
+        view.duration = duration;
+        view.accent = accent;
+
+        System.IO.Directory.CreateDirectory("Assets/Resources");
+        PrefabUtility.SaveAsPrefabAsset(root, StatusTooltipPrefab);
+        Object.DestroyImmediate(root);
+        return "Status tooltip prefab: " + StatusTooltipPrefab;
+    }
+
     // ป้ายปุ่ม = ช่องข้าวหลามตัดของหน้า Loadout, แสงหลังปุ่ม = Circle (Glow ของ QTE_Frame), แผ่นคำ = Noti_Frame
     public static string BuildPickupPrompt()
     {
@@ -285,13 +365,15 @@ public static class AscendiaBuildMenusUI
 
         RectTransform rows = Rect("Rows", window, new Vector2(0f, -20f), new Vector2(840f, 440f));
         VerticalLayoutGroup layout = rows.gameObject.AddComponent<VerticalLayoutGroup>();
-        layout.spacing = 10f;
+        layout.spacing = 6f;
         layout.childControlWidth = true;
         layout.childControlHeight = false;
         layout.childForceExpandHeight = false;
         layout.childAlignment = TextAnchor.UpperCenter;
 
         SettingsRow(rows, "Row_Volume", "MASTER VOLUME", true);
+        SettingsRow(rows, "Row_Music", "MUSIC", true);
+        SettingsRow(rows, "Row_Effects", "SOUND EFFECTS", true);
         SettingsRow(rows, "Row_Shake", "CAMERA SHAKE", true);
         SettingsRow(rows, "Row_Screen", "SCREEN MODE", false);
         SettingsRow(rows, "Row_Resolution", "RESOLUTION", false);
@@ -312,7 +394,7 @@ public static class AscendiaBuildMenusUI
 
     static void SettingsRow(Transform parent, string name, string label, bool bar)
     {
-        RectTransform row = Rect(name, parent, Vector2.zero, new Vector2(840f, 64f));
+        RectTransform row = Rect(name, parent, Vector2.zero, new Vector2(840f, 50f));
         Img(row, null, new Color(1f, 1f, 1f, 0.04f));
         Text("Label", row, label, Regular, 28f, Pale, new Vector2(-200f, 0f), new Vector2(420f, 60f), TextAlignmentOptions.Left).characterSpacing = 4f;
         Text("Value", row, "-", Bold, 28f, Color.white, new Vector2(230f, bar ? 8f : 0f), new Vector2(300f, 50f));

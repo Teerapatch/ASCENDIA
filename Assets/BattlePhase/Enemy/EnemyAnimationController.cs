@@ -34,7 +34,13 @@ public class EnemyAnimationController : MonoBehaviour
     {
         SetupModel();
         StartCoroutine(FaceWhenPlayerReady());
+        // เข้าฉาก: ก่อตัวขึ้นจากแสง (ศัตรูในชุดเดียวกันเกิดเหลื่อมกันตาม entranceDelay)
+        if (model != null && enemy != null && enemy.playEntranceFX)
+            CharacterFX.Materialize(model, CharacterFX.Instance.enemyColor, Height, enemy.entranceDelay);
     }
+
+    // Transform ของโมเดล (จุดหมุนที่เท้า) ให้ CharacterFX ย่อ/ขยาย
+    public Transform Model => model;
 
     // โมเดลผู้เล่นถูกสร้าง/วางโดย PlayerBattleAnimator อาจหลัง Start ของศัตรู (เช่นศัตรูเกิดก่อน หรือลูกน้องที่บอสเรียก) หันซ้ำอีกรอบ
     private IEnumerator FaceWhenPlayerReady()
@@ -308,6 +314,7 @@ public class EnemyAnimationController : MonoBehaviour
                 if (!CanContinue(turn)) yield break;
 
                 EnemyProjectile projectile = LaunchProjectile();
+                SoundManager.Play(AttackSound);
                 parry.delayBeforeStrike = Mathf.Max(0f, set.projectileFlightTime - set.parryLead);
                 parry.warningDuration = Mathf.Min(parry.delayBeforeStrike, set.warningDuration);
                 yield return ParryManager.Instance.PlayStrike(parry, turn);
@@ -325,6 +332,7 @@ public class EnemyAnimationController : MonoBehaviour
                 // SlashVFX ตรงจังหวะที่อาวุธฟันถึงในคลิป (โดนหรือถูก Parry ก็มี) วิ่งคู่กับช่วง Parry
                 if (slashSettings == null || !slashSettings.Covers(slashKey, strikeIndex))
                     ParryManager.Instance.StartCoroutine(SlashAtStrike(move.state, strike, move.length, turn));
+                ParryManager.Instance.StartCoroutine(SoundAtStrike(move.state, strike.time * move.length, turn));
                 yield return ParryManager.Instance.PlayStrike(parry, turn);
             }
         }
@@ -376,8 +384,33 @@ public class EnemyAnimationController : MonoBehaviour
         return EnemyProjectile.Launch(set.projectilePrefab, from, target, set.projectileFlightTime, set.projectileArc, set.projectileScale, set.projectileImpactPrefab, set.projectileEnergyBlast);
     }
 
+    // เสียงอาวุธของศัตรูตรงจังหวะที่อาวุธฟันถึงในคลิป (EnemyAnimationSet.attackSound ว่าง = เลือกตามชนิดจากชื่อชุด)
+    private string AttackSound
+    {
+        get
+        {
+            if (set != null && !string.IsNullOrEmpty(set.attackSound)) return set.attackSound;
+            string n = set != null ? set.name : "";
+            if (n.Contains("Boss")) return Sfx.EnemyBossAttack;
+            if (n.Contains("Axe")) return Sfx.EnemyAxeAttack;
+            if (n.Contains("Wand")) return Sfx.EnemyWandCast;
+            return Sfx.EnemyBladeAttack;
+        }
+    }
+
+    private IEnumerator SoundAtStrike(string state, float at, int turn)
+    {
+        // ปล่อยเสียงก่อนจังหวะฟันนิดหน่อย ให้เสียงหวดตรงกับตอนอาวุธถึง
+        yield return WaitForState(state, Mathf.Max(0f, at - 0.08f));
+        if (!CanContinue(turn) || StateSeconds(state) < at - 0.3f) yield break;
+        SoundManager.Play(AttackSound);
+        // เสียงร้องตอนฟัน (Orc Pack) บอสร้องหนักกว่า สุ่มเล่นตาม chance ในตาราง
+        SoundManager.Play(AttackSound == Sfx.EnemyBossAttack ? Sfx.EnemyVocalHeavy : Sfx.EnemyVocalAttack);
+    }
+
     private IEnumerator RageRoutine()
     {
+        SoundManager.Play(Sfx.EnemyBossRoar);
         animator.CrossFadeInFixedTime(set.rageState, 0.1f, 0, 0f);
         yield return null;
 

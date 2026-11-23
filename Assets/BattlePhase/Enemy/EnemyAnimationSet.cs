@@ -31,6 +31,8 @@ public enum EnemyBasicAttackMode { RandomCount, Chain }
 
 public class EnemyAnimationSet : ScriptableObject
 {
+    [Tooltip("id เสียงตอนอาวุธฟันถึง / ร่าย (SoundLibrary) ว่าง = เลือกตามชื่อชุด Blade / Axe / Wand / Boss")]
+    public string attackSound;
     [Header("โมเดล")]
     public GameObject model;
     public RuntimeAnimatorController controller;

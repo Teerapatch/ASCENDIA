@@ -166,6 +166,7 @@ public class NodeMapButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHa
         if (!manager.IsSelecting) return;
         hovered = true;
         manager.SetHoveredNode(Node);
+        SoundManager.Play(Sfx.UIHover);
     }
 
     public void OnPointerExit(PointerEventData eventData)
@@ -187,6 +188,8 @@ public class NodeMapButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHa
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (eventData.button == PointerEventData.InputButton.Left) manager.ChooseNode(Node);
+        if (eventData.button != PointerEventData.InputButton.Left) return;
+        SoundManager.Play(Sfx.UIConfirm);
+        manager.ChooseNode(Node);
     }
 }

@@ -42,7 +42,11 @@ public class UIHoverPop : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
         if (baseScale == Vector3.zero) baseScale = target.localScale;
     }
 
-    public void OnPointerEnter(PointerEventData eventData) => hovered = true;
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        hovered = true;
+        if (interactable) SoundManager.Play(Sfx.UIHover);
+    }
     public void OnPointerExit(PointerEventData eventData) { hovered = false; pressed = false; }
     public void OnPointerDown(PointerEventData eventData) => pressed = interactable;
     public void OnPointerUp(PointerEventData eventData) => pressed = false;
@@ -51,6 +55,7 @@ public class UIHoverPop : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
     {
         if (!interactable) return;
         punch = 1f;
+        SoundManager.Play(UIButtonSound.Guess(gameObject.name));
         onClick.Invoke();
     }
 

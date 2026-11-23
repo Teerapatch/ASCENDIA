@@ -246,6 +246,7 @@ public class ForgeManager : MonoBehaviour
             // 🌟 1. จ่ายของเพื่อคราฟต์
             weapon.isUnlocked = true;
             weapon.currentLevel = 1;
+            SoundManager.Play(Sfx.ForgeHammer);
 
             // นำเข้า Loadout อัตโนมัติ
             for (int i = 0; i < playerData.activeLoadout.Length; i++)
@@ -261,6 +262,8 @@ public class ForgeManager : MonoBehaviour
 
         // 🌟 2. จ่ายของเพื่ออัปเกรด
         weapon.currentLevel++;
+        SoundManager.Play(Sfx.ForgeHammer);
+        SoundManager.Play(Sfx.ForgeUpgrade);
         WeaponSkill gained = weapon.SkillUnlockedAt(weapon.currentLevel);
         if (gained != null)
         {

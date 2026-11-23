@@ -103,6 +103,7 @@ public class EnemyProjectile : MonoBehaviour
     {
         if (finished) return;
         finished = true;
+        SoundManager.Play(Sfx.BlastImpact);
         if (blast != null)
         {
             BattleProjectiles fx = BattleProjectiles.Instance;

@@ -132,6 +132,7 @@ public class SkillQTEManager : MonoBehaviour
         if (currentAngleDistance < -Mathf.Max(30f, successArcDegrees * 0.5f))
         {
             FlashArc(failColor);
+            SoundManager.Play(Sfx.QTEMiss);
             Debug.Log($"<color=red>QTE ฮิตที่ {currentStepIndex + 1} : FAILED! (ไม่ได้กด/ปล่อยเลยเป้า)</color>");
             ProceedToNextStep();
         }
@@ -184,6 +185,7 @@ public class SkillQTEManager : MonoBehaviour
             isHit = RectTransformUtility.RectangleContainsScreenPoint(hitZoneUI, tipScreenPos, uiCamera);
         }
         FlashArc(isHit ? successColor : failColor);
+        SoundManager.Play(isHit ? Sfx.QTEHit : Sfx.QTEMiss);
 
         if (isHit)
         {
