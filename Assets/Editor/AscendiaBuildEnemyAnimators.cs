@@ -223,12 +223,14 @@ public static class AscendiaBuildEnemyAnimators
             GameObject root = PrefabUtility.LoadPrefabContents(source.prefab);
             try
             {
-                Transform old = root.transform.Find("Model");
+                // โมเดลเดิม (ชื่ออะไรก็ได้) ลบแล้วสร้างใหม่ คงชื่อที่ตั้งไว้ ไม่งั้นจะได้โมเดลซ้อนสองตัว
+                Transform old = EnemyAnimationController.FindModel(root.transform);
+                string modelName = old != null ? old.name : "Model";
                 if (old != null) Object.DestroyImmediate(old.gameObject);
 
                 float rootScale = Mathf.Max(0.001f, root.transform.localScale.y);
                 var model = (GameObject)PrefabUtility.InstantiatePrefab(set.model, root.transform);
-                model.name = "Model";
+                model.name = modelName;
                 model.transform.localScale = Vector3.one * (set.targetHeight / (Mathf.Max(0.01f, set.modelHeight) * rootScale));
                 model.transform.localPosition = Vector3.down * (set.groundBelowSpawn / rootScale);
                 model.transform.localRotation = Quaternion.Euler(0f, set.previewYaw, 0f);

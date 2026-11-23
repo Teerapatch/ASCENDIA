@@ -26,6 +26,12 @@ public static class AscendiaBuildBattleAnimators
         public bool melee;
         public string fallbackSelf;
         public (string skill, string clip, bool strike)[] map;
+        // ท่าโจมตีพื้นฐาน (ไม่ใส่ = คลิป Attack) ปืนและไม้เท้าใช้ท่ายิง/ร่ายแทนท่าฟาด
+        public string attackClip;
+        public float attackSpeed = 1f;
+        public BattleProjectileKind attackShot;
+        // กระสุนของสกิล (ยกเว้นสกิลที่ใช้ท่า Parry ซึ่งไม่ได้ยิง)
+        public BattleProjectileKind skillShot;
     }
 
     static readonly Source[] Sources =
@@ -33,13 +39,17 @@ public static class AscendiaBuildBattleAnimators
         new Source { type = WeaponType.Dagger, name = "Dagger", weaponMesh = "Dagger", melee = true, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Dagger_Anim/Dagger_Anim_V2.fbx",
             map = new[] { ("Quick Attack", "Attack", true), ("Dancing Knife", "DanceSkill", true), ("Flurry Strike", "FlurrySkill", true), ("Eviscerate", "Attack", true),
                           ("Expose Weakness", "Attack", true), ("Throwing Knife", "Attack", false), ("Vanish Blade", "Parry1", false) } },
+        // คลิป Attack ของปืนเป็นท่าฟาดด้ามปืน: ท่าพื้นฐานและสกิลยิงใช้ QuickSkill2 (ยกปืนเล็งแล้วยิง มีแรงถีบตอนยิง)
         new Source { type = WeaponType.Gun, name = "Gun", weaponMesh = "Gun", melee = false, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Gun_Anim/Gun_Anim_V2.fbx",
-            map = new[] { ("Bullet Hell", "BulletSkill", false), ("Quick Draw", "QuickSkill2", false), ("Overdraw", "QuickSkill2", false), ("Piercer Shot", "Attack", false),
-                          ("Trick Shot", "Attack", false), ("Tactical Reload", "Parry1", false) } },
+            attackClip = "QuickSkill2", attackSpeed = 1.25f, attackShot = BattleProjectileKind.Bullet, skillShot = BattleProjectileKind.Bullet,
+            map = new[] { ("Bullet Hell", "BulletSkill", false), ("Quick Draw", "QuickSkill2", false), ("Overdraw", "QuickSkill2", false), ("Piercer Shot", "QuickSkill2", false),
+                          ("Trick Shot", "QuickSkill2", false), ("Tactical Reload", "Parry1", false) } },
         new Source { type = WeaponType.LongSword, name = "LongSword", weaponMesh = "Sword", melee = true, fallbackSelf = "Parry1", path = "Assets/Animation/Player/LongSword_anim/Longsword_Anim_v2.fbx",
             map = new[] { ("Executioner", "ExecutSkill", true), ("Heavy Impact", "HeavySkill", true), ("Mighty Cleave", "MightySkill", true), ("Pommel Bash", "Attack", true),
                           ("Unyielding", "Attack", true), ("Berserk", "Parry1", false) } },
+        // คลิป Attack ของไม้เท้าเป็นท่าเหวี่ยงฟาด: ท่าพื้นฐานใช้ SpellSkill (เหยียดแขนชี้ไม้เท้าไปข้างหน้าตอนร่าย) เร่งให้สั้นลง แล้วยิงพลังงานออกไป
         new Source { type = WeaponType.Spell, name = "Spell", weaponMesh = "Wand", melee = false, fallbackSelf = "Parry1", path = "Assets/Animation/Player/Wand_Anim/Wand_Anim2.fbx",
+            attackClip = "SpellSkill", attackSpeed = 1.6f, attackShot = BattleProjectileKind.EnergyBlast,
             map = new[] { ("Chaos Catalyst", "ChaosSkill", false), ("Elemental Discharge", "ElementalSkill", false), ("Aura Fusion", "ElementalSkill", false),
                           ("Spell Burn", "SpellSkill", false), ("Spell Break", "SpellSkill", false), ("Elemental Transmutation", "SpellSkill", false) } },
     };
@@ -102,11 +112,11 @@ public static class AscendiaBuildBattleAnimators
                 var data = new BattleWeaponAnimation
                 {
                     weapon = source.type,
-                    model = model,
+                    model = ArtModel(source.path) ?? model,
                     controller = BuildController(controllerPath, clips),
                     idleState = IdleClip,
                     hurtState = hurtState,
-                    attack = MakeClip("Attack", impacts, tracks, source.melee),
+                    attack = MakeAttack(source, clips, impacts, tracks),
                     parries = clips.Keys.Where(k => k.StartsWith("Parry")).OrderBy(k => k).ToList()
                 };
                 if (aim != null)
@@ -126,7 +136,9 @@ public static class AscendiaBuildBattleAnimators
                 {
                     string clip = clips.ContainsKey(entry.clip) ? entry.clip : "Attack";
                     if (clip != entry.clip) report.AppendLine($"  skill {entry.skill}: missing {entry.clip}, using Attack");
-                    data.skills.Add(new BattleSkillClip { skillName = entry.skill, clip = MakeClip(clip, impacts, tracks, source.melee && entry.strike) });
+                    BattleClip skillClip = MakeClip(clip, impacts, tracks, source.melee && entry.strike);
+                    if (!clip.StartsWith("Parry")) skillClip.projectile = source.skillShot;
+                    data.skills.Add(new BattleSkillClip { skillName = entry.skill, clip = skillClip });
                 }
                 set.weapons.Add(data);
             }
@@ -159,6 +171,23 @@ public static class AscendiaBuildBattleAnimators
     static AnimationClip LoadHurtClip()
     {
         return AssetDatabase.LoadAllAssetsAtPath(BasicAnimPath).OfType<AnimationClip>().FirstOrDefault(c => c.name == HurtClipName);
+    }
+
+    // โมเดลที่ใช้ในเกม: Prefab ของอาร์ตใน Assets/Anim_NewMat/Player (Variant ของ FBX ตัวเดียวกัน ใส่วัสดุ Toon + ใบมีดเรืองแสง) ไม่มีค่อยใช้ FBX
+    public static GameObject ArtModel(string fbxPath)
+    {
+        string relative = fbxPath.Substring("Assets/Animation/Player/".Length);
+        string prefab = "Assets/Anim_NewMat/Player/" + System.IO.Path.ChangeExtension(relative, ".prefab").Replace('\\', '/');
+        return AssetDatabase.LoadAssetAtPath<GameObject>(prefab);
+    }
+
+    static BattleClip MakeAttack(Source source, Dictionary<string, AnimationClip> clips, Dictionary<string, List<float>> impacts, Dictionary<string, Vector3[]> tracks)
+    {
+        bool custom = !string.IsNullOrEmpty(source.attackClip) && clips.ContainsKey(source.attackClip);
+        BattleClip attack = MakeClip(custom ? source.attackClip : "Attack", impacts, tracks, source.melee);
+        if (custom) attack.speed = source.attackSpeed;
+        attack.projectile = source.attackShot;
+        return attack;
     }
 
     static BattleClip MakeClip(string state, Dictionary<string, List<float>> found, Dictionary<string, Vector3[]> tracks, bool melee)

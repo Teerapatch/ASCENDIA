@@ -14,7 +14,18 @@ public class PlayerBattleAnimator : MonoBehaviour
         public BattleWeaponAnimation data;
         public GameObject root;
         public Animator animator;
+        public SkinnedMeshRenderer weapon;   // หาครั้งแรกที่ใช้ (ShotOrigin)
+        public Transform hand;
+        public bool weaponSearched;
+        public Dictionary<string, Transform> bones; // หากระดูกตามชื่อ (ShotOriginSettings)
     }
+
+    // ชื่อ Mesh อาวุธในโมเดลแต่ละชุด (เหมือนใน Build Battle Animators)
+    private static readonly Dictionary<WeaponType, string> WeaponMeshNames = new Dictionary<WeaponType, string>
+    {
+        { WeaponType.Dagger, "Dagger" }, { WeaponType.Gun, "Gun" }, { WeaponType.LongSword, "Sword" }, { WeaponType.Spell, "Wand" },
+    };
+    private Mesh shotBake;
 
     private BattleAnimationSet set;
     private readonly Dictionary<WeaponType, Rig> rigs = new Dictionary<WeaponType, Rig>();
@@ -22,6 +33,16 @@ public class PlayerBattleAnimator : MonoBehaviour
 
     // ตำแหน่งโมเดลที่เห็นจริง (โมเดลถูกเลื่อนออกจาก Player_Holder ตาม modelLocalPosition กล้องจึงต้องใช้ค่านี้)
     public Vector3 ModelPosition => current != null && current.root != null ? current.root.transform.position : transform.position;
+    // ทิศที่โมเดลหันอยู่ในแนวราบ (FaceTarget หันหาศัตรูตอนเริ่มเทิร์นศัตรู)
+    public Vector3 ModelForward
+    {
+        get
+        {
+            Vector3 forward = current != null && current.root != null ? current.root.transform.forward : transform.forward;
+            forward.y = 0f;
+            return forward.sqrMagnitude > 0.0001f ? forward.normalized : Vector3.forward;
+        }
+    }
     private Vector3 homeWorld;
     private int parryIndex;
     private Coroutine faceRoutine;
@@ -149,6 +170,10 @@ public class PlayerBattleAnimator : MonoBehaviour
         float firstHit = hits[0];
         int stateHash = Animator.StringToHash(clip.state);
         float released = -1f;
+        // รอยฟันที่จัดไว้ใน Slash VFX Editor: เกิดตามจังหวะในคลิป (ติดกับรากของโมเดล)
+        SlashVFXSettings slashSettings = SlashVFXSettings.Instance;
+        List<SlashVFXEntry> slashes = slashSettings != null ? slashSettings.For(SlashVFXSettings.PlayerKey(current.data.weapon, clip.state)) : null;
+        int nextSlash = 0;
 
         while (true)
         {
@@ -160,6 +185,12 @@ public class PlayerBattleAnimator : MonoBehaviour
                 animator.speed = time >= firstHit * 0.98f ? 0f : set.qteHoldSpeed;
             else
                 animator.speed = Mathf.Max(0.01f, clip.speed);
+
+            while (slashes != null && nextSlash < slashes.Count && time >= slashes[nextSlash].time)
+            {
+                CombatVFX.SlashAt(current.root.transform, slashes[nextSlash]);
+                nextSlash++;
+            }
 
             while (isReady && next < hits.Count && time >= hits[next])
             {
@@ -184,7 +215,24 @@ public class PlayerBattleAnimator : MonoBehaviour
         animator.CrossFadeInFixedTime(current.data.idleState, set.crossFade * 1.5f, 0);
     }
 
+    // ท่าที่กำลังเล่นเป็นท่าฟัน (เหวี่ยงอาวุธเข้าไปตี) หรือไม่ ใช้ตัดสินว่าจะมี SlashVFX
+    public bool ActiveClipMelee => activeClip != null && activeClip.melee;
+
+    // ฮิตนี้จัด SlashVFX ไว้เองใน Slash VFX Editor แล้ว (เกิดจาก PlayAction เอง ไม่ต้องมีรอยอัตโนมัติ)
+    public bool HasSlashEntry(int hitIndex)
+    {
+        SlashVFXSettings settings = SlashVFXSettings.Instance;
+        return settings != null && activeClip != null && current != null && settings.Covers(SlashVFXSettings.PlayerKey(current.data.weapon, activeClip.state), hitIndex);
+    }
+
     // ทิศบนจอของแรงตีในจังหวะนี้: ท่าฟันใช้ทิศที่ปลายอาวุธเคลื่อน ท่ายิงใช้ทิศจากผู้เล่นไปหาเป้า
+    // ทิศที่ปลายอาวุธเคลื่อนในโลก ณ ฮิตนี้ของท่าที่เล่นอยู่ (ศูนย์ = ไม่มีข้อมูล) ใช้วาง SlashVFX ตามการเหวี่ยงจริง
+    public Vector3 HitWorldSwing(int hitIndex)
+    {
+        if (activeClip == null || current == null || activeClip.swings == null || hitIndex < 0 || hitIndex >= activeClip.swings.Count) return Vector3.zero;
+        return current.root.transform.rotation * activeClip.swings[hitIndex];
+    }
+
     public Vector2 HitScreenDirection(int hitIndex, Vector3 targetPosition)
     {
         Camera cam = Camera.main;
@@ -215,6 +263,69 @@ public class PlayerBattleAnimator : MonoBehaviour
             }
             return found ? bounds.center : transform.position + Vector3.up * 2f;
         }
+    }
+
+    // จุดปล่อยกระสุน: ค่าที่จัดเองใน ShotOriginSettings (Slash VFX Editor) ก่อน
+    // ไม่มี = จุดของอาวุธที่ยื่นไปทางเป้ามากที่สุด ณ เฟรมนี้ (ปากกระบอกปืน / ปลายไม้เท้า) ไม่เจออาวุธ = มือ
+    public Vector3 ShotOrigin(Vector3 toward)
+    {
+        if (current == null) return BodyCenter;
+        if (!current.weaponSearched)
+        {
+            current.weaponSearched = true;
+            WeaponMeshNames.TryGetValue(current.data.weapon, out string meshName);
+            foreach (SkinnedMeshRenderer r in current.root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (r.name == meshName) current.weapon = r;
+            foreach (Transform t in current.root.GetComponentsInChildren<Transform>(true))
+                if (t.name == "DEF-hand.R") current.hand = t;
+        }
+
+        ShotOriginSettings settings = ShotOriginSettings.Instance;
+        ShotOriginEntry entry = settings != null ? settings.Find(current.data.weapon, activeClip != null ? activeClip.state : null) : null;
+        if (entry != null)
+        {
+            Transform bone = FindBone(current, entry.bone);
+            if (bone != null) return ShotOriginSettings.Resolve(entry, bone, current.root.transform.lossyScale.x);
+        }
+
+        Vector3 hand = current.hand != null ? current.hand.position : BodyCenter;
+        if (shotBake == null) shotBake = new Mesh();
+        return AutoShotOrigin(current.weapon, hand, toward, shotBake);
+    }
+
+    private static Transform FindBone(Rig rig, string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        if (rig.bones == null)
+        {
+            rig.bones = new Dictionary<string, Transform>();
+            foreach (Transform t in rig.root.GetComponentsInChildren<Transform>(true))
+                if (!rig.bones.ContainsKey(t.name)) rig.bones[t.name] = t;
+        }
+        return rig.bones.TryGetValue(name, out Transform bone) ? bone : null;
+    }
+
+    // จุดยอดของ Mesh อาวุธที่ยื่นไปทาง toward มากที่สุด (ใช้ทั้งในเกมและ Slash VFX Editor)
+    // BakeMesh (ไม่ใช้สเกล) ได้จุดยอดที่ขนาดจริงในโลกแล้ว ใช้แค่ตำแหน่ง+การหมุนของ Renderer
+    // (สเกลของ Renderer อาวุธในฉากคือ 300 จากสเกลนำเข้า FBX x Characters ถ้าคูณ localToWorldMatrix จุดจะไปไกลหลายร้อยหน่วย)
+    public static Vector3 AutoShotOrigin(SkinnedMeshRenderer weapon, Vector3 hand, Vector3 toward, Mesh buffer)
+    {
+        if (weapon == null || buffer == null) return hand;
+        weapon.BakeMesh(buffer);
+        Vector3[] vertices = buffer.vertices;
+        if (vertices.Length == 0) return hand;
+        Matrix4x4 toWorld = Matrix4x4.TRS(weapon.transform.position, weapon.transform.rotation, Vector3.one);
+        Vector3 direction = (toward - hand).normalized;
+        Vector3 best = hand;
+        float bestReach = float.MinValue;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Vector3 world = toWorld.MultiplyPoint3x4(vertices[i]);
+            float reach = Vector3.Dot(world - hand, direction);
+            if (reach > bestReach) { bestReach = reach; best = world; }
+        }
+        // กันพลาด: อาวุธยาวไม่ถึง 10 หน่วย ถ้าไกลกว่านั้นแปลว่าคำนวณผิด ใช้มือแทน
+        return (best - hand).sqrMagnitude > 100f ? hand : best;
     }
 
     // ท่าเจ็บ: สะดุ้งตามทิศบนจอที่โดน (ศูนย์ = สุ่ม) และเล่นคลิป Hurt ถ้าอาวุธนี้มี

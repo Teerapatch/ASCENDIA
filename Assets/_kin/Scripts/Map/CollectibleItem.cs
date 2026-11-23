@@ -15,7 +15,13 @@ public class CollectibleItem : MonoBehaviour
     public float staminaRestoreAmount = 10f; // ถ้าเป็นสมุนไพร จะให้ฟื้นฟูเท่าไหร่
 
     [Header("UI Prompt")]
-    [Tooltip("ลากข้อความ 3D (Press E) มาใส่ตรงนี้")]
+    [Tooltip("ป้าย [E] แบบ Screen Space (PickupPrompt) วาดทับฉากเสมอ หินบังไม่ได้ ปิดไว้ = ใช้ข้อความ 3D (promptUI) แบบเดิม")]
+    public bool useScreenPrompt = true;
+    [Tooltip("คำบนป้าย ว่างไว้ = COLLECT สำหรับแร่, GATHER สำหรับสมุนไพร")]
+    public string promptLabel = "";
+    [Tooltip("ป้ายตั้งอยู่เหนือขอบบนของโมเดลอีกเท่านี้ (หน่วยโลก)")]
+    public float promptWorldLift = .2f;
+    [Tooltip("ข้อความ 3D (Press E) แบบเดิม ใช้เมื่อปิด useScreenPrompt")]
     public GameObject promptUI; 
 
     [Header("Effects")]
@@ -26,27 +32,65 @@ public class CollectibleItem : MonoBehaviour
     public Color herbSparkleColor = new Color(.65f, 1f, .7f);
 
     private bool isPlayerNearby = false;
+    private PickupPrompt screenPrompt;
+    private Vector3 promptAnchor;
 
     private void Start()
     {
-        // เริ่มเกมมา ให้ซ่อนปุ่ม E ไว้ก่อน
+        // เริ่มเกมมา ให้ซ่อนปุ่ม E ไว้ก่อน (ใช้ป้าย Screen Space แล้ว ข้อความ 3D เดิมปิดถาวร)
         if (promptUI != null) promptUI.SetActive(false);
+
+        // โมเดลที่มองเห็น (โมเดลของอาร์ตอาจอยู่เยื้องจากจุดกดเก็บ)
+        bool found = false;
+        Bounds bounds = default;
+        foreach (Renderer renderer in GetComponentsInChildren<Renderer>())
+        {
+            if (!renderer.enabled || renderer is ParticleSystemRenderer) continue;
+            if (!found) { bounds = renderer.bounds; found = true; }
+            else bounds.Encapsulate(renderer.bounds);
+        }
+        Vector3 center = found ? bounds.center : transform.position;
+        promptAnchor = (found ? new Vector3(center.x, bounds.max.y, center.z) : center) + Vector3.up * promptWorldLift;
 
         if (showSparkle)
         {
-            // วางตรงกลางโมเดลที่มองเห็น (โมเดลของอาร์ตอาจอยู่เยื้องจากจุดกดเก็บ)
-            bool found = false;
-            Bounds bounds = default;
-            foreach (Renderer renderer in GetComponentsInChildren<Renderer>())
-            {
-                if (!renderer.enabled || renderer is ParticleSystemRenderer) continue;
-                if (!found) { bounds = renderer.bounds; found = true; }
-                else bounds.Encapsulate(renderer.bounds);
-            }
-            Vector3 center = found ? bounds.center : transform.position;
             float radius = found ? Mathf.Clamp(bounds.extents.magnitude * .6f, .5f, 1.6f) : .8f;
-            SoftGlow.Sparkle(transform, center, useImmediately ? herbSparkleColor : gemSparkleColor, radius);
+            SoftGlow.Sparkle(transform, center, SparkleColor, radius);
         }
+    }
+
+    private Color SparkleColor => useImmediately ? herbSparkleColor : gemSparkleColor;
+
+    private void SetPromptVisible(bool show)
+    {
+        if (!useScreenPrompt)
+        {
+            if (promptUI != null) promptUI.SetActive(show);
+            return;
+        }
+        if (screenPrompt == null)
+        {
+            if (!show) return;
+            string text = !string.IsNullOrEmpty(promptLabel) ? promptLabel : (useImmediately ? "GATHER" : "COLLECT");
+            screenPrompt = PickupPrompt.Create(transform, promptAnchor, text, SparkleColor);
+        }
+        screenPrompt.Show(show);
+    }
+
+    private void OnEnable()
+    {
+        if (screenPrompt != null && isPlayerNearby) screenPrompt.Show(true);
+    }
+
+    private void OnDisable()
+    {
+        if (screenPrompt != null) screenPrompt.Show(false);
+    }
+
+    private void OnDestroy()
+    {
+        // เก็บสำเร็จ = ป้ายเล่นท่าเก็บเองแล้วลบตัวเอง ไม่อย่างนั้น (ห้องถูกลบ ฯลฯ) ลบป้ายทิ้งเลย
+        if (screenPrompt != null) screenPrompt.Dismiss();
     }
 
     private void OnTriggerEnter(Collider other)
@@ -55,7 +99,7 @@ public class CollectibleItem : MonoBehaviour
         if (other.CompareTag("Player"))
         {
             isPlayerNearby = true;
-            if (promptUI != null) promptUI.SetActive(true); // โชว์ข้อความ "Press E"
+            SetPromptVisible(true); // โชว์ป้าย "E COLLECT"
         }
     }
 
@@ -65,7 +109,7 @@ public class CollectibleItem : MonoBehaviour
         if (other.CompareTag("Player"))
         {
             isPlayerNearby = false;
-            if (promptUI != null) promptUI.SetActive(false); // ซ่อนข้อความ
+            SetPromptVisible(false); // ซ่อนป้าย
         }
     }
 
@@ -111,6 +155,7 @@ public class CollectibleItem : MonoBehaviour
         if (success)
         {
             if (collectEffect != null) Instantiate(collectEffect, transform.position, Quaternion.identity);
+            if (screenPrompt != null) { screenPrompt.Collect(); screenPrompt = null; }
             Destroy(gameObject);
         }
     }

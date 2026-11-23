@@ -77,6 +77,8 @@ public class EnemyAnimationSet : ScriptableObject
     public float rageSummonTime = 0.5f;
 
     [Header("Projectile")]
+    [Tooltip("ใช้ลูกพลังงานแบบเดียวกับ Energy Blast ของผู้เล่น (BattleProjectiles) แทน projectilePrefab / projectileImpactPrefab")]
+    public bool projectileEnergyBlast = true;
     public GameObject projectilePrefab;
     public GameObject projectileImpactPrefab;
     [Tooltip("เวลาบินจากมือถึงผู้เล่น (วินาที) ช่วง Parry เปิดตอนกระสุนใกล้ถึง")]

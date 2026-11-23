@@ -420,8 +420,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyController
   enemyName: Blade Guardian
-  baseSpeed: 70
-  maxHP: 400
+  baseSpeed: 80
+  maxHP: 200
   currentHP: 0
   maxPosture: 150
   currentPosture: 0
@@ -470,6 +470,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyAnimationController
   set: {fileID: 11400000, guid: e24a9d82946639840a11a43a1a96d665, type: 2}
+  slashTowardAttacker: 1.5
+  slashWhenParried: 0
 --- !u!1 &7418187145467261429
 GameObject:
   m_ObjectHideFlags: 0
@@ -731,7 +733,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 4ea7dd9f8bc24c241bf34b563554f327, type: 3}
       propertyPath: m_Name
-      value: Model
+      value: BladeGuardians
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

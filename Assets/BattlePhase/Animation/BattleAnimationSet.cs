@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+// กระสุนที่ท่ายิงออกไปในแต่ละจังหวะโดน (ค่าถูกบันทึกเป็นตัวเลข ห้ามสลับลำดับ เพิ่มต่อท้ายเท่านั้น)
+public enum BattleProjectileKind { None = 0, Bullet = 1, EnergyBlast = 2 }
+
 // ตารางอนิเมชันการต่อสู้ของผู้เล่น สร้างด้วยเมนู Tools/ASCENDIA/Build Battle Animators แล้วปรับค่าใน Inspector ได้
 [Serializable]
 public class BattleClip
@@ -18,6 +21,8 @@ public class BattleClip
     public float speed = 1f;
     [Tooltip("พุ่งเข้าไปตีถึงตัวศัตรู")]
     public bool melee;
+    [Tooltip("ยิงกระสุนออกไปในแต่ละจังหวะโดน (ดาเมจลงตอนกระสุนถึงตัว) None = โดนทันทีตามจังหวะ")]
+    public BattleProjectileKind projectile;
 }
 
 [Serializable]

@@ -26,6 +26,11 @@ public class BattleArtUI : MonoBehaviour
     private PlayerCombatController player;
     private Image passiveIcon;
     private TextMeshProUGUI passiveTitle, passiveDescription, passiveCount;
+    private SigilSlotsUI sigilSlots; // ช่องธาตุ 5 ช่องของ Wand แทนตัวเลข
+    [Tooltip("Prefab ช่องธาตุของ Wand (Weapon/Spell/SigilSlots.prefab) ว่าง = Resources/SigilSlots หรือสร้างจากโค้ด")]
+    public GameObject sigilSlotsPrefab;
+    [Tooltip("ใช้ตำแหน่งใน RectTransform ของ Prefab SigilSlots (จัดเองใน Prefab) ปิด = วางตรงตัวเลข Passive")]
+    public bool sigilUsePrefabPosition = true;
     private WeaponData shownWeapon;
     private int shownTurn = -1;
     private CanvasGroup hudGroup;
@@ -392,6 +397,14 @@ public class BattleArtUI : MonoBehaviour
         qte.Bg_Diamond = (RectTransform)frame.Find("Glow");
         qte.successArc = frame.Find("Bar").GetComponent<Image>();
         frame.gameObject.SetActive(false);
+
+        // ตัว Manager ต้องเปิดอยู่ (Awake ตั้ง Instance, Update หมุนเข็ม) ถ้าฉากบันทึก QTE_Panel ปิดไว้
+        // SkillQTEManager.Instance จะเป็น null และทุกสกิลข้าม QTE ไปเงียบ ๆ: ซ่อนวงแหวนเก่าทั้งหมดแล้วเปิดตัว Manager
+        if (!qte.gameObject.activeSelf)
+        {
+            foreach (Transform child in qte.transform) child.gameObject.SetActive(false);
+            qte.gameObject.SetActive(true);
+        }
     }
 
     // ป้ายแจ้งเหตุการณ์ (เทิร์นศัตรู, เวฟใหม่, บอสเรียกลูกน้อง) ใช้กรอบ LogAction ด้านบนแทนป้ายดำเดิม
@@ -531,6 +544,26 @@ public class BattleArtUI : MonoBehaviour
         passiveDescription = frame.GetChild(3).GetComponent<TextMeshProUGUI>();
         passiveCount = frame.GetChild(6).GetComponent<TextMeshProUGUI>();
 
+        // Wand: เพชร 5 ช่องแสดงธาตุที่เก็บไว้ วางตรงกลางของตัวเลข Passive (ตัวเลขซ่อนตอนถือ Wand)
+        RectTransform countRect = passiveCount.rectTransform;
+        GameObject sigilSource = sigilSlotsPrefab != null ? sigilSlotsPrefab : Resources.Load<GameObject>("SigilSlots");
+        if (sigilSource != null)
+        {
+            GameObject made = Instantiate(sigilSource, countRect.parent, false);
+            made.name = "SigilSlots";
+            sigilSlots = made.GetComponent<SigilSlotsUI>();
+            if (sigilSlots == null) sigilSlots = made.AddComponent<SigilSlotsUI>();
+        }
+        else sigilSlots = SigilSlotsUI.Create((RectTransform)countRect.parent, Vector2.zero);
+        // มาจาก Prefab: ใช้ตำแหน่ง/สเกลใน RectTransform ของ Prefab ตามที่จัดไว้ (เทียบกับ Passive_Frame) ไม่ทับ
+        // สร้างจากโค้ด (หรือปิด sigilUsePrefabPosition): วางตรงกลางตัวเลขของ Passive
+        if (sigilSource == null || !sigilUsePrefabPosition)
+        {
+            RectTransform sigilRect = (RectTransform)sigilSlots.transform;
+            sigilRect.position = countRect.TransformPoint(countRect.rect.center);
+        }
+        sigilSlots.gameObject.SetActive(false);
+
         passiveRect = (RectTransform)frame;
         passivePosition = passiveRect.anchoredPosition;
         passiveScale = passiveRect.localScale;
@@ -639,6 +672,13 @@ public class BattleArtUI : MonoBehaviour
             passiveDescription.text = info != null ? info.description : "";
         }
 
+        bool spell = weapon.weaponType == WeaponType.Spell;
+        if (sigilSlots != null)
+        {
+            if (sigilSlots.gameObject.activeSelf != spell) sigilSlots.gameObject.SetActive(spell);
+            if (spell) sigilSlots.Show(player.elementSlots);
+        }
+
         switch (weapon.weaponType)
         {
             case WeaponType.Dagger:
@@ -648,7 +688,7 @@ public class BattleArtUI : MonoBehaviour
                 passiveCount.text = player.totalGunCounterAttacks.ToString();
                 break;
             case WeaponType.Spell:
-                passiveCount.text = player.elementSlots.Count.ToString();
+                passiveCount.text = "";
                 break;
             default:
                 passiveCount.text = "";

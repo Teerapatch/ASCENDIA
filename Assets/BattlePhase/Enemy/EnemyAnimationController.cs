@@ -66,12 +66,28 @@ public class EnemyAnimationController : MonoBehaviour
     // รัศมีลำตัวในหน่วยโลก ไม่นับอาวุธ ใช้หาระยะยืนตีของผู้เล่น
     public float BodyRadius => model != null && set != null ? set.targetHeight * 0.18f : 0f;
 
+    // โมเดลศัตรูใน Prefab: ลูกชื่อ Model ก่อน ไม่มีก็ลูกโดยตรงที่มี Animator/SkinnedMeshRenderer (ไม่นับ HurtPivot ที่สร้างตอนเล่น)
+    public static Transform FindModel(Transform root)
+    {
+        Transform named = root.Find("Model");
+        if (named != null) return named;
+        Transform withMesh = null;
+        foreach (Transform child in root)
+        {
+            if (child.name == "HurtPivot" || child.GetComponentInChildren<SkinnedMeshRenderer>(true) == null) continue;
+            if (child.GetComponent<Animator>() != null) return child;
+            if (withMesh == null) withMesh = child;
+        }
+        return withMesh;
+    }
+
     private void SetupModel()
     {
         if (model != null || set == null) return;
 
-        // โมเดลฝังอยู่ใน Prefab ชื่อ Model (Tools/ASCENDIA/Setup Enemy Prefabs) ถ้าไม่มีค่อยสร้างจากตาราง
-        Transform found = transform.Find("Model");
+        // โมเดลฝังอยู่ใน Prefab (Tools/ASCENDIA/Setup Enemy Prefabs) เปลี่ยนชื่อได้ ถ้าไม่มีจริง ๆ ค่อยสร้างจากตาราง
+        // (เคยหาด้วยชื่อ Model อย่างเดียว พอเปลี่ยนชื่อในPrefab ก็สร้างซ้ำอีกตัว โมเดลจึงซ้อนกันสองตัว)
+        Transform found = FindModel(transform);
         if (found == null)
         {
             if (set.model == null) return;
@@ -262,8 +278,19 @@ public class EnemyAnimationController : MonoBehaviour
         animator.CrossFadeInFixedTime(move.state, 0.1f, 0, 0f);
         yield return null;
 
+        // รอยฟันที่จัดไว้ใน Slash VFX Editor (ติดกับโมเดล ตามจังหวะในคลิป) จังหวะที่จัดแล้วไม่มีรอยอัตโนมัติ
+        string slashKey = SlashVFXSettings.EnemyKey(set, move.state);
+        SlashVFXSettings slashSettings = SlashVFXSettings.Instance;
+        if (slashSettings != null)
+        {
+            foreach (SlashVFXEntry entry in slashSettings.For(slashKey))
+                if (entry.enabled) ParryManager.Instance.StartCoroutine(SlashFromSettings(move.state, entry, move.length, turn));
+        }
+
+        int strikeIndex = -1;
         foreach (EnemyStrike strike in move.strikes)
         {
+            strikeIndex++;
             if (!CanContinue(turn)) yield break;
 
             ParryStrike parry = new ParryStrike
@@ -295,11 +322,48 @@ public class EnemyAnimationController : MonoBehaviour
             {
                 parry.delayBeforeStrike = Mathf.Max(0f, strike.time * move.length - StateSeconds(move.state) - set.parryLead);
                 parry.warningDuration = Mathf.Min(parry.delayBeforeStrike, set.warningDuration);
+                // SlashVFX ตรงจังหวะที่อาวุธฟันถึงในคลิป (โดนหรือถูก Parry ก็มี) วิ่งคู่กับช่วง Parry
+                if (slashSettings == null || !slashSettings.Covers(slashKey, strikeIndex))
+                    ParryManager.Instance.StartCoroutine(SlashAtStrike(move.state, strike, move.length, turn));
                 yield return ParryManager.Instance.PlayStrike(parry, turn);
             }
         }
 
         if (CanContinue(turn)) yield return WaitForState(move.state, move.length * 0.95f);
+    }
+
+    [Tooltip("SlashVFX ของศัตรูเกิดที่ตัวผู้เล่น เยื้องเข้าหาศัตรูกี่หน่วย (จุดที่อาวุธฟันถึง)")]
+    public float slashTowardAttacker = 1.5f;
+
+    [Tooltip("ยังเล่น SlashVFX แม้ผู้เล่น Parry การฟันนั้นได้แล้ว (ปิด = ParryVFX แทนรอยฟัน ไม่ซ้อนกัน)")]
+    public bool slashWhenParried = true;
+
+    private IEnumerator SlashFromSettings(string state, SlashVFXEntry entry, float length, int turn)
+    {
+        float at = entry.time * length;
+        yield return WaitForState(state, at);
+        // WaitForState ออกทันทีถ้าท่าเปลี่ยนไปแล้ว: เกิดเฉพาะตอนคลิปถึงจังหวะจริง
+        if (!CanContinue(turn) || model == null || StateSeconds(state) < at - 0.05f) yield break;
+        CombatVFX.SlashAt(model, entry);
+    }
+
+    private IEnumerator SlashAtStrike(string state, EnemyStrike strike, float length, int turn)
+    {
+        // เริ่มก่อน PlayStrike ของการฟันนี้ในเฟรมเดียวกัน: การฟันนี้คือลำดับถัดไป
+        int serial = ParryManager.Instance != null ? ParryManager.Instance.StrikeSerial + 1 : 0;
+        yield return WaitForState(state, strike.time * length);
+        if (!CanContinue(turn) || PlayerCombatController.Instance == null) yield break;
+        if (!slashWhenParried && ParryManager.Instance != null && ParryManager.Instance.StrikeSerial == serial && ParryManager.Instance.LastStrikeParried) yield break;
+
+        PlayerCombatController player = PlayerCombatController.Instance;
+        Vector3 at = player.BodyCenter;
+        Vector3 toward = enemy.BodyCenter - at;
+        toward.y = 0f;
+        if (toward.sqrMagnitude > 0.01f) at += toward.normalized * slashTowardAttacker;
+
+        // วางรอยฟันในระนาบที่ปลายอาวุธเหวี่ยงจริง (swing อยู่ในพื้นที่ของโมเดล; ไม่มีข้อมูล = CombatVFX ฟันขวางเอง)
+        Vector3 swing = model != null ? model.rotation * strike.swing : Vector3.zero;
+        CombatVFX.Slash(at, swing, enemy.BodyCenter, player.vfxBodyHeight);
     }
 
     private EnemyProjectile LaunchProjectile()
@@ -309,7 +373,7 @@ public class EnemyAnimationController : MonoBehaviour
         System.Func<Vector3> target = () => PlayerBattleAnimator.Instance != null
             ? PlayerBattleAnimator.Instance.BodyCenter
             : PlayerCombatController.Instance.transform.position + Vector3.up * 2f;
-        return EnemyProjectile.Launch(set.projectilePrefab, from, target, set.projectileFlightTime, set.projectileArc, set.projectileScale, set.projectileImpactPrefab);
+        return EnemyProjectile.Launch(set.projectilePrefab, from, target, set.projectileFlightTime, set.projectileArc, set.projectileScale, set.projectileImpactPrefab, set.projectileEnergyBlast);
     }
 
     private IEnumerator RageRoutine()

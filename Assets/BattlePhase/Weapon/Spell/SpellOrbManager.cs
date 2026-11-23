@@ -83,8 +83,10 @@ public class SpellOrbManager : MonoBehaviour
                     }
                 }
 
-                // แสงเรืองและประกายสีธาตุ ช่วยให้เห็นชัดตอนเล็ง
-                SoftGlow.Sparkle(orbObj.transform, spawnPos, color, orbWorldSize * .5f);
+                // หน้าตาเป็นพลังงานของธาตุนั้น (ไฟ / น้ำ / ลม / ดิน) แทนลูกกลม
+                orb.showMesh = false;
+                if (mr != null) mr.enabled = false;
+                ElementEnergyFX.Attach(orbObj, randomElem);
             }
 
             activeOrbs.Add(orbObj);

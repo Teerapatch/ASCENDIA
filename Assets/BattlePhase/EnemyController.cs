@@ -84,7 +84,7 @@ public class EnemyController : MonoBehaviour
         currentHP = maxHP;
         currentPosture = maxPosture;
         isMarkedByGun = false;
-        // ดาวหมุน + ตัวโยกมึน ๆ ตอนติด Stagger
+        // ดาวหมุนรอบหัวตอนติด Stagger
         if (GetComponent<StaggerFX>() == null) gameObject.AddComponent<StaggerFX>();
     }
 
@@ -158,7 +158,9 @@ public class EnemyController : MonoBehaviour
         if (burn <= 0f) return false;
 
         if (DamagePopupManager.Instance != null) DamagePopupManager.Instance.CreateTextPopup(transform.position + Vector3.up, "BURN", new Color(1f, 0.5f, 0.1f));
+        suppressHitVFX = true; // ไฟไหม้ไม่ใช่การปะทะ ไม่ต้องมี HitVFX
         TakeDamage(Mathf.RoundToInt(burn));
+        suppressHitVFX = false;
         return IsDead;
     }
 
@@ -189,6 +191,21 @@ public class EnemyController : MonoBehaviour
         EnterStagger();
     }
 
+    private bool suppressHitVFX;
+
+    // กลางลำตัว: Collider ลำตัวก่อน (Bounds ของ Mesh รวมดาบยาวของบอสด้วย จุดกลางจะเบี้ยว)
+    public Vector3 BodyCenter
+    {
+        get
+        {
+            Collider body = GetComponent<Collider>();
+            return body != null && body.enabled ? body.bounds.center : transform.position + Vector3.up;
+        }
+    }
+
+    // ความสูงตัวในโลก (ขนาด VFX)
+    public float BodyHeight => AnimationController != null && AnimationController.Height > 0.01f ? AnimationController.Height : 4f;
+
     private EnemyAnimationController animationController;
     private EnemyAnimationController AnimationController
     {
@@ -209,7 +226,8 @@ public class EnemyController : MonoBehaviour
         Debug.Log($"{enemyName} took {damage} damage! (HP: {currentHP}/{maxHP})");
 
         Color dmgColor = isStaggered ? Color.yellow : Color.white;
-        DamagePopupManager.Instance.CreatePopup(transform.position, damage, isStaggered, dmgColor);
+        DamagePopupManager.Instance.CreatePopup(BodyCenter, damage, isStaggered, dmgColor); // กลางลำตัว แล้วลอยขึ้นบนจอ
+        if (!suppressHitVFX) CombatVFX.Hit(BodyCenter, BodyHeight, hitDirection); // ประกายกระแทก คู่กับท่าเจ็บ (PlayHurt ด้านล่าง)
 
         CameraShakeManager.TryShake(0.3f);
         if (AnimationController != null) AnimationController.PlayHurt(hitDirection, isStaggered ? 1.3f : 1f);
@@ -237,7 +255,7 @@ public class EnemyController : MonoBehaviour
         Statuses.Remove(CombatStatusType.Shatter);
         Debug.Log($"<color=yellow>!!! {enemyName}'s Posture is BROKEN !!!</color>");
 
-        // Particle Stagger เดิมเลิกใช้แล้ว (StaggerFX ทำดาวหมุน + ท่ามึนแทน) หยุดไว้เผื่อ Prefab ตั้งให้เล่นเอง
+        // Particle Stagger เดิมเลิกใช้แล้ว (StaggerFX ทำดาวหมุนแทน) หยุดไว้เผื่อ Prefab ตั้งให้เล่นเอง
         if (staggerParticle != null) staggerParticle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
         CameraShakeManager.TryShake(1.5f);

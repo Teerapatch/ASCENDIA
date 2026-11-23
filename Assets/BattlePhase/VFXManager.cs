@@ -46,7 +46,8 @@ public class VFXManager : MonoBehaviour
         }
 
         // เสกประกายไฟที่จุดปะทะปลายทาง (End Position) พุ่งไปตามทิศที่ลาก
-        if (parrySparkVFXPrefab != null)
+        // มี ParryVFX ชุดใหม่ (CombatVFX) แล้วไม่ต้องมีประกายเดิมซ้อนอีกชุด (เส้นรอยลากด้านบนยังอยู่)
+        if (parrySparkVFXPrefab != null && !CombatVFX.HasParry)
         {
             GameObject sparkObj = Instantiate(parrySparkVFXPrefab, endPosition, Quaternion.identity);
             Camera cam = Camera.main;

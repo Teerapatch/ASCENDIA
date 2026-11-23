@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 
 // กระสุนของศัตรู: บินโค้งจากมือไปหาผู้เล่น ถึงแล้วค้างรอผล Parry (ปัดออก) หรือระเบิดใส่
+// energyBlast = หน้าตาแบบ Energy Blast ของผู้เล่น (ShotVisual + แสงร่าย/ระเบิดของ BattleProjectiles สีศัตรู enemyBlast*)
 public class EnemyProjectile : MonoBehaviour
 {
     private Vector3 start;
@@ -10,14 +11,33 @@ public class EnemyProjectile : MonoBehaviour
     private float flightTime, arc, elapsed;
     private bool finished;
     private GameObject impactPrefab;
-    private Vector3 lastPosition;
+    private Vector3 lastPosition, lastDirection = Vector3.forward;
+    private ShotVisual blast;
+    private float startedAt;
 
-    public static EnemyProjectile Launch(GameObject prefab, Vector3 from, Func<Vector3> target, float flightTime, float arc, float scale, GameObject impactPrefab)
+    public static EnemyProjectile Launch(GameObject prefab, Vector3 from, Func<Vector3> target, float flightTime, float arc, float scale, GameObject impactPrefab, bool energyBlast = false)
     {
-        GameObject go = prefab != null ? Instantiate(prefab, from, Quaternion.identity) : CreateDefault(from);
-        go.transform.localScale = (prefab != null ? prefab.transform.localScale : Vector3.one) * scale;
+        GameObject go;
+        ShotVisual blast = null;
+        if (energyBlast)
+        {
+            go = new GameObject("EnemyEnergyBlast");
+            go.transform.position = from;
+            BattleProjectiles fx = BattleProjectiles.Instance;
+            float size = fx.enemyBlastSize * scale;
+            blast = ShotVisual.Build(fx, go, true, fx.enemyBlastColor, fx.enemyBlastCoreColor, size, 0.22f, size * 0.7f);
+            Vector3 to = target != null ? target() : from + Vector3.forward;
+            fx.BlastCast(from, (to - from).sqrMagnitude > 0.0001f ? (to - from).normalized : Vector3.forward, fx.enemyBlastColor, fx.enemyBlastCoreColor);
+        }
+        else
+        {
+            go = prefab != null ? Instantiate(prefab, from, Quaternion.identity) : CreateDefault(from);
+            go.transform.localScale = (prefab != null ? prefab.transform.localScale : Vector3.one) * scale;
+        }
         EnemyProjectile projectile = go.GetComponent<EnemyProjectile>();
         if (projectile == null) projectile = go.AddComponent<EnemyProjectile>();
+        projectile.blast = blast;
+        projectile.startedAt = Time.unscaledTime;
         projectile.start = from;
         projectile.lastPosition = from;
         projectile.target = target;
@@ -60,9 +80,14 @@ public class EnemyProjectile : MonoBehaviour
         Vector3 end = target();
         Vector3 position = Vector3.Lerp(start, end, t) + Vector3.up * (Mathf.Sin(t * Mathf.PI) * arc);
         Vector3 velocity = position - lastPosition;
-        if (velocity.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(velocity);
+        if (velocity.sqrMagnitude > 0.0001f)
+        {
+            transform.rotation = Quaternion.LookRotation(velocity);
+            lastDirection = velocity.normalized;
+        }
         transform.position = position;
         lastPosition = position;
+        blast?.Pulse(Time.unscaledTime - startedAt);
     }
 
     // Parry สำเร็จ: ปัดกระสุนออกไปตามทิศที่ผู้เล่นลาก
@@ -78,6 +103,13 @@ public class EnemyProjectile : MonoBehaviour
     {
         if (finished) return;
         finished = true;
+        if (blast != null)
+        {
+            BattleProjectiles fx = BattleProjectiles.Instance;
+            fx.BlastImpact(transform.position, lastDirection, fx.enemyBlastColor, fx.enemyBlastCoreColor);
+            Destroy(gameObject, blast.Finish());
+            return;
+        }
         if (impactPrefab != null && VFXManager.Instance != null)
         {
             VFXManager.Instance.PlayTimed(impactPrefab, transform.position, Quaternion.identity, 1f, 0.4f, 2.5f);
@@ -94,8 +126,9 @@ public class EnemyProjectile : MonoBehaviour
             time += Time.deltaTime;
             transform.position += direction * (28f * Time.deltaTime);
             transform.localScale = scale * Mathf.Max(0f, 1f - time / 0.35f);
+            blast?.Pulse(Time.unscaledTime - startedAt);
             yield return null;
         }
-        Destroy(gameObject);
+        Destroy(gameObject, blast != null ? blast.Finish() : 0f);
     }
 }

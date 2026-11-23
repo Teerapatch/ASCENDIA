@@ -12,6 +12,8 @@ using UnityEngine.UI;
 //  - Build Settings Prefab        -> Assets/Resources/SettingsMenu.prefab (SettingsMenu) + ปุ่ม SETTINGS ในหน้าต่าง Esc (GameExitMenu.prefab)
 //  - Build Title Scene            -> Assets/_kin/Scenes/TitleScene.unity (TitleMenu) ใส่เป็นฉากแรกใน Build Settings
 //  - Build Battle Result Screen   -> BattleResult_UI ใน TurnBase_Phase (BattleResultScreen)
+//  - Build Pickup Prompt Prefab   -> Assets/Resources/PickupPrompt.prefab (PickupPrompt: ป้ายกด E เก็บแร่/สมุนไพรตอนปีน)
+//  - Build Damage Popup Prefab    -> แปลง DamagePopup_Prefab (เลขดาเมจของฉากต่อสู้) เป็น UI บนจอ (DamagePopup) + DamagePopup_Text.mat
 // รันซ้ำได้: ของที่มีอยู่แล้วจะถูกสร้างใหม่ทับ (หน้า Settings / Title / Result) ถ้าแต่งเองแล้วอย่ารันซ้ำ
 public static class AscendiaBuildMenusUI
 {
@@ -22,6 +24,7 @@ public static class AscendiaBuildMenusUI
     const string ExitMenuPrefab = "Assets/Resources/GameExitMenu.prefab";
     const string TitleScenePath = "Assets/_kin/Scenes/TitleScene.unity";
     const string BattleScene = "Assets/Scenes/TurnBase_Phase.unity";
+    const string PickupPromptPrefab = "Assets/Resources/" + PickupPrompt.ResourcePath + ".prefab";
 
     static readonly Color Ink = new Color(0.05f, 0.06f, 0.1f, 1f);
     static readonly Color Pale = new Color(0.85f, 0.88f, 1f, 1f);
@@ -130,6 +133,136 @@ public static class AscendiaBuildMenusUI
         for (int i = 0; i < SceneManager.sceneCount; i++)
             if (SceneManager.GetSceneAt(i).isDirty) { error = "ยังมีฉากที่ไม่ได้บันทึก: " + SceneManager.GetSceneAt(i).path; return false; }
         return true;
+    }
+
+    // ---------------------------------------------------------------- Pickup Prompt
+    [MenuItem("Tools/ASCENDIA/UI/Build Pickup Prompt Prefab")]
+    static void BuildPickupPromptMenu() => Debug.Log(BuildPickupPrompt());
+
+    // ยังไม่มี Prefab (เช่น เพิ่ง Clone โปรเจกต์) = สร้างให้เองครั้งเดียว มีแล้วไม่แตะ ของที่แต่งไว้จึงไม่หาย
+    [InitializeOnLoadMethod]
+    static void EnsurePickupPrompt()
+    {
+        EditorApplication.delayCall += () =>
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || System.IO.File.Exists(PickupPromptPrefab)) return;
+            if (AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontBold) == null) return; // ยัง Import ไม่เสร็จ
+            Debug.Log(BuildPickupPrompt());
+        };
+    }
+
+    // ป้ายปุ่ม = ช่องข้าวหลามตัดของหน้า Loadout, แสงหลังปุ่ม = Circle (Glow ของ QTE_Frame), แผ่นคำ = Noti_Frame
+    public static string BuildPickupPrompt()
+    {
+        PickupPrompt prompt = PickupPrompt.BuildDefault(
+            S("Camp 1/Loadout_SlotFrame.png"),
+            AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Assets (jmes)/UI/Particles/Circle.png"),
+            S("Battle/Noti_Frame.png"),
+            Bold, Bold);
+        System.IO.Directory.CreateDirectory("Assets/Resources");
+        PrefabUtility.SaveAsPrefabAsset(prompt.gameObject, PickupPromptPrefab);
+        Object.DestroyImmediate(prompt.gameObject);
+        return "Pickup prompt prefab: " + PickupPromptPrefab;
+    }
+
+    // ---------------------------------------------------------------- Damage Popup
+    const string DamagePopupPrefab = "Assets/BattlePhase/UI_Section/DamagePopup_Prefab.prefab";
+    const string DamagePopupMaterial = "Assets/BattlePhase/UI_Section/DamagePopup_Text.mat";
+
+    [MenuItem("Tools/ASCENDIA/UI/Build Damage Popup Prefab")]
+    static void BuildDamagePopupMenu() => Debug.Log(BuildDamagePopup());
+
+    // Prefab ยังเป็นเลข 3D แบบเก่า (TextMeshPro ในโลก) = แปลงเป็นแบบ UI ให้เองครั้งเดียว แปลงแล้วไม่แตะ ของที่แต่งไว้จึงไม่หาย
+    // ลองซ้ำทุกรอบ update สักพัก เผื่อหลัง Domain Reload ฐานข้อมูล Asset ยังโหลดไม่พร้อม
+    [InitializeOnLoadMethod]
+    static void EnsureDamagePopup()
+    {
+        int tries = 0;
+        EditorApplication.CallbackFunction check = null;
+        check = () =>
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating) return;
+            if (++tries > 600) { EditorApplication.update -= check; return; }
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DamagePopupPrefab);
+            if (prefab == null || AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontBold) == null) return; // ยัง Import ไม่เสร็จ
+            EditorApplication.update -= check;
+            if (prefab.GetComponent<TextMeshPro>() != null) Debug.Log(BuildDamagePopup());
+        };
+        EditorApplication.update += check;
+    }
+
+    // แปลง DamagePopup_Prefab ที่เดิม (GameObject รากตัวเดิม ฉากจึงยังชี้ถึงได้) เป็น UI:
+    // แสง = DamagePopup_Glow (วาดในโค้ด), ปื้นพู่กันหลังเลข/เส้นคริติคอล = TitleBack, ป้ายข้อความ = Noti_Frame, ตัวอักษร NotoSerifJP Bold + ขอบ/เงา (DamagePopup_Text.mat)
+    public static string BuildDamagePopup()
+    {
+        TMP_FontAsset font = Bold;
+        Material material = AssetDatabase.LoadAssetAtPath<Material>(DamagePopupMaterial);
+        if (material == null && font != null)
+        {
+            material = DamagePopup.CreateTextMaterial(font);
+            AssetDatabase.CreateAsset(material, DamagePopupMaterial);
+        }
+
+        GameObject root = PrefabUtility.LoadPrefabContents(DamagePopupPrefab);
+        try
+        {
+            for (int i = root.transform.childCount - 1; i >= 0; i--)
+                Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
+            TextMeshPro old = root.GetComponent<TextMeshPro>();
+            if (old != null) Object.DestroyImmediate(old);
+            MeshRenderer renderer = root.GetComponent<MeshRenderer>();
+            if (renderer != null) Object.DestroyImmediate(renderer);
+            MeshFilter filter = root.GetComponent<MeshFilter>();
+            if (filter != null) Object.DestroyImmediate(filter);
+            root.layer = LayerMask.NameToLayer("UI");
+
+            DamagePopup.Build(root,
+                DamagePopupGlowSprite(),
+                S("Camp 1/TitleBack.png"),
+                S("Battle/Noti_Frame.png"),
+                font, material);
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = root.layer;
+            PrefabUtility.SaveAsPrefabAsset(root, DamagePopupPrefab);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+        return "Damage popup prefab: " + DamagePopupPrefab;
+    }
+
+    // แสงฟุ้งวงกลมที่จางถึง 0 พอดีขอบภาพ (Circle ของอาร์ตยังมีค่าโปร่งแสงเล็กน้อยที่ขอบ ขยายใหญ่ ๆ แล้วเห็นเป็นกรอบสี่เหลี่ยม)
+    const string DamagePopupGlow = "Assets/BattlePhase/UI_Section/DamagePopup_Glow.png";
+
+    static Sprite DamagePopupGlowSprite()
+    {
+        if (!System.IO.File.Exists(DamagePopupGlow))
+        {
+            const int size = 256;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = (x + 0.5f) / size * 2f - 1f, dy = (y + 0.5f) / size * 2f - 1f;
+                float r = Mathf.Clamp01(Mathf.Sqrt(dx * dx + dy * dy));
+                float a = (1f - r) * (1f - r); // ขอบนุ่ม เป็น 0 ที่รัศมีเต็ม
+                a *= a * (3f - 2f * a);
+                pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
+            }
+            tex.SetPixels32(pixels);
+            System.IO.File.WriteAllBytes(DamagePopupGlow, ImageConversion.EncodeToPNG(tex));
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(DamagePopupGlow);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(DamagePopupGlow);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+        }
+        return AssetDatabase.LoadAssetAtPath<Sprite>(DamagePopupGlow);
     }
 
     // ---------------------------------------------------------------- Settings

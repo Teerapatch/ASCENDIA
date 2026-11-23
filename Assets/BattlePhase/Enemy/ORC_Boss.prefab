@@ -520,6 +520,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GuardianBossController
   set: {fileID: 11400000, guid: 1355fa37b2753354ba41da510e0895ba, type: 2}
+  slashTowardAttacker: 1.5
+  slashWhenParried: 1
 --- !u!1 &7418187145467261429
 GameObject:
   m_ObjectHideFlags: 0
@@ -781,7 +783,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: dc016700ddfbc9248ba9ee1461b86531, type: 3}
       propertyPath: m_Name
-      value: Model
+      value: Boss-Guardians2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

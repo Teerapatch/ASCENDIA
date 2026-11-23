@@ -3,6 +3,8 @@
 public class FloatingElementOrb : MonoBehaviour
 {
     public ElementType elementType;
+    [Tooltip("แสดงลูกกลมเดิม (ปิดเมื่อใช้ ElementEnergyFX เป็นหน้าตาพลังงานของธาตุ)")]
+    public bool showMesh = true;
 
     [Header("Living Movement Settings")]
     public float moveSpeed = 1.2f;      // ความเร็วในการเคลื่อนที่
@@ -61,7 +63,7 @@ public class FloatingElementOrb : MonoBehaviour
     public void SetVisible(bool visible)
     {
         isVisible = visible;
-        if (meshRenderer != null) meshRenderer.enabled = isVisible;
+        if (meshRenderer != null) meshRenderer.enabled = isVisible && showMesh;
         if (col != null) col.enabled = isVisible;
         // แสงเรือง/ประกายที่เป็นลูกของ Orb ซ่อนตามไปด้วย
         foreach (Transform child in transform) child.gameObject.SetActive(isVisible);

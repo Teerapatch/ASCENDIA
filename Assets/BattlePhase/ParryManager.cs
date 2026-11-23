@@ -68,6 +68,8 @@ public class ParryManager : MonoBehaviour
 
     // ผลของจังหวะล่าสุด ให้ศัตรูที่คุมเทิร์นเอง (เช่นกระสุน) ตัดสินใจต่อ
     public bool LastStrikeParried { get; private set; }
+    // นับทุกครั้งที่ PlayStrike เริ่ม ใช้ผูกเหตุการณ์ (เช่น SlashVFX ของศัตรู) กับการฟันครั้งที่ถูกต้อง
+    public int StrikeSerial { get; private set; }
     public Vector2 LastSwipeDirection { get; private set; } = Vector2.right;
 
     private void Awake()
@@ -107,7 +109,18 @@ public class ParryManager : MonoBehaviour
         float pop = hintPopDuration > 0f ? Mathf.Lerp(hintPopScale, 1f, Mathf.Clamp01(t / hintPopDuration)) : 1f;
         float pulse = 1f + Mathf.Sin(t * hintPulseSpeed) * hintPulseAmount;
         activeHint.transform.localScale = activeHintBaseScale * (pop * pulse);
+
+        // HintVFX ชุดใหม่ระเบิดครั้งเดียว: ยิงซ้ำทุก vfxHintRepeat วินาที (เวลาจริง) ตลอดช่วงที่ Hint ยังโชว์ (ของอาร์ตวนทุก 1 วิ)
+        if (vfxHintRepeat > 0f && Time.unscaledTime - activeHintFiredAt >= vfxHintRepeat)
+        {
+            activeHintFiredAt = Time.unscaledTime;
+            CombatVFX.Replay(activeHint);
+        }
     }
+
+    [Tooltip("HintVFX (VFX Graph) ยิงซ้ำทุกกี่วินาทีตามเวลาจริง ระหว่างที่ Hint ยังค้างอยู่ (0 = ครั้งเดียว)")]
+    public float vfxHintRepeat = 1f;
+    private float activeHintFiredAt;
 
     // ==========================================
     // Hint VFX
@@ -146,6 +159,7 @@ public class ParryManager : MonoBehaviour
             activeHint = Instantiate(prefab, HintPosition(), HintRotation(screenAngle));
             activeHintBaseScale = prefab.transform.localScale * hintScale;
             activeHintShownAt = Time.unscaledTime;
+            activeHintFiredAt = activeHintShownAt;
             activeHint.transform.localScale = activeHintBaseScale * hintPopScale;
             // ประกายของ Hint พุ่งไปทางเดียวกับทิศที่ต้องลาก (แทนการกระจายรอบตัว)
             Quaternion rot = activeHint.transform.rotation;
@@ -167,9 +181,31 @@ public class ParryManager : MonoBehaviour
         if (hintStep1Prefab != null) ShowHint(hintStep1Prefab, currentHintAngle);
     }
 
+    [Tooltip("ตัวคูณขนาด HintVFX ชุดใหม่ (VFX_Hint) เพิ่มจาก vfxHintScreenSize")]
+    public float vfxHintScale = 1f;
+    [Tooltip("ความยาวเส้นประกายของ VFX_Hint เป็นสัดส่วนของความสูงจอ (ในฉากทดสอบของอาร์ตราว 0.4)")]
+    public float vfxHintScreenSize = 0.35f;
+    // เส้นประกายของ Hint_01 ยาวราว 10 หน่วยที่สเกล 1 (กรวย 5 หน่วย x สเกล 2 ของ Muzzle_01 ใน Prefab)
+    private const float VfxHintStreakLength = 10f;
+
     private void ShowDirectionHint(float screenAngle)
     {
-        if (hintStep2DirectionPrefab != null) ShowHint(hintStep2DirectionPrefab, screenAngle);
+        // HintVFX ชุดใหม่ (Resources/BattleVFX/VFX_Hint) บอกทิศที่ศัตรูจะตี แทน Hint จังหวะ 2 เดิม
+        GameObject vfxHint = CombatVFX.HintPrefab;
+        if (vfxHint != null)
+        {
+            ShowHint(vfxHint, screenAngle);
+            // ขนาดตามจอ ไม่ใช่ตามตัวศัตรู: เส้นประกายของอาร์ตยาวหลายเท่าตัวทดสอบ ถ้าขยายตามตัวศัตรูจะยาวเกินจอ
+            if (activeHint != null && mainCam != null)
+            {
+                float viewHeight = mainCam.orthographic ? mainCam.orthographicSize * 2f
+                    : 2f * hintDistanceFromCamera * Mathf.Tan(mainCam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                float scale = vfxHintScreenSize * viewHeight / VfxHintStreakLength * vfxHintScale;
+                activeHintBaseScale = vfxHint.transform.localScale * scale;
+                activeHint.transform.localScale = activeHintBaseScale * hintPopScale;
+            }
+        }
+        else if (hintStep2DirectionPrefab != null) ShowHint(hintStep2DirectionPrefab, screenAngle);
         else if (hintParticle != null) ShowHint(null, screenAngle);
     }
 
@@ -178,7 +214,9 @@ public class ParryManager : MonoBehaviour
         if (hintParticle) hintParticle.SetActive(false);
         if (activeHint == null) return;
 
-        // VFX วนลูป: หยุดปล่อยอนุภาคแล้วค่อยลบ จะได้จางหายแทนการหายวับ
+        // VFX วนลูป: หยุดปล่อยอนุภาคแล้วค่อยลบ จะได้จางหายแทนการหายวับ (ทั้ง Particle System และ VFX Graph)
+        CombatVFX.StopEmitting(activeHint);
+        foreach (ParryHintArrows arrows in activeHint.GetComponentsInChildren<ParryHintArrows>()) arrows.FadeOut(hintFadeOutTime);
         foreach (ParticleSystem ps in activeHint.GetComponentsInChildren<ParticleSystem>())
         {
             ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
@@ -227,6 +265,7 @@ public class ParryManager : MonoBehaviour
     {
         requiredDirection = GetDirectionFromIndex(strike.sliderDirectionIndex);
         LastStrikeParried = false;
+        StrikeSerial++;
         currentHintAngle = Mathf.Atan2(requiredDirection.y, requiredDirection.x) * Mathf.Rad2Deg;
 
         // 1. ดีเลย์ก่อนฟัน (ซิงก์จังหวะง้างดาบ) ช่วงท้ายโชว์ Hint จังหวะ 1 สั้น ๆ ให้ผู้เล่นเตรียมตัวก่อนบอกทิศ
@@ -423,6 +462,8 @@ public class ParryManager : MonoBehaviour
         LastSwipeDirection = swipeScreenDirection.sqrMagnitude > 0.0001f ? swipeScreenDirection.normalized : requiredDirection;
 
         if (PlayerBattleAnimator.Instance != null) PlayerBattleAnimator.Instance.PlayParry();
+        // ParryVFX เล่นพร้อมท่า Parry (เฟรมเดียวกัน) ด้านหน้าตัวผู้เล่น ทุกครั้งที่ Parry สำเร็จ
+        PlayParryVFX(swipeScreenDirection.sqrMagnitude > 0.0001f ? swipeScreenDirection : requiredDirection);
 
         bool isSpellActive = (PlayerCombatController.Instance != null &&
                               PlayerCombatController.Instance.ActiveWeapon != null &&
@@ -463,7 +504,9 @@ public class ParryManager : MonoBehaviour
             float sparkAngle = swipeScreenDirection.sqrMagnitude > 0.0001f
                 ? Mathf.Atan2(swipeScreenDirection.y, swipeScreenDirection.x) * Mathf.Rad2Deg
                 : currentHintAngle;
-            VFXManager.Instance.SpawnParrySuccess(HintPosition(), HintRotation(sparkAngle), parrySuccessScale, hintSortingBoost);
+            // ParryVFX ชุดใหม่ (VFX_test ของอาร์ต) เกิดที่ตัวผู้เล่น ถ้าไม่มี Prefab ใช้ชุดเดิมตรงจุด Hint
+            if (!CombatVFX.HasParry)
+                VFXManager.Instance.SpawnParrySuccess(HintPosition(), HintRotation(sparkAngle), parrySuccessScale, hintSortingBoost);
         }
 
         // แถบแสงขาวพาดหลังตัวศัตรูตามทิศที่ลาก (Evasion ไม่มีการลาก -> ใช้ทิศของ Hint)
@@ -475,6 +518,47 @@ public class ParryManager : MonoBehaviour
 
         // หยุดเวลา/สโลว์, แฟลช, วงแหวน, เส้นความเร็ว, PARRY!, Post FX และกล้องพุ่ง+เอียง (ParryImpactFX)
         ParryImpactFX.Play(HintPosition(), LastSwipeDirection);
+    }
+
+    [Header("ParryVFX (Resources/BattleVFX/VFX_Parry)")]
+    [Tooltip("ระยะด้านหน้าตัวผู้เล่น (ตามทิศที่โมเดลหัน ซึ่งหันหาศัตรูที่ตี) ที่ ParryVFX เกิด")]
+    public float parryVFXFront = 2f;
+    [Tooltip("ยกขึ้น/ลงจากกลางลำตัว")]
+    public float parryVFXHeight = 0f;
+    [Tooltip("ขนาดเทียบกับความสูงตัวผู้เล่น (vfxBodyHeight)")]
+    public float parryVFXScale = 1f;
+    [Tooltip("หน่วงก่อนเกิด (วินาทีจริง) ไว้จูนให้ตรงจังหวะปะทะในท่า Parry 0 = พร้อมกันทันที")]
+    public float parryVFXDelay = 0f;
+    [Tooltip("ประกายไฟชุดเดิม (Cartoon FX, VFXManager.parrySuccessVFXPrefab) พุ่งตามทิศที่ลาก ณ จุดเดียวกับ ParryVFX")]
+    public bool parryClassicSparks = true;
+
+    private void PlayParryVFX(Vector2 swipe)
+    {
+        if (parryVFXDelay > 0f) StartCoroutine(PlayParryVFXLater(swipe, parryVFXDelay));
+        else SpawnParryVFX(swipe);
+    }
+
+    private IEnumerator PlayParryVFXLater(Vector2 swipe, float delay)
+    {
+        yield return new WaitForSecondsRealtime(delay);
+        SpawnParryVFX(swipe);
+    }
+
+    private void SpawnParryVFX(Vector2 swipe)
+    {
+        PlayerCombatController player = PlayerCombatController.Instance;
+        if (player == null) return;
+        Vector3 position = player.BodyCenter + player.BodyForward * parryVFXFront + Vector3.up * parryVFXHeight;
+        CombatVFX.Parry(position, player.BodyForward, swipe, player.vfxBodyHeight * parryVFXScale);
+
+        // ประกายไฟที่เห็นชัด: ชุดเดิมที่เคยเล่นตรงจุด Hint ย้ายมาอยู่จุดปะทะหน้าตัวผู้เล่น
+        // ขนาดเดิมจูนไว้ที่ระยะ hintDistanceFromCamera จึงคูณตามระยะจริงจากกล้องให้ดูเท่าเดิมบนจอ
+        if (parryClassicSparks && CombatVFX.HasParry && VFXManager.Instance != null && mainCam != null)
+        {
+            float angle = Mathf.Atan2(swipe.y, swipe.x) * Mathf.Rad2Deg;
+            float depthScale = Vector3.Distance(mainCam.transform.position, position) / Mathf.Max(0.1f, hintDistanceFromCamera);
+            VFXManager.Instance.SpawnParrySuccess(position, HintRotation(angle), parrySuccessScale * depthScale * parryVFXScale);
+        }
     }
 
     void FailStrike(string reason)

@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 // หลอดเลือด/Stagger ของศัตรูชุด ReArt v2 (EnemyHUD บน BattleUI แบบ Overlay)
 // คัดลอกแม่แบบหนึ่งชุดต่อศัตรูแต่ละตัว ลอยเหนือหัวตามตำแหน่งบนจอ แล้วซ่อนหลอดแบบ World Space เดิม (ไอคอนสถานะยังอยู่)
+// หลอดที่คัดลอกอยู่ในชั้น EnemyHUD_Layer (Canvas ซ้อน ลำดับต่ำกว่า BattleUI) จึงอยู่ใต้เมนู/การ์ด/ลำดับเทิร์น และใต้เลขดาเมจ (BattleUILayers)
 public class EnemyHUDOverlay : MonoBehaviour
 {
     public RectTransform template;
@@ -37,10 +38,21 @@ public class EnemyHUDOverlay : MonoBehaviour
     private readonly Dictionary<EnemyController, Entry> entries = new Dictionary<EnemyController, Entry>();
     private readonly List<EnemyController> stale = new List<EnemyController>();
     private Canvas canvas;
+    private Transform hudParent;
 
     private void Start()
     {
         canvas = GetComponent<Canvas>();
+    }
+
+    private Transform HudParent()
+    {
+        if (hudParent != null) return hudParent;
+        if (canvas != null && canvas.isRootCanvas && canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            hudParent = BattleUILayers.Get(canvas, BattleUILayers.EnemyHUDLayer, BattleUILayers.EnemyHUDOffset);
+        else
+            hudParent = template.parent;
+        return hudParent;
     }
 
     private void LateUpdate()
@@ -114,7 +126,7 @@ public class EnemyHUDOverlay : MonoBehaviour
 
     private Entry Create(EnemyController enemy)
     {
-        RectTransform root = Instantiate(template, template.parent);
+        RectTransform root = Instantiate(template, HudParent());
         root.gameObject.SetActive(true);
         root.name = "EnemyHUD_" + enemy.enemyName;
         root.anchorMin = root.anchorMax = Vector2.zero;

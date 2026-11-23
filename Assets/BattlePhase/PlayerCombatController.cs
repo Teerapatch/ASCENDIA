@@ -68,6 +68,8 @@ public class PlayerCombatController : MonoBehaviour
     }
     private List<CapturedHit> damageCapture;
     private List<CapturedHit> pendingHits;
+    // Combo ของ Dagger ที่ท่าขอไว้ตอนคำนวณผล (CaptureDamage) ได้จริงเฉพาะจังหวะที่ดาเมจลงตัวศัตรู (ResolveHit)
+    private int capturedComboStacks, pendingComboStacks;
     private float capturedShakeForce;
 
     [Header("Hit Impact")]
@@ -450,11 +452,14 @@ public class PlayerCombatController : MonoBehaviour
 
         onApproached?.Invoke();
 
+        BattleProjectileKind shot = clip != null && battleAnimator != null && target != null ? clip.projectile : BattleProjectileKind.None;
         System.Action<int, int> onHit = (index, count) =>
         {
             // จังหวะแรกคำนวณผลของท่าทั้งหมด (บัฟ/AP/ดาเมจรวม) แล้วทยอยแบ่งดาเมจลงทีละจังหวะ
             if (index == 0) CaptureDamage(apply);
-            ResolveHit(index, count);
+            // ท่ายิง: ปล่อยกระสุนตอนจังหวะนี้ ดาเมจลงตอนกระสุนถึงตัว
+            if (shot != BattleProjectileKind.None) FireShot(shot, target, index, count);
+            else ResolveHit(index, count);
         };
 
         if (battleAnimator != null) yield return battleAnimator.PlayAction(clip, ready, onHit);
@@ -463,6 +468,15 @@ public class PlayerCombatController : MonoBehaviour
             while (ready != null && !ready()) yield return null;
             onHit(0, 1);
         }
+
+        // รอกระสุนที่ยังบินอยู่ลงเป้าให้หมดก่อนจบเทิร์น (กันค้าง: ไม่เกิน 3 วินาทีจริง)
+        float waited = 0f;
+        while (shotsInFlight > 0 && waited < 3f)
+        {
+            waited += Time.unscaledDeltaTime;
+            yield return null;
+        }
+        shotsInFlight = 0;
 
         if (battleAnimator != null)
         {
@@ -476,15 +490,36 @@ public class PlayerCombatController : MonoBehaviour
         FinishTurnAction();
     }
 
+    private int shotsInFlight;
+
+    // ยิงกระสุน 1 ลูกจากปากกระบอก/ปลายไม้เท้าไปที่เป้าหลัก ถึงแล้วค่อยแบ่งดาเมจของจังหวะนี้ (ResolveHit ลงทุกเป้าที่โดนในท่า)
+    private void FireShot(BattleProjectileKind kind, EnemyController target, int index, int count)
+    {
+        Vector3 last = target.BodyCenter;
+        Vector3 from = battleAnimator.ShotOrigin(last);
+        shotsInFlight++;
+        BattleProjectiles.Instance.Fire(kind, from,
+            () => { if (target != null && !target.IsDead) last = target.BodyCenter; return last; },
+            () =>
+            {
+                if (this == null) return; // ออกจากฉาก/หยุดเล่นระหว่างกระสุนบิน
+                shotsInFlight = Mathf.Max(0, shotsInFlight - 1);
+                ResolveHit(index, count);
+            });
+    }
+
     private void CaptureDamage(System.Action apply)
     {
         damageCapture = new List<CapturedHit>();
+        capturedComboStacks = 0;
         CameraShakeManager.BeginCapture();
         try { apply?.Invoke(); }
         finally
         {
             capturedShakeForce = CameraShakeManager.EndCapture();
             pendingHits = damageCapture;
+            pendingComboStacks = capturedComboStacks;
+            capturedComboStacks = 0;
             damageCapture = null;
         }
     }
@@ -498,7 +533,7 @@ public class PlayerCombatController : MonoBehaviour
         float from = index / totalWeight;
         float to = index == count - 1 ? 1f : (index + 1) / totalWeight;
         bool last = index == count - 1;
-        bool landed = false, killed = false;
+        bool landed = false, killed = false, damaged = false;
         Vector3 hitPosition = transform.position;
 
         foreach (CapturedHit hit in pendingHits)
@@ -513,13 +548,25 @@ public class PlayerCombatController : MonoBehaviour
 
             // ท่าเจ็บของศัตรูตามทิศที่อาวุธฟันในจังหวะนี้ (อาวุธยิงใช้ทิศจากผู้เล่นไปหาเป้า)
             Vector2 direction = battleAnimator != null ? battleAnimator.HitScreenDirection(index, hit.target.transform.position) : hit.direction;
-            if (damage > 0) hit.target.TakeDamage(damage, direction);
+            // ท่าฟัน (มีการเหวี่ยงอาวุธ): SlashVFX ที่ตัวเป้า วางในระนาบที่ปลายอาวุธเหวี่ยงจริงในจังหวะนี้ (ท่ายิง/ร่ายไม่มี)
+            if (battleAnimator != null && battleAnimator.ActiveClipMelee && !battleAnimator.HasSlashEntry(index))
+                CombatVFX.Slash(hit.target.BodyCenter, battleAnimator.HitWorldSwing(index), battleAnimator.BodyCenter, hit.target.BodyHeight);
+            if (damage > 0) { hit.target.TakeDamage(damage, direction); damaged = true; }
             if (posture > 0 && !hit.target.IsDead) hit.target.TakePostureDamage(posture, direction);
             killed |= hit.target.IsDead;
         }
 
         if (landed) PlayHitImpact(last, killed, count, hitPosition);
-        if (last) pendingHits = null;
+
+        // Combo ของจังหวะนี้ (แบ่งตามสัดส่วนเดียวกับดาเมจ) ได้เฉพาะเมื่อดาเมจลงตัวศัตรูจริง
+        int stacks = Mathf.RoundToInt(pendingComboStacks * to) - Mathf.RoundToInt(pendingComboStacks * from);
+        if (damaged && stacks > 0) GrantComboStacks(stacks);
+
+        if (last)
+        {
+            pendingHits = null;
+            pendingComboStacks = 0;
+        }
     }
 
     // ความรู้สึกตอนโดน: กล้องกระแทกไปทางเดียวกับแรงตี หยุดภาพสั้น ๆ และเลนส์กระตุก จังหวะสุดท้ายแรงสุด
@@ -971,6 +1018,15 @@ public class PlayerCombatController : MonoBehaviour
     }
 
     // hitDirection = ทิศบนจอของแรงที่โดน (ศูนย์ = สุ่มท่าเจ็บ)
+    [Tooltip("ความสูงตัวผู้เล่นในโลก ใช้กำหนดขนาด VFX (Hit / Parry / Slash ของศัตรูที่ฟันใส่)")]
+    public float vfxBodyHeight = 5f;
+
+    // กลางลำตัวของโมเดลที่มองเห็น (โมเดลอยู่ห่าง Player_Holder ราว 4 หน่วย)
+    public Vector3 BodyCenter => battleAnimator != null ? battleAnimator.BodyCenter : transform.position + Vector3.up * (vfxBodyHeight * 0.55f);
+
+    // ทิศที่โมเดลผู้เล่นหันอยู่ (ตอนศัตรูตี โมเดลหันหาผู้ตี) ใช้วาง ParryVFX ไว้ด้านหน้า
+    public Vector3 BodyForward => battleAnimator != null ? battleAnimator.ModelForward : transform.forward;
+
     public void TakeDamage(int damage, Vector2 hitDirection = default)
     {
         if (ActiveWeapon == null) return;
@@ -979,7 +1035,8 @@ public class PlayerCombatController : MonoBehaviour
         ActiveWeapon.currentDurability -= damage;
         Debug.Log($"{ActiveWeapon.weaponName} took {damage} damage. Remaining: {ActiveWeapon.currentDurability}");
 
-        DamagePopupManager.Instance.CreatePopup(transform.position, damage, false, Color.red);
+        DamagePopupManager.Instance.CreatePopup(BodyCenter, damage, false, new Color(1f, 0.35f, 0.3f)); // ฉายจากตัวโมเดลจริง (Player_Holder อยู่ห่างโมเดลราว 4 หน่วย)
+        CombatVFX.Hit(BodyCenter, vfxBodyHeight, hitDirection); // ประกายกระแทกตอนโดน (ท่าเจ็บเล่นใน PlayHurt)
 
         if (WeaponUIManager.Instance != null)
         {
@@ -1068,7 +1125,7 @@ public class PlayerCombatController : MonoBehaviour
     public void ShowPopup(string text, Color color)
     {
         if (DamagePopupManager.Instance != null)
-            DamagePopupManager.Instance.CreateTextPopup(transform.position + Vector3.up * 2f, text, color);
+            DamagePopupManager.Instance.CreateTextPopup(BodyCenter + Vector3.up * (vfxBodyHeight * 0.4f), text, color);
     }
 
     // ========================================== WeaponPassiveSystem ==========================================
@@ -1082,12 +1139,24 @@ public class PlayerCombatController : MonoBehaviour
             }
         }
 
+        // ระหว่างคำนวณผลของท่า: เก็บไว้ก่อน ได้จริงตอนดาเมจลง (ResolveHit) Parry อยู่นอกช่วงนี้จึงได้ทันที
+        if (damageCapture != null)
+        {
+            capturedComboStacks += amount;
+            return;
+        }
+        GrantComboStacks(amount);
+    }
+
+    private void GrantComboStacks(int amount)
+    {
+        if (amount <= 0) return;
         currentComboStacks += amount;
         Debug.Log($"<color=cyan>COMBO +{amount}! (Total: {currentComboStacks})</color>");
 
         if (DamagePopupManager.Instance != null)
         {
-            DamagePopupManager.Instance.CreatePopup(transform.position + Vector3.up * 1.5f, currentComboStacks, true, Color.cyan);
+            DamagePopupManager.Instance.CreatePopup(BodyCenter + Vector3.up * (vfxBodyHeight * 0.25f), currentComboStacks, true, Color.cyan);
         }
     }
 

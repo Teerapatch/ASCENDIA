@@ -8,22 +8,22 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: BladeGuard_Balde
-    second: {fileID: 2100000, guid: e3ed58f5aa634beead8c65484dbac200, type: 2}
+    second: {fileID: 2100000, guid: 6f64f9d27d210404c9d254b048c74654, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: BladeGuard__skin
-    second: {fileID: 2100000, guid: 6c4c80cd1bfd42a5b7f0c9a7bc9c8f7b, type: 2}
+    second: {fileID: 2100000, guid: e6b84dfadefb9be47a19011549467605, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: BladeGuard_armor
-    second: {fileID: 2100000, guid: bad6a31ebc584ca5b18a0a3bd1bc2fd6, type: 2}
+    second: {fileID: 2100000, guid: 1dbf4ba4c2ff31a4dbbbf13f73cb208b, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: BladeGuard_eye
-    second: {fileID: 2100000, guid: dbecf13698c54961a6f57f1141faddbe, type: 2}
+    second: {fileID: 2100000, guid: 6f64f9d27d210404c9d254b048c74654, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

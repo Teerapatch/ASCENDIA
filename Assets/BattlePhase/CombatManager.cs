@@ -180,6 +180,7 @@ public class CombatManager : MonoBehaviour
 
         if (SpellOrbManager.Instance != null) SpellOrbManager.Instance.ClearOrbs();
 
+        EnemyTurnLight.Release();
         LastSummary = BuildSummary(outcome);
         OnBattleEnded?.Invoke(LastSummary);
     }
@@ -252,6 +253,7 @@ public class CombatManager : MonoBehaviour
 
     private void SpawnWave(List<GameObject> enemyPrefabs)
     {
+        EnemyTurnLight.Release(); // ดับไฟส่องไว้ก่อน ศัตรูชุดใหม่ยังไม่ถึงเทิร์น
         int spawnCount = Mathf.Min(enemyPrefabs.Count, enemySpawnPoints.Count);
         for (int i = 0; i < spawnCount; i++)
         {
@@ -485,11 +487,14 @@ public class CombatManager : MonoBehaviour
         if (!activeTurn.IsEnemy)
         {
             currentState = CombatState.PlayerTurn;
+            EnemyTurnLight.Release();
             player.StartTurn(activeTurn.WeaponRef);
         }
         else
         {
             currentState = CombatState.EnemyTurn;
+            // ไฟส่องศัตรูที่ถึงเทิร์น (ติดตั้งแต่ป้ายประกาศขึ้น)
+            EnemyTurnLight.Focus(activeTurn.EnemyRef);
 
             if (WeaponUIManager.Instance != null)
             {

@@ -8,27 +8,27 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Axe
-    second: {fileID: 2100000, guid: 55df3a9ae1d64d7c8b463072fd35bccf, type: 2}
+    second: {fileID: 2100000, guid: 2620535917c49bb4ca50f6bf66f13b11, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Axe_Handle
-    second: {fileID: 2100000, guid: 72c71e33f82f412c8454ce7528246f65, type: 2}
+    second: {fileID: 2100000, guid: deb6079673d0a33459d4e2f83e81f079, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: KikiAxe_Armor
-    second: {fileID: 2100000, guid: 968295daa7664629adb35708c541bcd9, type: 2}
+    second: {fileID: 2100000, guid: deb6079673d0a33459d4e2f83e81f079, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: KikiAxe_Skin
-    second: {fileID: 2100000, guid: 335fbec375bc40c0b7b459fbfeb58269, type: 2}
+    second: {fileID: 2100000, guid: 99035c7fed1c0234d9ec51f93732ce04, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: KikiAxe_eye
-    second: {fileID: 2100000, guid: 3b3c1217e2d04941a5372ce4f860b0b1, type: 2}
+    second: {fileID: 2100000, guid: 2620535917c49bb4ca50f6bf66f13b11, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

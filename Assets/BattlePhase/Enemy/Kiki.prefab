@@ -469,9 +469,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyController
   enemyName: Axe Guardian
   baseSpeed: 70
-  maxHP: 200
+  maxHP: 250
   currentHP: 0
-  maxPosture: 50
+  maxPosture: 100
   currentPosture: 0
   isStaggered: 0
   isMarkedByGun: 0
@@ -532,6 +532,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemyAnimationController
   set: {fileID: 11400000, guid: ff871771ee3ae194eb64f50af8b149b8, type: 2}
+  slashTowardAttacker: 1.5
+  slashWhenParried: 0
 --- !u!1 &6781430380897670956
 GameObject:
   m_ObjectHideFlags: 0
@@ -745,7 +747,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: c556b963cd8b78c408de7f8fcfce0f98, type: 3}
       propertyPath: m_Name
-      value: Model
+      value: AxeGuardian
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
